@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>Hai Anh - AI Tutor</title>
+    <!-- Các thư viện cần thiết -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { corePlugins: { preflight: true } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="font-sans antialiased bg-gray-100">
+<div id="loadingOverlay"><div class="spinner"></div><div id="loadingText">Đang xử lý, vui lòng chờ...</div></div>
+
+<div id="fileProtocolBanner" class="hidden fixed top-0 left-0 right-0 z-[2000] bg-red-600 text-white px-4 py-3 text-sm shadow-lg" style="line-height:1.6">
+    ⚠️ <strong>Chức năng AI bị chặn</strong> — Bạn đang mở file bằng <code style="background:rgba(0,0,0,0.3);padding:0 4px;border-radius:3px">file://</code>, trình duyệt sẽ chặn mọi kết nối ra ngoài.<br>
+    👉 Cách khắc phục: Dùng <strong>VS Code + Live Server</strong>, hoặc chạy <code style="background:rgba(0,0,0,0.3);padding:0 4px;border-radius:3px">python -m http.server 8080</code> rồi truy cập <strong>http://localhost:8080/Hello-X4_index.html</strong>
+    <button onclick="document.getElementById('fileProtocolBanner').classList.add('hidden')" style="margin-left:12px;text-decoration:underline;opacity:0.8">Đóng</button>
+</div>
+
+<div class="container mx-auto px-4 py-6 max-w-7xl">
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-gray-200">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-3 mb-4">
+            <h1 class="text-2xl font-bold text-blue-800 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> Hai Anh Study</h1>
+            <div class="flex gap-3 flex-wrap justify-end">
+                <button id="openAiGenBtn" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-2 rounded-xl text-sm font-medium"><i class="fas fa-magic"></i> Tạo đề bằng AI</button>
+                <button id="aiSettingsBtn" class="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2 rounded-xl text-sm font-medium"><i class="fas fa-cog"></i> <span>Cài đặt API</span> <span id="apiKeyBadge" class="inline-block w-2 h-2 rounded-full ml-1 bg-red-500" title="Chưa có API Key"></span></button>
+                <button id="darkModeToggle" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded-xl text-sm"><i class="fas fa-moon"></i> <span id="darkModeText">Tối</span></button>
+                <button id="pauseResumeBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-xl text-sm font-medium"><i class="fas fa-pause"></i> Tạm dừng</button>
+                <button id="resetExamBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl text-sm"><i class="fas fa-undo-alt mr-1"></i> Làm lại</button>
+                <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm shadow-sm"><i class="fas fa-check-circle mr-1"></i> Nộp bài</button>
+            </div>
+        </div>
+        <div class="bg-gray-50 p-4 rounded-xl mb-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[180px]"><label class="block text-sm font-medium text-gray-700 mb-1">📚 Bộ câu hỏi đã lưu</label><select id="bankSelect" class="w-full border rounded-lg p-2 text-sm bg-white"><option value="">-- Chọn bộ câu hỏi --</option></select></div>
+                <button id="loadSelectedBankBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"><i class="fas fa-folder-open"></i> Tải bộ</button>
+                <button id="deleteBankBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm"><i class="fas fa-trash-alt"></i> Xóa bộ</button>
+                <button id="showStatsBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm"><i class="fas fa-chart-line"></i> Báo cáo chi tiết</button>
+            </div>
+            <div id="currentBankInfo" class="text-xs text-gray-500 mt-2"></div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+            <div><label class="block text-sm font-medium text-gray-700">📁 Tải file Excel thủ công (Đa Sheet)</label><input type="file" id="excelUpload" accept=".xlsx, .xls, .csv" class="mt-1 block w-full text-sm border rounded-lg p-2 bg-white"><div id="uploadStatus" class="text-xs text-gray-500 mt-1">Hỗ trợ đọc nhiều sheet cùng lúc.</div></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-sm font-medium text-gray-700">📝 Số câu (0 = full)</label><input type="number" id="questionCount" value="0" min="0" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
+                <div><label class="block text-sm font-medium text-gray-700">⏱️ Thời gian (phút)</label><input type="number" id="timeMinutes" value="30" min="1" class="w-full border rounded-lg p-2 text-sm bg-white"></div>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-3 mt-4">
+            <button id="startFullTestBtn" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-xl text-sm shadow"><i class="fas fa-play mr-1"></i> Thi full bài</button>
+            <button id="startRandomTestBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm shadow"><i class="fas fa-random mr-1"></i> Thi ngẫu nhiên</button>
+            <button id="reviewWrongMainBtn" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-xl text-sm shadow"><i class="fas fa-book-open mr-1"></i> Ôn câu sai</button>
+            <button id="showGridBtn" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-sm shadow"><i class="fas fa-th"></i> Bảng tổng quan</button>
+        </div>
+        <div id="modeInfo" class="mt-2 text-xs font-medium text-blue-600"></div>
+    </div>
+
+    <!-- Sticky Nav -->
+    <div class="sticky-nav bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap md:flex-nowrap justify-between items-center gap-3 border border-gray-200">
+        <div class="flex items-center gap-3 flex-shrink-0"><i class="fas fa-chart-line text-blue-500 text-xl"></i><div><div class="text-sm font-medium text-gray-600">Tiến độ</div><div class="flex items-center gap-2"><span id="answeredCount" class="text-lg font-bold text-blue-700">0</span><span class="text-gray-400">/</span><span id="totalQuestionsCount" class="text-lg font-semibold">0</span></div></div></div>
+        <div class="flex-1 w-full min-w-[120px]"><div class="w-full bg-gray-200 rounded-full h-2.5"><div id="progressFill" class="progress-bar bg-blue-600 h-2.5 rounded-full" style="width:0%"></div></div></div>
+        <div class="flex items-center gap-2 flex-wrap">
+            <div class="relative group flex items-center">
+                <i class="fas fa-search absolute left-3 text-gray-400 text-sm pointer-events-none"></i>
+                <input type="text" id="searchInput" placeholder="Tìm câu..." title="Hỗ trợ gõ tắt chữ cái đầu" class="pl-9 pr-8 py-1.5 border rounded-lg text-sm w-40 md:w-56 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <button id="clearSearchBtn" class="absolute right-2 text-gray-400 hover:text-gray-600 hidden outline-none"><i class="fas fa-times-circle"></i></button>
+            </div>
+            <div id="timerDisplay" class="bg-gray-100 px-3 py-1 rounded-lg font-mono text-lg font-bold text-red-600 whitespace-nowrap">30:00</div>
+            <button id="goTopBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg text-sm"><i class="fas fa-arrow-up"></i></button>
+            <button id="goBottomBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg text-sm"><i class="fas fa-arrow-down"></i></button>
+        </div>
+    </div>
+
+    <!-- Question Grid Panel -->
+    <div id="questionGridPanel" class="bg-white rounded-xl shadow-sm p-4 mb-6 hidden border border-gray-200"><h3 class="font-semibold text-gray-700 mb-2"><i class="fas fa-table"></i> Tổng quan câu hỏi</h3><div class="overflow-x-auto"><div id="questionGrid" class="grid-responsive pb-2"></div></div><div class="text-xs text-gray-500 mt-2 flex gap-4 flex-wrap"><span><span class="inline-block w-3 h-3 bg-blue-200 rounded"></span> Chưa làm</span><span><span class="inline-block w-3 h-3 bg-green-500 rounded"></span> Đã làm</span><span><span class="inline-block w-3 h-3 bg-yellow-400 rounded"></span> Đánh dấu</span></div></div>
+    
+    <!-- Render Container -->
+    <div id="questionsContainer" class="space-y-5 mb-10"></div>
+    <div id="loadMoreTrigger" class="h-10 w-full"></div>
+
+    <!-- Result Panel -->
+    <div id="resultPanel" class="bg-white rounded-xl shadow-md p-5 mt-6 hidden border-t-4 border-blue-400">
+        <div class="flex justify-between items-center mb-3">
+            <div class="flex items-center gap-3"><i class="fas fa-clipboard-list text-blue-600 text-xl"></i><h2 class="text-xl font-bold text-gray-800">📊 Kết quả</h2></div>
+            <button id="exportPdfBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm"><i class="fas fa-file-pdf"></i> Xuất Báo Cáo</button>
+        </div>
+        <div id="resultContent" class="text-gray-700 space-y-2"></div>
+        <button id="reviewWrongBtn" class="mt-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm"><i class="fas fa-eye"></i> Xem lại câu sai</button>
+    </div>
+
+    <!-- Stats Modal -->
+    <div id="statsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4"><div class="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto p-6"><div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold text-gray-800">📈 Báo cáo lịch sử học tập</h2><div><button id="clearHistoryBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm mr-2"><i class="fas fa-trash-alt"></i> Xóa lịch sử</button><button id="closeStatsModal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button></div></div><div id="statsContent"></div><div id="wrongQuestionsList" class="mt-6 border-t pt-4"><h3 class="text-xl font-semibold mb-2">📌 Câu hỏi sai nhiều lần</h3><div id="wrongQuestionsContainer" class="overflow-x-auto"></div><button id="reviewWrongQuestionsBtn" class="mt-3 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm"><i class="fas fa-book-open"></i> Ôn tập các câu sai này</button></div><canvas id="statsChart" width="400" height="200" class="mt-4"></canvas></div></div>
+</div>
+
+<div id="toastMsg" class="toast-notify hidden"></div>
+
+<!-- Custom Confirm Modal -->
+<div id="customModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
+    <div id="customModalContent" class="bg-white rounded-xl shadow-lg max-w-sm w-full p-6 border border-transparent">
+        <h3 id="customModalTitle" class="text-lg font-bold mb-3 text-gray-800 dark:text-white">Xác nhận</h3>
+        <p id="customModalText" class="text-sm text-gray-600 mb-4"></p>
+        <input type="text" id="customModalInput" class="hidden w-full border rounded-lg p-2 mb-4 bg-white text-gray-800 focus:outline-none focus:border-blue-500">
+        <div class="flex justify-end gap-3">
+            <button id="customModalCancel" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Hủy</button>
+            <button id="customModalConfirm" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Đồng ý</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cài đặt API -->
+<div id="aiSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
+    <div id="aiSettingsModalContent" class="bg-white rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent">
+        <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Để sử dụng AI ở môi trường thật (Internet), bạn cần cung cấp API Key của Google Gemini.</p>
+        <input type="password" id="geminiApiKeyInput" placeholder="Nhập Google Gemini API Key..." class="w-full border rounded-lg p-2 mb-4 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:border-purple-500">
+        <div class="flex flex-wrap justify-end gap-3">
+            <button id="checkModelsBtn" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition"><i class="fas fa-list"></i> Kiểm tra Models</button>
+            <button id="closeAiSettingsBtn" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Đóng</button>
+            <button id="saveAiSettingsBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition">Lưu Key</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AI Generator -->
+<div id="aiGenModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[50] p-4">
+    <div id="aiGenModalContent" class="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto flex flex-col">
+        <h3 class="text-xl font-bold mb-2 text-indigo-700 dark:text-indigo-400"><i class="fas fa-magic"></i> AI Sinh đề Tự động</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Dán nội dung, chụp ảnh hoặc tải lên file tài liệu (PDF, Word, Excel, Ảnh). AI sẽ đọc và tự động tạo thành đề trắc nghiệm.</p>
+        
+        <div class="space-y-4 flex-1 flex flex-col">
+            <div class="border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl p-4 text-center hover:bg-indigo-50 dark:hover:bg-slate-800 transition cursor-pointer" id="uploadFileArea">
+                <i class="fas fa-cloud-upload-alt text-3xl text-indigo-400 mb-2"></i>
+                <div class="text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-1">Nhấn để Tải lên Ảnh, PDF, Word, Excel, TXT</div>
+                <div class="text-xs text-gray-500">(Hoặc dùng điện thoại để chụp ảnh trực tiếp)</div>
+                <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.txt,.csv,.xlsx,.xls" class="hidden">
+            </div>
+
+            <div id="filePreviewContainer" class="hidden relative p-3 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-between border border-indigo-100 dark:border-slate-700">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <i id="fileIconPreview" class="fas fa-file-alt text-2xl text-indigo-500"></i>
+                    <span id="fileNameDisplay" class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate whitespace-nowrap max-w-[250px]"></span>
+                </div>
+                <button id="removeFileBtn" class="text-red-500 hover:text-red-700 p-1"><i class="fas fa-times-circle text-lg"></i></button>
+            </div>
+
+            <div class="flex-1 flex flex-col min-h-[120px]">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hoặc Dán văn bản trực tiếp vào đây:</label>
+                <textarea id="aiGenTextArea" class="w-full flex-1 border rounded-lg p-3 text-sm bg-white dark:bg-slate-900 text-gray-800 dark:text-white resize-none focus:outline-none focus:border-indigo-500" placeholder="Copy bài giảng, thông báo, quy trình... dán vào đây..."></textarea>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Số câu:</label>
+                    <input type="number" id="aiGenCount" value="10" min="1" max="50" class="w-full border rounded-lg p-2 text-sm bg-white dark:bg-slate-900 text-gray-800 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Độ khó:</label>
+                    <select id="aiGenDifficulty" class="w-full border rounded-lg p-2 text-sm bg-white dark:bg-slate-900 text-gray-800 dark:text-white">
+                        <option value="Mặc định">Mặc định</option>
+                        <option value="Dễ">Dễ</option>
+                        <option value="Trung bình">Trung bình</option>
+                        <option value="Khó">Khó</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tên bộ đề:</label>
+                    <input type="text" id="aiGenName" placeholder="Mặc định: Bộ đề AI" class="w-full border rounded-lg p-2 text-sm bg-white dark:bg-slate-900 text-gray-800 dark:text-white">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+            <button id="closeAiGenBtn" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Đóng</button>
+            <button id="submitAiGenBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"><i class="fas fa-bolt mr-1"></i> Bắt đầu tạo</button>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
