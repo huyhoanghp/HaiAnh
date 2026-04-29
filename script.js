@@ -37,7 +37,7 @@ const VOICE_DICTIONARY = {
     "v.v": "vân vân", "v.v.": "vân vân", "HĐQT": "Hội đồng quản trị", "v/v": "về việc",
     "X4": "X bốn", "KNL": "Khung năng lực", "NV": "nhân viên", "GĐ": "Giám đốc",
     "PGĐ": "Phó Giám đốc", "TP": "Trưởng phòng", "PP": "Phó phòng", "CN": "Chi nhánh",
-    "P.": "Phòng", "TT": "Trung tâm"
+    "P.": "Phòng", "TT": "Trung tâm", "TP.HCM": "thành phố Hồ Chí Minh"
 };
 
 let speechInterval = null;
@@ -48,17 +48,22 @@ function normalizeText(text) {
     // Xóa Markdown nhưng giữ lại dấu chấm câu để ngắt nghỉ
     p = p.replace(/#{1,6}\s?/g, " ").replace(/\*\*/g, "").replace(/\*/g, "")
          .replace(/^-{3,}/gm, " ").replace(/^[-*+]\s/gm, ". ");
-    // Xóa ký tự đặc biệt gây treo engine, giữ lại dấu chấm, phẩy, hỏi, chấm phẩy
+    // Xóa ký tự đặc biệt gây treo engine
     p = p.replace(/["“”„‟«»‹›'‘’`_~]/g, "").replace(/[\(\)\[\]\{\}]/g, " ");
     // Đọc số câu/đáp án
     p = p.replace(/^([A-D])\.\s/gim, "Đáp án $1. ").replace(/^(\d+)\.\s/gim, "Câu $1. ");
-    // Dictionary (Ưu tiên khớp từ dài trước)
-    const sortedKeys = Object.keys(VOICE_DICTIONARY).sort((a, b) => b.length - a.length);
+    
+    // Merge từ điển hệ thống và từ điển người dùng (nếu có)
+    const userDict = JSON.parse(localStorage.getItem('user_voice_dict') || '{}');
+    const fullDict = { ...VOICE_DICTIONARY, ...userDict };
+
+    // Dictionary (Thoát chuỗi Regex và ưu tiên từ dài)
+    const sortedKeys = Object.keys(fullDict).sort((a, b) => b.length - a.length);
     sortedKeys.forEach(k => {
-        const regex = new RegExp(`\\b${k}\\b`, "gi");
-        p = p.replace(regex, VOICE_DICTIONARY[k]);
+        const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b${escapedK}\\b`, "gi");
+        p = p.replace(regex, fullDict[k]);
     });
-    // CHỈ làm sạch khoảng trắng thừa, KHÔNG chèn khoảng trắng quanh dấu câu (tránh lỗi phờ-ương)
     return p.replace(/\s+/g, " ").trim();
 }
 
@@ -85,35 +90,41 @@ const SpeechManager = {
     },
 
     chunkText(text) {
-        let remaining = text;
-        const maxLen = 150; // Tăng nhẹ giới hạn để câu tự nhiên hơn
-        const chunks = [];
-        while (remaining.length > 0) {
-            if (remaining.length <= maxLen) {
-                chunks.push(remaining);
-                break;
-            }
-            let splitIdx = -1;
-            // Ưu tiên ngắt mạnh
-            const strongDelims = [". ", "? ", "! ", "; "];
-            for (let d of strongDelims) {
-                const last = remaining.lastIndexOf(d, maxLen);
-                if (last > splitIdx) splitIdx = last + d.length;
-            }
-            // Nếu không có ngắt mạnh, mới ngắt tại dấu phẩy hoặc gạch ngang
-            if (splitIdx <= 0) {
-                const weakDelims = [", ", " - "];
-                for (let d of weakDelims) {
+        // Tách theo dòng trước để xử lý ngắt nghỉ 500ms
+        const lines = text.split(/\n+/);
+        let chunks = [];
+        const maxLen = 150;
+
+        lines.forEach(line => {
+            let remaining = line.trim();
+            if (!remaining) return;
+
+            while (remaining.length > 0) {
+                if (remaining.length <= maxLen) {
+                    chunks.push(remaining + " [break]"); // Đánh dấu ngắt dòng
+                    break;
+                }
+                let splitIdx = -1;
+                const strongDelims = [". ", "? ", "! ", "; "];
+                for (let d of strongDelims) {
                     const last = remaining.lastIndexOf(d, maxLen);
                     if (last > splitIdx) splitIdx = last + d.length;
                 }
+                if (splitIdx <= 0) {
+                    const weakDelims = [", ", " - "];
+                    for (let d of weakDelims) {
+                        const last = remaining.lastIndexOf(d, maxLen);
+                        if (last > splitIdx) splitIdx = last + d.length;
+                    }
+                }
+                if (splitIdx <= 0) splitIdx = remaining.lastIndexOf(" ", maxLen);
+                if (splitIdx <= 0) splitIdx = maxLen;
+                
+                chunks.push(remaining.substring(0, splitIdx).trim());
+                remaining = remaining.substring(splitIdx).trim();
             }
-            if (splitIdx <= 0) splitIdx = remaining.lastIndexOf(" ", maxLen);
-            if (splitIdx <= 0) splitIdx = maxLen;
-            chunks.push(remaining.substring(0, splitIdx).trim());
-            remaining = remaining.substring(splitIdx).trim();
-        }
-        return chunks.filter(c => c.length > 0);
+        });
+        return chunks;
     },
 
     async start(text, qIdx) {
@@ -128,6 +139,7 @@ const SpeechManager = {
 
         if (this.sessionId !== currentSession) return;
 
+        // Giữ lại \n để chunkText xử lý
         this.queue = this.chunkText(text);
         this.currentIdx = 0;
         this.activeQIdx = qIdx;
@@ -144,8 +156,19 @@ const SpeechManager = {
 
         if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
 
-        const chunk = this.queue[this.currentIdx];
-        this.currentUtterance = new SpeechSynthesisUtterance(chunk);
+        let chunk = this.queue[this.currentIdx];
+        let hasBreak = chunk.includes("[break]");
+        chunk = chunk.replace("[break]", "");
+
+        // Chỉ đọc nếu có nội dung
+        const cleanChunk = normalizeText(chunk);
+        if (!cleanChunk) {
+            this.currentIdx++;
+            this.play(session);
+            return;
+        }
+
+        this.currentUtterance = new SpeechSynthesisUtterance(cleanChunk);
         if (vietnameseVoice) this.currentUtterance.voice = vietnameseVoice;
         this.currentUtterance.lang = 'vi-VN';
         this.currentUtterance.rate = this.rate;
@@ -154,19 +177,17 @@ const SpeechManager = {
             if (session !== this.sessionId) return;
             if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
             this.currentIdx++;
-            setTimeout(() => this.play(session), 40); // Giảm delay giữa các đoạn
+            // Nếu có dấu ngắt dòng, nghỉ 500ms, ngược lại 40ms
+            const delay = hasBreak ? 550 : 40;
+            setTimeout(() => this.play(session), delay);
         };
 
         this.currentUtterance.onend = next;
         this.currentUtterance.onerror = next;
 
-        // Watchdog thông minh hơn
-        const expectedDuration = Math.max(4000, chunk.length * 150); 
+        const expectedDuration = Math.max(4000, cleanChunk.length * 150); 
         this.watchdogTimer = setTimeout(() => {
-            if (session === this.sessionId && !this.isPaused) {
-                console.log("Watchdog: Engine stalled, skipping to next chunk.");
-                next();
-            }
+            if (session === this.sessionId && !this.isPaused) next();
         }, expectedDuration);
 
         window.speechSynthesis.speak(this.currentUtterance);
