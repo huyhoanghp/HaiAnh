@@ -6,6 +6,12 @@ body.dark .bg-gray-100, body.dark .bg-gray-200 { background-color: #0f172a !impo
 body.dark .text-gray-700, body.dark .text-gray-600, body.dark .text-gray-500, body.dark .text-gray-800, body.dark .text-black { color: #cbd5e1 !important; }
 body.dark input, body.dark select, body.dark textarea, body.dark .border { background-color: #0f172a !important; color: #e2e8f0 !important; border-color: #475569 !important; }
 
+/* Tăng độ tương phản cho chế độ sáng */
+.text-gray-400 { color: #64748b !important; } /* Sẫm màu hơn từ xám nhạt sang xám đậm */
+.bg-gray-50 { background-color: #f8fafc !important; }
+.speak-toggle-btn { color: #1e40af !important; border-color: #bfdbfe !important; }
+.dark .speak-toggle-btn { color: #60a5fa !important; border-color: #1e3a8a !important; }
+
 body.dark #resultContent { color: #e2e8f0; }
 body.dark #resultContent .bg-gray-50 { background-color: #1e293b !important; border: 1px solid #475569; }
 body.dark #resultContent .text-gray-800 { color: #f8fafc !important; }
@@ -18,12 +24,17 @@ body.dark #customModalText { color: #cbd5e1; }
 body.dark .btn-secondary { background-color: #334155; color: #e2e8f0; }
 body.dark .btn-secondary:hover { background-color: #475569; }
 
-.ai-explanation-box { background-color: #fdf4ff !important; border: 1px solid #e9d5ff !important; }
-.ai-explanation-box .ai-text-content { color: #111827 !important; line-height: 1.6; }
-body.dark .ai-explanation-box { background-color: #1e1b4b !important; border-color: #4c1d95 !important; }
+.ai-explanation-box { 
+    background-color: #f5f3ff !important; 
+    border: 1px solid #ddd6fe !important; 
+    border-radius: 1rem !important;
+    overflow: visible !important; 
+}
+.ai-explanation-box .ai-text-content { color: #1e293b !important; line-height: 1.6; }
+body.dark .ai-explanation-box { background-color: #2e106540 !important; border-color: #7c3aed40 !important; }
 body.dark .ai-explanation-box .ai-text-content { color: #e2e8f0 !important; }
 
-.card-question { transition: all 0.2s ease; content-visibility: auto; contain-intrinsic-size: auto 200px; }
+.card-question { transition: all 0.2s ease; overflow: visible !important; }
 .answer-correct { background-color: #dcfce7; border-left: 4px solid #22c55e; }
 .answer-wrong { background-color: #fee2e2; border-left: 4px solid #ef4444; }
 body.dark .answer-correct { background-color: #064e3b !important; border-left-color: #4ade80; }
@@ -40,6 +51,163 @@ body.dark .wrong-table th { background-color: #334155; }
 #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1.2rem; backdrop-filter: blur(3px); }
 .spinner { border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 1rem; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+    .container { padding: 10px !important; }
+    .btn-grid button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700; /* Làm đậm chữ */
+    letter-spacing: 0.025em;
+    transition: all 0.2s;
+}
+
+/* Hệ thống Nút bấm Đồng nhất */
+.btn-unified {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.btn-unified:active { transform: scale(0.96); }
+.btn-unified i { font-size: 1rem; }
+
+.btn-primary { background: #2563eb; color: #ffffff; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+.btn-primary:hover { background: #1d4ed8; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+
+.btn-secondary { background: #f59e0b; color: #ffffff; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.2); }
+.btn-secondary:hover { background: #d97706; }
+
+.btn-ghost { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.btn-ghost:hover { background: #e2e8f0; color: #1e293b; }
+.dark .btn-ghost { background: #334155; color: #f1f5f9; border-color: #475569; }
+
+/* Action Icons trong Khung Tiến độ */
+.action-icon-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.625rem;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.action-icon-btn:active { transform: scale(0.9); }
+.action-icon-btn.primary { color: #2563eb; background: #eff6ff; border-color: #dbeafe; }
+.action-icon-btn.secondary { color: #d97706; background: #fffbeb; border-color: #fef3c7; }
+.action-icon-btn.ghost { color: #64748b; }
+.action-icon-btn.highlight { color: #7c3aed; background: #f5f3ff; border-color: #ddd6fe; }
+.dark .action-icon-btn.highlight { color: #a78bfa; background: #2e106540; border-color: #7c3aed40; }
+
+.dark .action-icon-btn { background: #1e293b; border-color: #334155; }
+.dark .action-icon-btn.primary { background: #1e3a8a; color: #60a5fa; }
+.dark .action-icon-btn.secondary { background: #78350f; color: #fbbf24; }
+
+.header-actions-desktop { display: none !important; }
+
+@media (min-width: 768px) {
+    .header-actions-desktop { display: flex !important; }
+}
+
+/* Tối ưu Khung tiến độ (Progress Area) */
+#progressArea {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 768px) {
+    #progressArea {
+        padding: 0.75rem !important;
+        margin-left: -0.5rem;
+        margin-right: -0.5rem;
+        border-radius: 1rem;
+    }
+    
+    #progressArea .flex.items-center.justify-between.mb-4 {
+        margin-bottom: 0.5rem !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .container { padding-bottom: 2rem; }
+}
+
+/* Tăng độ rõ nét cho từng loại nút trong Light Mode */
+#openAiGenBtn { background-color: #e0e7ff !important; color: #3730a3 !important; border: 1px solid #c7d2fe !important; }
+#aiSettingsBtn { background-color: #f5f3ff !important; color: #701a75 !important; border: 1px solid #ddd6fe !important; }
+
+.dark .btn-grid button { color: #f1f5f9 !important; background-color: transparent !important; }
+
+@media (max-width: 640px) {
+    .btn-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+    }
+    .btn-grid button {
+        padding: 0.5rem 0.25rem;
+        width: 100%;
+    }
+}
+    .card-question { padding: 15px !important; border-radius: 16px !important; margin-bottom: 15px !important; }
+    .header-info { flex-direction: column; gap: 10px; }
+    .sticky-nav { padding: 10px !important; }
+    .ai-explanation-box { padding: 12px !important; font-size: 14px !important; }
+    h1.text-3xl { font-size: 20px !important; }
+}
+
+/* Question Card Styles */
+.q-card { 
+    background: #ffffff; 
+    border-radius: 1.25rem; 
+    padding: 1.5rem; 
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+    border: 1px solid #e2e8f0;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.dark .q-card { background: #1e293b; border-color: #334155; }
+
+/* FIX CONTRAST: Đảm bảo chữ câu hỏi luôn sẫm màu */
+.q-text-focus { 
+    font-size: 1.125rem !important; 
+    font-weight: 700 !important; 
+    color: #1e293b !important; 
+    line-height: 1.6 !important;
+    margin-bottom: 1.25rem !important;
+    display: block !important;
+    opacity: 1 !important;
+}
+body.dark .q-text-focus { color: #f1f5f9 !important; }
+
+.q-text { 
+    font-size: 1.125rem; 
+    font-weight: 600; 
+    color: #1e293b; 
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+}
+.dark .q-text { color: #f1f5f9; }
+
+.q-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+.dark .q-toolbar { border-bottom-color: #334155; }
 
 /* Voice buttons styling */
 .voice-btn { cursor: pointer; opacity: 0.6; transition: opacity 0.2s, transform 0.2s; }

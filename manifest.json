@@ -1,0 +1,21 @@
+{
+  "name": "Hai Anh Study",
+  "short_name": "HaiAnh Study",
+  "description": "Hệ thống luyện thi trắc nghiệm thông minh Hello-X4",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "BTS_Icon.webp",
+      "sizes": "192x192",
+      "type": "image/webp"
+    },
+    {
+      "src": "BTS_Icon.webp",
+      "sizes": "512x512",
+      "type": "image/webp"
+    }
+  ]
+}
