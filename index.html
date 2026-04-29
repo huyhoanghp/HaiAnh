@@ -12,46 +12,42 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     
-    <link rel="stylesheet" href="style.css?v=2.6">
+    <link rel="stylesheet" href="style.css?v=2.7">
 </head>
 <body class="font-sans antialiased bg-gray-100">
 <div id="loadingOverlay"><div class="spinner"></div><div id="loadingText">Đang xử lý, vui lòng chờ...</div></div>
 
 <div id="fileProtocolBanner" class="hidden fixed top-0 left-0 right-0 z-[2000] bg-red-600 text-white px-4 py-3 text-sm shadow-lg" style="line-height:1.6">
     ⚠️ <strong>Chức năng AI bị chặn</strong> — Bạn đang mở file bằng <code style="background:rgba(0,0,0,0.3);padding:0 4px;border-radius:3px">file://</code>, trình duyệt sẽ chặn mọi kết nối ra ngoài.<br>
-    👉 Cách khắc phục: Dùng <strong>VS Code + Live Server</strong>, hoặc chạy <code style="background:rgba(0,0,0,0.3);padding:0 4px;border-radius:3px">python -m http.server 8080</code> rồi truy cập <strong>http://localhost:8080/Hello-X4_index.html</strong>
+    👉 Cách khắc phục: Dùng <strong>VS Code + Live Server</strong>, hoặc chạy <code style="background:rgba(0,0,0,0.3);padding:0 4px;border-radius:3px">python -m http.server 8080</code> rồi truy cập <strong>http://localhost:8080/index.html</strong>
     <button onclick="document.getElementById('fileProtocolBanner').classList.add('hidden')" style="margin-left:12px;text-decoration:underline;opacity:0.8">Đóng</button>
 </div>
 
 <div class="container mx-auto px-4 py-6 max-w-7xl">
     <!-- Header -->
     <div class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-gray-200">
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
             <h1 class="text-2xl font-bold text-blue-800 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> Hai Anh Study</h1>
             
             <div class="flex gap-2 flex-wrap justify-center md:justify-end">
-                <!-- Nhóm Cài đặt (Luôn hiện ở Header) -->
                 <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa-magic"></i> AI Gen</button>
                 <button id="aiSettingsBtn" class="btn-unified btn-ghost">
                     <i class="fas fa-key"></i> API <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
                 </button>
                 <button id="darkModeToggle" class="btn-unified btn-ghost"><i class="fas fa-circle-half-stroke"></i> <span id="darkModeText">Tối</span></button>
                 
-                <!-- Nhóm Điều khiển (Chỉ hiện ở Header trên Desktop) -->
-                <div class="header-actions-desktop flex gap-2">
-                    <button id="pauseResumeBtn" class="btn-unified btn-secondary"><i class="fas fa-pause"></i> Tạm dừng</button>
-                    <button id="resetExamBtn" class="btn-unified btn-ghost"><i class="fas fa-rotate-right"></i> Làm lại</button>
-                    <button id="submitBtn" class="btn-unified btn-primary"><i class="fas fa-paper-plane"></i> Nộp bài</button>
+                <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
+                <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">
+                    <button id="pauseResumeBtn" class="btn-unified btn-secondary text-xs px-3 py-1.5"><i class="fas fa-pause"></i> Tạm dừng</button>
+                    <button id="resetExamBtn" class="btn-unified btn-ghost text-xs px-3 py-1.5"><i class="fas fa-rotate-right"></i> Làm lại</button>
+                    <button id="submitBtn" class="btn-unified btn-primary text-xs px-3 py-1.5"><i class="fas fa-paper-plane"></i> Nộp bài</button>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Sticky Bottom Bar (Chỉ hiện trên Mobile) -->
-        <div class="mobile-action-bar">
-            <button id="pauseResumeBtnMob" class="btn-unified btn-secondary flex-1"><i class="fas fa-pause"></i> Tạm dừng</button>
-            <button id="resetExamBtnMob" class="btn-unified btn-ghost"><i class="fas fa-rotate-right"></i></button>
-            <button id="submitBtnMob" class="btn-unified btn-primary flex-1"><i class="fas fa-paper-plane"></i> Nộp bài</button>
-        </div>
+    <!-- Khung Cài đặt đề thi (Chỉ hiện khi chưa thi) -->
+    <div id="setupArea" class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-gray-200">
         <div class="bg-gray-50 p-4 rounded-xl mb-4">
             <div class="flex flex-wrap gap-3 items-end">
                 <div class="flex-1 min-w-[200px]"><label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 ml-1">📚 Bộ câu hỏi đã lưu</label><select id="bankSelect" class="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"><option value="">-- Chọn bộ câu hỏi --</option></select></div>
@@ -79,35 +75,69 @@
         <div id="modeInfo" class="mt-2 text-xs font-medium text-blue-600"></div>
     </div>
 
-    <!-- Sticky Nav -->
-    <div class="sticky-nav bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap md:flex-nowrap justify-between items-center gap-3 border border-gray-200">
-        <div class="flex items-center gap-3 flex-shrink-0"><i class="fas fa-chart-line text-blue-500 text-xl"></i><div><div class="text-sm font-medium text-gray-600">Tiến độ</div><div class="flex items-center gap-2"><span id="answeredCount" class="text-lg font-bold text-blue-700">0</span><span class="text-gray-400">/</span><span id="totalQuestionsCount" class="text-lg font-semibold">0</span></div></div></div>
-        <div class="flex-1 w-full min-w-[120px]"><div class="w-full bg-gray-200 rounded-full h-2.5"><div id="progressFill" class="progress-bar bg-blue-600 h-2.5 rounded-full" style="width:0%"></div></div></div>
-        <div class="flex items-center gap-2 flex-wrap">
-            <div class="relative group flex items-center">
-                <i class="fas fa-search absolute left-3 text-gray-400 text-sm pointer-events-none"></i>
-                <input type="text" id="searchInput" placeholder="Tìm câu..." title="Hỗ trợ gõ tắt chữ cái đầu" class="pl-9 pr-8 py-1.5 border rounded-lg text-sm w-40 md:w-56 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                <button id="clearSearchBtn" class="absolute right-2 text-gray-400 hover:text-gray-600 hidden outline-none"><i class="fas fa-times-circle"></i></button>
+    <!-- Sticky Nav & Progress Area (Phương án 2) -->
+    <div id="progressArea" class="sticky top-2 z-40 bg-white rounded-2xl shadow-md p-4 mb-6 border border-gray-100 hidden">
+        <!-- Hàng 1: Tiến độ và Cụm điều khiển -->
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+                    <i class="fas fa-chart-line text-lg"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Tiến độ</div>
+                    <div class="flex items-center gap-1.5">
+                        <span id="answeredCount" class="text-xl font-extrabold text-blue-700">0</span>
+                        <span class="text-gray-300 font-light">/</span>
+                        <span id="totalQuestionsCount" class="text-xl font-bold text-gray-500">0</span>
+                    </div>
+                </div>
             </div>
-            <div id="timerDisplay" class="bg-gray-100 px-3 py-1 rounded-lg font-mono text-lg font-bold text-red-600 whitespace-nowrap">30:00</div>
-            <button id="goTopBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg text-sm"><i class="fas fa-arrow-up"></i></button>
-            <button id="goBottomBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-lg text-sm"><i class="fas fa-arrow-down"></i></button>
+
+            <!-- Cụm Điều khiển Icon (Pause, Reset, Submit) -->
+            <div class="flex gap-2">
+                <button id="pauseResumeBtnHeader" title="Tạm dừng" class="action-icon-btn secondary">
+                    <i class="fas fa-pause"></i>
+                </button>
+                <button id="resetExamBtnHeader" title="Làm lại" class="action-icon-btn ghost">
+                    <i class="fas fa-rotate-right"></i>
+                </button>
+                <button id="submitBtnHeader" title="Nộp bài" class="action-icon-btn primary">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Thanh Progress Bar -->
+        <div class="w-full bg-gray-100 h-2 rounded-full mb-4 overflow-hidden">
+            <div id="progressFill" class="bg-blue-600 h-full w-0 transition-all duration-500 shadow-sm"></div>
+        </div>
+
+        <!-- Hàng 2: Tìm kiếm, Timer và Điều hướng -->
+        <div class="flex items-center gap-3">
+            <div class="relative flex-1">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                <input type="text" id="searchInput" placeholder="Tìm câu..." title="Hỗ trợ gõ tắt chữ cái đầu" class="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-100 transition-all">
+                <button id="clearSearchBtn" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"><i class="fas fa-times-circle"></i></button>
+            </div>
+            
+            <div id="timerDisplay" class="bg-red-50 text-red-600 px-3 py-2 rounded-xl font-mono font-bold text-sm border border-red-100 min-w-[75px] text-center shadow-sm">30:00</div>
+            
+            <div class="flex gap-1">
+                <button id="goTopBtn" title="Lên đầu" class="p-2 text-gray-400 hover:text-blue-600 transition-colors"><i class="fas fa-arrow-up"></i></button>
+                <button id="goBottomBtn" title="Xuống cuối" class="p-2 text-gray-400 hover:text-blue-600 transition-colors"><i class="fas fa-arrow-down"></i></button>
+            </div>
         </div>
     </div>
 
     <!-- Question Grid Panel -->
-    <div id="questionGridPanel" class="bg-white rounded-xl shadow-sm p-4 mb-6 hidden border border-gray-200"><h3 class="font-semibold text-gray-700 mb-2"><i class="fas fa-table"></i> Tổng quan câu hỏi</h3><div class="overflow-x-auto"><div id="questionGrid" class="grid-responsive pb-2"></div></div><div class="text-xs text-gray-500 mt-2 flex gap-4 flex-wrap"><span><span class="inline-block w-3 h-3 bg-blue-200 rounded"></span> Chưa làm</span><span><span class="inline-block w-3 h-3 bg-green-500 rounded"></span> Đã làm</span><span><span class="inline-block w-3 h-3 bg-yellow-400 rounded"></span> Đánh dấu</span></div></div>
+    <div id="questionGridPanel" class="bg-white rounded-xl shadow-sm p-4 mb-6 hidden border border-gray-200">
+        <h3 class="font-semibold text-gray-700 mb-2"><i class="fas fa-table"></i> Tổng quan câu hỏi</h3>
+        <div class="overflow-x-auto"><div id="questionGrid" class="grid-responsive pb-2"></div></div>
+    </div>
     
     <!-- Render Container -->
     <div id="questionsContainer" class="space-y-5 mb-6"></div>
     <div id="loadMoreTrigger" class="h-10 w-full"></div>
-
-    <!-- Bottom Submit Section -->
-    <div id="bottomActions" class="mt-8 mb-12 flex justify-center hidden">
-        <button id="submitBtnBottom" class="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-2xl text-lg font-bold shadow-2xl transform transition active:scale-95 flex items-center gap-3">
-            <i class="fas fa-check-double"></i> HOÀN THÀNH & NỘP BÀI
-        </button>
-    </div>
 
     <!-- Result Panel -->
     <div id="resultPanel" class="bg-white rounded-xl shadow-md p-5 mt-6 hidden border-t-4 border-blue-400">

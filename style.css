@@ -108,6 +108,30 @@ body.dark .wrong-table th { background-color: #334155; }
 .dark .action-icon-btn.primary { background: #1e3a8a; color: #60a5fa; }
 .dark .action-icon-btn.secondary { background: #78350f; color: #fbbf24; }
 
+.header-actions-desktop { display: none !important; }
+
+@media (min-width: 768px) {
+    .header-actions-desktop { display: flex !important; }
+}
+
+/* Tối ưu Khung tiến độ (Progress Area) */
+#progressArea {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 768px) {
+    #progressArea {
+        padding: 0.75rem !important;
+        margin-left: -0.5rem;
+        margin-right: -0.5rem;
+        border-radius: 1rem;
+    }
+    
+    #progressArea .flex.items-center.justify-between.mb-4 {
+        margin-bottom: 0.5rem !important;
+    }
+}
+
 @media (max-width: 640px) {
     .container { padding-bottom: 2rem; }
 }

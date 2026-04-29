@@ -735,16 +735,26 @@ function pauseExam() {
     if (!examActive || submitted) return; 
     isPaused = true; 
     stopTimer(); 
-    const btns = [document.getElementById('pauseResumeBtn'), document.getElementById('pauseResumeBtnMob')];
-    btns.forEach(btn => { if (btn) btn.innerHTML = '<i class="fas fa-play"></i> Tiếp tục'; });
+    const btns = [document.getElementById('pauseResumeBtn'), document.getElementById('pauseResumeBtnHeader')];
+    btns.forEach(btn => { 
+        if (btn) {
+            if (btn.id === 'pauseResumeBtn') btn.innerHTML = '<i class="fas fa-play"></i> Tiếp tục';
+            else btn.innerHTML = '<i class="fas fa-play"></i>';
+        }
+    });
     showToast("Đã tạm dừng."); 
     saveProgressToLocal(); 
 }
 function resumeExam() { 
     if (!examActive || submitted) return; 
     isPaused = false; 
-    const btns = [document.getElementById('pauseResumeBtn'), document.getElementById('pauseResumeBtnMob')];
-    btns.forEach(btn => { if (btn) btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng'; });
+    const btns = [document.getElementById('pauseResumeBtn'), document.getElementById('pauseResumeBtnHeader')];
+    btns.forEach(btn => { 
+        if (btn) {
+            if (btn.id === 'pauseResumeBtn') btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng';
+            else btn.innerHTML = '<i class="fas fa-pause"></i>';
+        }
+    });
     startTimer(timeRemainingSeconds); 
     showToast("Tiếp tục."); 
     saveProgressToLocal(); 
@@ -783,10 +793,11 @@ function initExam(questionsArray, timeMinutes) {
         if (!questionsArray || !questionsArray.length) { showToast("Chưa có ngân hàng."); return false; }
         stopTimer(); currentQuestions = [...questionsArray]; userAnswers = Array(currentQuestions.length).fill().map(() => []); flagged = Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = false;
         const pauseResumeBtn = document.getElementById('pauseResumeBtn'); if (pauseResumeBtn) pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng';
+        const pauseResumeBtnHeader = document.getElementById('pauseResumeBtnHeader'); if (pauseResumeBtnHeader) pauseResumeBtnHeader.innerHTML = '<i class="fas fa-pause"></i>';
         updateProgress(); initLazyRender();
         const resultPanel = document.getElementById('resultPanel'); if (resultPanel) resultPanel.classList.add('hidden');
-        const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.remove('hidden');
-        const mobBar = document.querySelector('.mobile-action-bar'); if (mobBar) mobBar.style.display = 'flex';
+        const setupArea = document.getElementById('setupArea'); if (setupArea) setupArea.classList.add('hidden');
+        const progressArea = document.getElementById('progressArea'); if (progressArea) progressArea.classList.remove('hidden');
         const searchInput = document.getElementById('searchInput'); if (searchInput) searchInput.value = '';
         const clearSearchBtn = document.getElementById('clearSearchBtn'); if (clearSearchBtn) clearSearchBtn.classList.add('hidden');
         startTimer(timeMinutes * 60);
@@ -808,6 +819,7 @@ function submitExam() {
             stopTimer(); examActive = false; submitted = true; const evalRes = evaluateAll(); scoreDetails = evalRes.details; const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
             const resultContent = document.getElementById('resultContent'); if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p><p class="text-sm text-gray-700 mt-1">Đúng: ${evalRes.correctCount} | Sai: ${evalRes.total - evalRes.correctCount}</p><div class="w-full bg-gray-200 rounded-full h-2 mt-3"><div class="bg-green-500 h-2 rounded-full" style="width:${percent}%"></div></div></div><div class="mt-3 text-sm italic text-gray-600">💡 Kết quả chi tiết bên dưới. Tận dụng "Gia sư AI" để phân tích lỗi sai nhé!</div>`;
             const resultPanel = document.getElementById('resultPanel'); if (resultPanel) resultPanel.classList.remove('hidden');
+            const setupArea = document.getElementById('setupArea'); if (setupArea) setupArea.classList.remove('hidden');
             const searchInput = document.getElementById('searchInput'); if (searchInput) searchInput.value = '';
             const clearSearchBtn = document.getElementById('clearSearchBtn'); if (clearSearchBtn) clearSearchBtn.classList.add('hidden');
             initLazyRender(() => { while (displayedCount < Math.min(50, filteredIndices.length)) renderNextBatch(''); setTimeout(() => resultPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); });
@@ -918,12 +930,11 @@ async function initGIA() {
         document.getElementById('startFullTestBtn')?.addEventListener('click', startFullTest);
         document.getElementById('startRandomTestBtn')?.addEventListener('click', startRandomTest);
         document.getElementById('resetExamBtn')?.addEventListener('click', resetCurrentExam);
-        document.getElementById('resetExamBtnMob')?.addEventListener('click', resetCurrentExam);
+        document.getElementById('resetExamBtnHeader')?.addEventListener('click', resetCurrentExam);
         document.getElementById('pauseResumeBtn')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
-        document.getElementById('pauseResumeBtnMob')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
+        document.getElementById('pauseResumeBtnHeader')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
-        document.getElementById('submitBtnMob')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
-        document.getElementById('submitBtnBottom')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
+        document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('showGridBtn')?.addEventListener('click', () => { if (currentQuestions.length) { const panel = document.getElementById('questionGridPanel'); panel?.classList.toggle('hidden'); if (panel && !panel.classList.contains('hidden')) renderQuestionGrid(); } else showToast("Chưa có bài thi."); });
         document.getElementById('goTopBtn')?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
         document.getElementById('goBottomBtn')?.addEventListener('click', () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
@@ -1013,11 +1024,9 @@ async function initGIA() {
             } catch (error) { showLoading(false); showToast("❌ Lỗi tạo đề: " + error.message, 7000); aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); }
         });
 
-        // Nút nộp bài dưới cùng & Mobile Bar
-        const submitBtnBottom = document.getElementById('submitBtnBottom');
-        if (submitBtnBottom) submitBtnBottom.onclick = submitExam;
-        const submitBtnMob = document.getElementById('submitBtnMob');
-        if (submitBtnMob) submitBtnMob.onclick = submitExam;
+        // Nút nộp bài Header
+        const submitBtnHeader = document.getElementById('submitBtnHeader');
+        if (submitBtnHeader) submitBtnHeader.onclick = submitExam;
 
         // Đóng gợi ý AI và Thông báo (Toast) khi chạm vào vùng trống
         document.addEventListener('pointerdown', (e) => {
