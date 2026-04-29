@@ -26,38 +26,41 @@ let currentFileData = null, currentMimeType = null;
 let vietnameseVoice = null;
 const VOICE_DICTIONARY = {
     // Chuyên ngành viễn thông/IT (do người dùng yêu cầu)
-    "OLT": "O L T",
-    "ONT": "O N T",
-    "ONU": "O N U",
-    "PON": "Pôn",
-    "GPON": "G Pôn",
-    "IP": "I P",
-    "ISP": "nhà cung cấp dịch vụ Internet",
-    "VoIP": "Voi P",
-    "IPTV": "I P T V",
-    "Triple Play": "Ba dịch vụ",
-    "Ethernet": "Ét tơ nét",
-    "gateway": "Cổng kết nối",
-    "Wi-Fi": "Quai phai",
+    "OLT": "O L T", "ONT": "O N T", "ONU": "O N U", "PON": "Pôn", "GPON": "G Pôn",
+    "IP": "I P", "ISP": "nhà cung cấp dịch vụ Internet", "VoIP": "Voi P", "IPTV": "I P T V",
+    "Triple Play": "Ba dịch vụ", "Ethernet": "Ét tơ nét", "gateway": "Cổng kết nối",
+    "Wi-Fi": "Quai phai", "ALU": "A L U", "DASAN": "đa san",
+    // Mạng và đơn vị
+    "2G": "hai gờ", "3G": "ba gờ", "4G": "bốn gờ", "5G": "năm gờ", "6G": "sáu gờ",
+    "km": "ki lô mét", "ms": "mi li giây",
     // Viết tắt phổ biến
-    "v.v": "vân vân",
-    "v.v.": "vân vân",
-    "HĐQT": "Hội đồng quản trị",
-    "v/v": "về việc",
-    "X4": "X bốn",
-    "KNL": "Khung năng lực",
-    "NV": "nhân viên",
-    "GĐ": "Giám đốc",
-    "ALU": "A L U",
-    "PGĐ": "Phó Giám đốc",
-    "TP": "Trưởng phòng",
-    "PP": "Phó phòng",
-    "CN": "Chi nhánh",
-    "P.": "Phòng",
-    "TT": "Trung tâm"
+    "v.v": "vân vân", "v.v.": "vân vân", "HĐQT": "Hội đồng quản trị", "v/v": "về việc",
+    "X4": "X bốn", "KNL": "Khung năng lực", "NV": "nhân viên", "GĐ": "Giám đốc",
+    "PGĐ": "Phó Giám đốc", "TP": "Trưởng phòng", "PP": "Phó phòng", "CN": "Chi nhánh",
+    "P.": "Phòng", "TT": "Trung tâm"
 };
 
 let speechInterval = null;
+
+function normalizeText(text) {
+    if (!text) return "";
+    let p = text;
+    // Xóa Markdown nhưng giữ lại dấu chấm câu để ngắt nghỉ
+    p = p.replace(/#{1,6}\s?/g, " ").replace(/\*\*/g, "").replace(/\*/g, "")
+         .replace(/^-{3,}/gm, " ").replace(/^[-*+]\s/gm, ". ");
+    // Xóa ký tự đặc biệt gây treo engine, giữ lại dấu chấm, phẩy, hỏi, chấm phẩy
+    p = p.replace(/["“”„‟«»‹›'‘’`_~]/g, "").replace(/[\(\)\[\]\{\}]/g, " ");
+    // Đọc số câu/đáp án
+    p = p.replace(/^([A-D])\.\s/gim, "Đáp án $1. ").replace(/^(\d+)\.\s/gim, "Câu $1. ");
+    // Dictionary (Ưu tiên khớp từ dài trước)
+    const sortedKeys = Object.keys(VOICE_DICTIONARY).sort((a, b) => b.length - a.length);
+    sortedKeys.forEach(k => {
+        const regex = new RegExp(`\\b${k}\\b`, "gi");
+        p = p.replace(regex, VOICE_DICTIONARY[k]);
+    });
+    // CHỈ làm sạch khoảng trắng thừa, KHÔNG chèn khoảng trắng quanh dấu câu (tránh lỗi phờ-ương)
+    return p.replace(/\s+/g, " ").trim();
+}
 
 const SpeechManager = {
     queue: [],
@@ -83,7 +86,7 @@ const SpeechManager = {
 
     chunkText(text) {
         let remaining = text;
-        const maxLen = 120; // Giảm xuống 120 để cực kỳ an toàn cho Android
+        const maxLen = 150; // Tăng nhẹ giới hạn để câu tự nhiên hơn
         const chunks = [];
         while (remaining.length > 0) {
             if (remaining.length <= maxLen) {
@@ -91,10 +94,19 @@ const SpeechManager = {
                 break;
             }
             let splitIdx = -1;
-            const punctuations = [". ", "? ", "! ", "; ", ": ", ", ", " - "];
-            for (let p of punctuations) {
-                const last = remaining.lastIndexOf(p, maxLen);
-                if (last > splitIdx) splitIdx = last + p.length;
+            // Ưu tiên ngắt mạnh
+            const strongDelims = [". ", "? ", "! ", "; "];
+            for (let d of strongDelims) {
+                const last = remaining.lastIndexOf(d, maxLen);
+                if (last > splitIdx) splitIdx = last + d.length;
+            }
+            // Nếu không có ngắt mạnh, mới ngắt tại dấu phẩy hoặc gạch ngang
+            if (splitIdx <= 0) {
+                const weakDelims = [", ", " - "];
+                for (let d of weakDelims) {
+                    const last = remaining.lastIndexOf(d, maxLen);
+                    if (last > splitIdx) splitIdx = last + d.length;
+                }
             }
             if (splitIdx <= 0) splitIdx = remaining.lastIndexOf(" ", maxLen);
             if (splitIdx <= 0) splitIdx = maxLen;
@@ -106,16 +118,14 @@ const SpeechManager = {
 
     async start(text, qIdx) {
         this.stop();
-        this.sessionId = Date.now(); // Tạo session mới
+        this.sessionId = Date.now();
         const currentSession = this.sessionId;
 
-        // Xả sạch bộ đệm (Double Cancel)
-        window.speechSynthesis.cancel();
-        await new Promise(r => setTimeout(r, 150));
         window.speechSynthesis.cancel();
         await new Promise(r => setTimeout(r, 200));
+        window.speechSynthesis.cancel();
+        await new Promise(r => setTimeout(r, 250));
 
-        // Kiểm tra nếu trong lúc chờ user đã bấm stop/chuyển câu khác
         if (this.sessionId !== currentSession) return;
 
         this.queue = this.chunkText(text);
@@ -127,58 +137,47 @@ const SpeechManager = {
     },
 
     play(session) {
-        // Chỉ chạy nếu đúng session hiện tại
         if (session !== this.sessionId || this.currentIdx >= this.queue.length || this.isPaused) {
-            if (this.currentIdx >= this.queue.length) this.stop();
+            if (this.currentIdx >= this.queue.length && session === this.sessionId) this.stop();
             return;
         }
 
         if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
 
         const chunk = this.queue[this.currentIdx];
-        if (!chunk || !/[a-zA-Z0-9à-ỹÀ-Ỹ]/.test(chunk)) {
-            this.currentIdx++;
-            this.play(session);
-            return;
-        }
-
         this.currentUtterance = new SpeechSynthesisUtterance(chunk);
         if (vietnameseVoice) this.currentUtterance.voice = vietnameseVoice;
         this.currentUtterance.lang = 'vi-VN';
         this.currentUtterance.rate = this.rate;
 
-        // Callback xử lý an toàn
         const next = () => {
             if (session !== this.sessionId) return;
             if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
             this.currentIdx++;
-            setTimeout(() => this.play(session), 50);
+            setTimeout(() => this.play(session), 40); // Giảm delay giữa các đoạn
         };
 
         this.currentUtterance.onend = next;
-        this.currentUtterance.onerror = (e) => {
-            console.warn("TTS Chunk Error, skipping...", e);
-            next();
-        };
+        this.currentUtterance.onerror = next;
 
-        // Watchdog: Nếu sau 10s (đoạn ngắn) không xong thì tự đẩy tiếp
-        const timeout = Math.max(5000, chunk.length * 100); // 100ms mỗi ký tự + 5s base
+        // Watchdog thông minh hơn
+        const expectedDuration = Math.max(4000, chunk.length * 150); 
         this.watchdogTimer = setTimeout(() => {
-            console.log("Watchdog triggered for session", session);
-            next();
-        }, timeout);
+            if (session === this.sessionId && !this.isPaused) {
+                console.log("Watchdog: Engine stalled, skipping to next chunk.");
+                next();
+            }
+        }, expectedDuration);
 
         window.speechSynthesis.speak(this.currentUtterance);
         this.updateUI();
 
-        // Heartbeat fix cho Chrome Mobile
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = setInterval(() => {
             if (window.speechSynthesis.speaking && !this.isPaused && session === this.sessionId) {
-                window.speechSynthesis.pause();
-                window.speechSynthesis.resume();
+                window.speechSynthesis.resume(); // Chỉ cần resume để kích hoạt lại buffer
             }
-        }, 8000);
+        }, 5000);
     },
 
     pause() {
