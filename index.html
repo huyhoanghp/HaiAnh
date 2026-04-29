@@ -51,6 +51,18 @@
                     <i class="fas fa-key"></i> API <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
                 </button>
                 <button id="darkModeToggle" class="btn-unified btn-ghost"><i class="fas fa-circle-half-stroke"></i> <span id="darkModeText">Tối</span></button>
+                <div class="relative">
+                    <button id="fontSizeToggle" class="btn-unified btn-ghost" title="Cỡ chữ">
+                        <i class="fas fa-font"></i> <span id="fontSizeLabel">100%</span>
+                    </button>
+                    <div id="fontSizePanel" class="font-size-panel hidden">
+                        <div class="text-xs font-bold text-gray-500 mb-2 flex justify-between">
+                            <span>Cỡ chữ</span>
+                            <span id="fontSizeVal">100%</span>
+                        </div>
+                        <input type="range" id="fontSizeSlider" min="80" max="250" value="100" class="font-range-input">
+                    </div>
+                </div>
                 
                 <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">

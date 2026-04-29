@@ -67,6 +67,56 @@ function normalizeText(text) {
     return p.replace(/\s+/g, " ").trim();
 }
 
+const FontSizeManager = {
+    scale: 100, // percentage
+
+    init() {
+        const saved = localStorage.getItem('haianh_font_scale');
+        if (saved !== null) {
+            this.scale = parseInt(saved);
+        }
+        this.apply();
+        this.initEvents();
+    },
+
+    initEvents() {
+        const toggleBtn = document.getElementById('fontSizeToggle');
+        const panel = document.getElementById('fontSizePanel');
+        const slider = document.getElementById('fontSizeSlider');
+        
+        toggleBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panel?.classList.toggle('hidden');
+        });
+
+        slider?.addEventListener('input', (e) => {
+            this.scale = parseInt(e.target.value);
+            this.apply();
+            localStorage.setItem('haianh_font_scale', this.scale);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (panel && !panel.contains(e.target) && !toggleBtn.contains(e.target)) {
+                panel.classList.add('hidden');
+            }
+        });
+    },
+
+    apply() {
+        const decimal = this.scale / 100;
+        document.documentElement.style.setProperty('--font-scale', decimal);
+        document.body.style.setProperty('--font-scale', decimal);
+        
+        const label = document.getElementById('fontSizeLabel');
+        const valDisplay = document.getElementById('fontSizeVal');
+        const slider = document.getElementById('fontSizeSlider');
+
+        if (label) label.innerText = `${this.scale}%`;
+        if (valDisplay) valDisplay.innerText = `${this.scale}%`;
+        if (slider) slider.value = this.scale;
+    }
+};
+
 const SpeechManager = {
     queue: [],
     currentIdx: 0,
@@ -435,7 +485,7 @@ function generateQuestionHTML(idx, rawSearch = "") {
         </div>
         
         <div class="mb-5">
-            <h3 class="q-text-focus leading-relaxed mb-4">${getHighlightedText(q.text, rawSearch)}</h3>
+            <h3 id="q-text-${idx}" class="q-text-focus leading-relaxed mb-4">${getHighlightedText(q.text, rawSearch)}</h3>
             <div class="space-y-2">${optionsHtml}</div>
         </div>
         <div class="flex items-center gap-3 mt-5 pt-4 border-t border-gray-50 dark:border-slate-800">
@@ -946,6 +996,7 @@ async function restoreProgress() {
 async function initGIA() {
     try {
         await openDB(); await refreshBankDropdown(); initDarkMode(); updateApiKeyBadge();
+        FontSizeManager.init();
         const restored = await restoreProgress(); if (!restored) { const banks = await getAllBanks(); if (banks.length) await loadBankById(banks[0].id); }
         const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn');
         searchInput?.addEventListener('input', () => { if (searchInput.value.length > 0) clearSearchBtn?.classList.remove('hidden'); else clearSearchBtn?.classList.add('hidden'); if (searchDebounceTimer) clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => { initLazyRender(); }, 300); });

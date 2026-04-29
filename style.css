@@ -1,4 +1,7 @@
-body { background-color: #f3f4f6; color: #111827; transition: all 0.2s; }
+:root {
+    --font-scale: 1;
+}
+body { background-color: #f3f4f6; color: #111827; transition: all 0.2s; font-size: 16px; }
 body.dark { background-color: #0f172a; color: #e2e8f0; }
 body.dark .bg-white, body.dark .bg-gray-50, body.dark .sticky-nav, body.dark .card-question { background-color: #1e293b !important; color: #e2e8f0 !important; border-color: #334155 !important; }
 body.dark .border-gray-200, body.dark .border-gray-100 { border-color: #334155 !important; }
@@ -35,6 +38,52 @@ body.dark .ai-explanation-box { background-color: #2e106540 !important; border-c
 body.dark .ai-explanation-box .ai-text-content { color: #e2e8f0 !important; }
 
 .card-question { transition: all 0.2s ease; overflow: visible !important; }
+.card-question .q-text-focus, 
+.card-question h3.q-text-focus,
+.card-question .q-text-focus *,
+[id^="q-text-"] { 
+    font-size: calc(1.125rem * var(--font-scale)) !important; 
+    line-height: 1.6 !important;
+    font-weight: 600 !important; 
+    color: #1e293b; 
+    transition: none !important; 
+    display: block;
+}
+body.dark .q-text-focus, body.dark [id^="q-text-"] { color: #f1f5f9 !important; }
+
+.option-input + span, .option-input + span * { 
+    font-size: calc(0.9375rem * var(--font-scale)) !important; 
+    line-height: 1.6 !important;
+    transition: none; 
+}
+
+.ai-text-content, .ai-text-content * { 
+    font-size: calc(0.9375rem * var(--font-scale)) !important; 
+    line-height: 1.7 !important; 
+}
+
+/* Font Size Slider Panel */
+.font-size-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    min-width: 200px;
+}
+body.dark .font-size-panel {
+    background: #1e293b;
+    border-color: #334155;
+}
+.font-range-input {
+    width: 100%;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
 .answer-correct { background-color: #dcfce7; border-left: 4px solid #22c55e; }
 .answer-wrong { background-color: #fee2e2; border-left: 4px solid #ef4444; }
 body.dark .answer-correct { background-color: #064e3b !important; border-left-color: #4ade80; }
