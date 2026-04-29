@@ -396,7 +396,7 @@ function generateQuestionHTML(idx, rawSearch = "") {
                 <span class="current-speed">${SpeechManager.rate.toFixed(1)}x</span>
             </button>
             <div class="speed-menu absolute top-full left-0 mt-1 w-16 bg-white dark:bg-slate-800 shadow-xl border border-gray-200 dark:border-slate-700 rounded-lg hidden z-[100] overflow-hidden">
-                ${[0.8, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer text-[10px] text-center ${SpeechManager.rate === r ? 'text-blue-600 font-bold bg-blue-50 dark:bg-blue-900' : ''}" data-rate="${r}" data-qidx="${idx}-q">${r.toFixed(1)}x</div>`).join('')}
+                ${[0.8, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer text-[10px] text-center text-gray-800 dark:text-gray-200 ${SpeechManager.rate === r ? 'text-blue-600 font-bold bg-blue-50 dark:bg-blue-900' : ''}" data-rate="${r}" data-qidx="${idx}-q">${r.toFixed(1)}x</div>`).join('')}
             </div>
         </div>
     </div>`;
@@ -424,7 +424,7 @@ function generateQuestionHTML(idx, rawSearch = "") {
                             <span class="current-speed">${SpeechManager.rate.toFixed(1)}x</span>
                         </button>
                         <div class="speed-menu absolute top-full left-0 mt-1 w-14 bg-white dark:bg-slate-800 shadow-xl border border-gray-200 rounded-md hidden z-[100] overflow-hidden">
-                            ${[0.8, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-1 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer text-[9px] text-center" data-rate="${r}" data-qidx="${idx}-q">${r.toFixed(1)}x</div>`).join('')}
+                            ${[0.8, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-1 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer text-[9px] text-center text-gray-800 dark:text-gray-200" data-rate="${r}" data-qidx="${idx}-q">${r.toFixed(1)}x</div>`).join('')}
                         </div>
                     </div>
                 </div>
@@ -626,37 +626,36 @@ async function explainWithAI(idx, lengthMode = 'normal') {
         AI_TEXT_CACHE[`ai-${idx}`] = data.candidates[0].content.parts[0].text;
 
         const toolbarHtml = `
-            <div class="mb-4 pb-3 border-b border-purple-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-4 w-full relative z-20">
-                <div class="flex items-center gap-2">
-                    <button class="speak-toggle-btn w-10 h-10 flex items-center justify-center bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 transition shadow-sm" data-qidx="ai-${idx}" title="Nghe giải thích">
-                        <i class="fas fa-volume-up text-lg"></i>
+            <div class="mb-3 pb-2 border-b border-purple-200 dark:border-slate-700 flex items-center justify-between gap-2 w-full relative z-20">
+                <div class="flex items-center gap-1.5">
+                    <button class="speak-toggle-btn w-8 h-8 flex items-center justify-center bg-transparent text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-50 transition border border-purple-300 dark:border-purple-800" data-qidx="ai-${idx}" title="Nghe giải thích">
+                        <i class="fas fa-volume-up text-base"></i>
                     </button>
                     <div class="relative speed-container">
-                        <button class="speed-btn h-10 px-3 flex items-center gap-1 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition text-sm font-medium border border-gray-200 dark:border-slate-700 shadow-sm">
+                        <button class="speed-btn h-8 px-2 flex items-center gap-1 bg-transparent text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 transition text-xs font-bold border border-gray-300 dark:border-slate-700">
                             <span class="current-speed">${SpeechManager.rate.toFixed(1)}x</span>
-                            <i class="fas fa-chevron-down text-[10px] opacity-50"></i>
                         </button>
-                        <div class="speed-menu absolute top-full left-0 mt-1 w-20 bg-white dark:bg-slate-800 shadow-xl border border-gray-200 dark:border-slate-700 rounded-lg hidden z-[100] overflow-hidden">
-                            ${[0.7, 0.9, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-3 py-2 hover:bg-purple-50 dark:hover:bg-purple-900 cursor-pointer text-sm text-center ${SpeechManager.rate === r ? 'text-purple-600 font-bold bg-purple-50 dark:bg-purple-900' : ''}" data-rate="${r}" data-qidx="ai-${idx}">${r.toFixed(1)}x</div>`).join('')}
+                        <div class="speed-menu absolute top-full left-0 mt-1 w-16 bg-white dark:bg-slate-800 shadow-xl border border-gray-200 dark:border-slate-700 rounded-lg hidden z-[100] overflow-hidden">
+                            ${[0.7, 0.9, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-2 py-1.5 hover:bg-purple-50 dark:hover:bg-purple-900 cursor-pointer text-xs text-center text-gray-800 dark:text-gray-200 ${SpeechManager.rate === r ? 'text-purple-600 font-bold' : ''}" data-rate="${r}" data-qidx="ai-${idx}">${r.toFixed(1)}x</div>`).join('')}
                         </div>
                     </div>
-                    <button class="copy-ai-btn w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 transition shadow-sm" data-qidx="ai-${idx}" title="Copy nội dung">
-                        <i class="fas fa-copy text-lg"></i>
+                    <button class="copy-ai-btn w-8 h-8 flex items-center justify-center bg-transparent text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-50 transition border border-blue-300 dark:border-blue-800" data-qidx="ai-${idx}" title="Copy nội dung">
+                        <i class="fas fa-copy text-base"></i>
                     </button>
                 </div>
-                <div class="flex items-center gap-1.5">
-                    <button class="ai-length-btn text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-lg transition ${lengthMode === 'short' ? 'bg-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-purple-600 border border-purple-200 dark:border-slate-700'}" data-qidx="${idx}" data-len="short">Ngắn</button>
-                    <button class="ai-length-btn text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-lg transition ${lengthMode === 'normal' ? 'bg-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-purple-600 border border-purple-200 dark:border-slate-700'}" data-qidx="${idx}" data-len="normal">Vừa</button>
-                    <button class="ai-length-btn text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-lg transition ${lengthMode === 'long' ? 'bg-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-purple-600 border border-purple-200 dark:border-slate-700'}" data-qidx="${idx}" data-len="long">Dài</button>
+                <div class="flex items-center gap-1">
+                    <button class="ai-length-btn text-[10px] font-bold px-2.5 py-1 rounded-md transition ${lengthMode === 'short' ? 'text-purple-800 border-2 border-purple-500 bg-purple-50' : 'text-gray-600 border border-gray-300 bg-white'}" data-qidx="${idx}" data-len="short">NGẮN</button>
+                    <button class="ai-length-btn text-[10px] font-bold px-2.5 py-1 rounded-md transition ${lengthMode === 'normal' ? 'text-purple-800 border-2 border-purple-500 bg-purple-50' : 'text-gray-600 border border-gray-300 bg-white'}" data-qidx="${idx}" data-len="normal">VỪA</button>
+                    <button class="ai-length-btn text-[10px] font-bold px-2.5 py-1 rounded-md transition ${lengthMode === 'long' ? 'text-purple-800 border-2 border-purple-500 bg-purple-50' : 'text-gray-600 border border-gray-300 bg-white'}" data-qidx="${idx}" data-len="long">DÀI</button>
                 </div>
             </div>`;
 
-        explainDiv.innerHTML = `<div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-2 border-purple-200 dark:border-purple-800 shadow-md relative overflow-visible">
-            <div class="font-bold text-purple-900 dark:text-purple-300 mb-3 flex items-center gap-2 text-base">
+        explainDiv.innerHTML = `<div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-purple-300 dark:border-purple-800 shadow-md relative overflow-visible">
+            <div class="font-bold text-purple-900 dark:text-purple-300 mb-3 flex items-center gap-2 text-sm">
                 <i class="fas fa-robot text-lg"></i> AI Tutor Giải thích
             </div>
             ${toolbarHtml}
-            <div class="ai-text-content leading-relaxed text-gray-800 dark:text-gray-200 text-sm md:text-base clear-both relative z-10">${formattedText}</div>
+            <div class="ai-text-content leading-relaxed text-gray-800 dark:text-gray-200 text-sm md:text-base relative z-10">${formattedText}</div>
         </div>`;
         explainDiv.dataset.loaded = 'true';
     } catch (error) {
