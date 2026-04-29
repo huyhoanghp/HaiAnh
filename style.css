@@ -6,6 +6,12 @@ body.dark .bg-gray-100, body.dark .bg-gray-200 { background-color: #0f172a !impo
 body.dark .text-gray-700, body.dark .text-gray-600, body.dark .text-gray-500, body.dark .text-gray-800, body.dark .text-black { color: #cbd5e1 !important; }
 body.dark input, body.dark select, body.dark textarea, body.dark .border { background-color: #0f172a !important; color: #e2e8f0 !important; border-color: #475569 !important; }
 
+/* Tăng độ tương phản cho chế độ sáng */
+.text-gray-400 { color: #64748b !important; } /* Sẫm màu hơn từ xám nhạt sang xám đậm */
+.bg-gray-50 { background-color: #f8fafc !important; }
+.speak-toggle-btn { color: #1e40af !important; border-color: #bfdbfe !important; }
+.dark .speak-toggle-btn { color: #60a5fa !important; border-color: #1e3a8a !important; }
+
 body.dark #resultContent { color: #e2e8f0; }
 body.dark #resultContent .bg-gray-50 { background-color: #1e293b !important; border: 1px solid #475569; }
 body.dark #resultContent .text-gray-800 { color: #f8fafc !important; }
@@ -18,12 +24,12 @@ body.dark #customModalText { color: #cbd5e1; }
 body.dark .btn-secondary { background-color: #334155; color: #e2e8f0; }
 body.dark .btn-secondary:hover { background-color: #475569; }
 
-.ai-explanation-box { background-color: #fdf4ff !important; border: 1px solid #e9d5ff !important; }
+.ai-explanation-box { background-color: #fdf4ff !important; border: 1px solid #e9d5ff !important; overflow: visible !important; }
 .ai-explanation-box .ai-text-content { color: #111827 !important; line-height: 1.6; }
 body.dark .ai-explanation-box { background-color: #1e1b4b !important; border-color: #4c1d95 !important; }
 body.dark .ai-explanation-box .ai-text-content { color: #e2e8f0 !important; }
 
-.card-question { transition: all 0.2s ease; content-visibility: auto; contain-intrinsic-size: auto 200px; }
+.card-question { transition: all 0.2s ease; overflow: visible !important; }
 .answer-correct { background-color: #dcfce7; border-left: 4px solid #22c55e; }
 .answer-wrong { background-color: #fee2e2; border-left: 4px solid #ef4444; }
 body.dark .answer-correct { background-color: #064e3b !important; border-left-color: #4ade80; }
@@ -40,6 +46,22 @@ body.dark .wrong-table th { background-color: #334155; }
 #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; flex-direction: column; color: white; font-size: 1.2rem; backdrop-filter: blur(3px); }
 .spinner { border: 4px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 4px solid white; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 1rem; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+    .container { padding: 10px !important; }
+    .card-question { padding: 15px !important; border-radius: 16px !important; margin-bottom: 15px !important; }
+    .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .btn-grid > * { width: 100% !important; margin: 0 !important; font-size: 12px !important; padding: 10px 5px !important; }
+    .header-info { flex-direction: column; gap: 10px; }
+    .sticky-nav { padding: 10px !important; }
+    .ai-explanation-box { padding: 12px !important; font-size: 14px !important; }
+    h1.text-3xl { font-size: 20px !important; }
+}
+
+/* Tối ưu hóa Toolbar trong Card */
+.q-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; }
+.dark .q-toolbar { border-bottom-color: #334155; }
 
 /* Voice buttons styling */
 .voice-btn { cursor: pointer; opacity: 0.6; transition: opacity 0.2s, transform 0.2s; }
