@@ -30,7 +30,7 @@
             <h1 class="text-2xl font-bold text-blue-800 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> Hai Anh Study</h1>
             
             <div class="flex gap-2 flex-wrap justify-center md:justify-end">
-                <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa-magic"></i> AI Gen</button>
+                <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa magic"></i> AI Gen</button>
                 <button id="aiSettingsBtn" class="btn-unified btn-ghost">
                     <i class="fas fa-key"></i> API <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
                 </button>
@@ -70,7 +70,6 @@
             <button id="startFullTestBtn" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg"><i class="fas fa-file-lines mr-1"></i> Thi full bài</button>
             <button id="startRandomTestBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg"><i class="fas fa-shuffle mr-1"></i> Ngẫu nhiên</button>
             <button id="reviewWrongMainBtn" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg"><i class="fas fa-graduation-cap mr-1"></i> Ôn câu sai</button>
-            <button id="showGridBtn" class="bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 px-4 py-2.5 rounded-xl text-sm font-bold border border-indigo-100 dark:border-indigo-900/50"><i class="fas fa-border-all"></i> Tổng quan</button>
         </div>
         <div id="modeInfo" class="mt-2 text-xs font-medium text-blue-600"></div>
     </div>
@@ -93,8 +92,11 @@
                 </div>
             </div>
 
-            <!-- Cụm Điều khiển Icon (Pause, Reset, Submit) -->
+            <!-- Cụm Điều khiển Icon (Grid, Pause, Reset, Submit) -->
             <div class="flex gap-2">
+                <button id="showGridBtnHeader" title="Tổng quan câu hỏi" class="action-icon-btn ghost">
+                    <i class="fas fa-border-all"></i>
+                </button>
                 <button id="pauseResumeBtnHeader" title="Tạm dừng" class="action-icon-btn secondary">
                     <i class="fas fa-pause"></i>
                 </button>
