@@ -68,6 +68,8 @@ const SpeechManager = {
     currentUtterance: null,
     pauseTimer: null,
     heartbeatInterval: null,
+    sessionId: 0, // ID phiên để tránh chồng lấn
+    watchdogTimer: null,
 
     init() {
         const savedRate = localStorage.getItem('voice_rate');
@@ -79,10 +81,9 @@ const SpeechManager = {
         localStorage.setItem('voice_rate', newRate);
     },
 
-    // Chia nhỏ văn bản < 140 ký tự để Android không bị ngắt
     chunkText(text) {
         let remaining = text;
-        const maxLen = 140;
+        const maxLen = 120; // Giảm xuống 120 để cực kỳ an toàn cho Android
         const chunks = [];
         while (remaining.length > 0) {
             if (remaining.length <= maxLen) {
@@ -105,28 +106,39 @@ const SpeechManager = {
 
     async start(text, qIdx) {
         this.stop();
-        // Reset Engine Buffer
+        this.sessionId = Date.now(); // Tạo session mới
+        const currentSession = this.sessionId;
+
+        // Xả sạch bộ đệm (Double Cancel)
         window.speechSynthesis.cancel();
-        await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 150));
+        window.speechSynthesis.cancel();
+        await new Promise(r => setTimeout(r, 200));
+
+        // Kiểm tra nếu trong lúc chờ user đã bấm stop/chuyển câu khác
+        if (this.sessionId !== currentSession) return;
 
         this.queue = this.chunkText(text);
         this.currentIdx = 0;
         this.activeQIdx = qIdx;
         this.isPaused = false;
         
-        if (this.queue.length > 0) this.play();
+        if (this.queue.length > 0) this.play(currentSession);
     },
 
-    play() {
-        if (this.currentIdx >= this.queue.length) {
-            this.stop();
+    play(session) {
+        // Chỉ chạy nếu đúng session hiện tại
+        if (session !== this.sessionId || this.currentIdx >= this.queue.length || this.isPaused) {
+            if (this.currentIdx >= this.queue.length) this.stop();
             return;
         }
+
+        if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
 
         const chunk = this.queue[this.currentIdx];
         if (!chunk || !/[a-zA-Z0-9à-ỹÀ-Ỹ]/.test(chunk)) {
             this.currentIdx++;
-            this.play();
+            this.play(session);
             return;
         }
 
@@ -135,53 +147,60 @@ const SpeechManager = {
         this.currentUtterance.lang = 'vi-VN';
         this.currentUtterance.rate = this.rate;
 
-        this.currentUtterance.onend = () => {
-            if (!this.isPaused) {
-                this.currentIdx++;
-                // Micro-delay để engine reset giữa các đoạn
-                setTimeout(() => this.play(), 60);
-            }
+        // Callback xử lý an toàn
+        const next = () => {
+            if (session !== this.sessionId) return;
+            if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
+            this.currentIdx++;
+            setTimeout(() => this.play(session), 50);
         };
 
+        this.currentUtterance.onend = next;
         this.currentUtterance.onerror = (e) => {
-            console.error("Speech Error:", e);
-            if (!this.isPaused) {
-                this.currentIdx++;
-                setTimeout(() => this.play(), 60);
-            }
+            console.warn("TTS Chunk Error, skipping...", e);
+            next();
         };
+
+        // Watchdog: Nếu sau 10s (đoạn ngắn) không xong thì tự đẩy tiếp
+        const timeout = Math.max(5000, chunk.length * 100); // 100ms mỗi ký tự + 5s base
+        this.watchdogTimer = setTimeout(() => {
+            console.log("Watchdog triggered for session", session);
+            next();
+        }, timeout);
 
         window.speechSynthesis.speak(this.currentUtterance);
         this.updateUI();
 
-        // Heartbeat fix: Một số trình duyệt tự ngắt sau 15s. Pause/Resume mỗi 10s để đánh thức.
+        // Heartbeat fix cho Chrome Mobile
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = setInterval(() => {
-            if (window.speechSynthesis.speaking && !this.isPaused) {
+            if (window.speechSynthesis.speaking && !this.isPaused && session === this.sessionId) {
                 window.speechSynthesis.pause();
                 window.speechSynthesis.resume();
             }
-        }, 10000);
+        }, 8000);
     },
 
     pause() {
         this.isPaused = true;
         window.speechSynthesis.cancel();
+        if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         this.updateUI();
         if (this.pauseTimer) clearTimeout(this.pauseTimer);
-        // Tự tắt sau 15p nếu quên
         this.pauseTimer = setTimeout(() => { if (this.isPaused) this.stop(); }, 900000);
     },
 
     resume() {
         this.isPaused = false;
         if (this.pauseTimer) clearTimeout(this.pauseTimer);
-        this.play();
+        this.play(this.sessionId);
     },
 
     stop() {
+        this.sessionId = 0; // Hủy mọi session đang chạy
         window.speechSynthesis.cancel();
+        if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         if (this.pauseTimer) clearTimeout(this.pauseTimer);
         this.queue = [];
