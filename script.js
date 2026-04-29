@@ -428,8 +428,8 @@ function generateQuestionHTML(idx, rawSearch = "") {
                         </div>
                     </div>
                 </div>
-                <button class="flag-btn text-gray-300 hover:text-orange-500 p-1" data-qidx="${idx}">
-                    <i class="${isFlagged ? 'fas' : 'far'} fa-bookmark text-lg"></i>
+                <button class="flag-btn w-8 h-8 flex items-center justify-center rounded-lg transition-all border-2 ${isFlagged ? 'border-orange-500 text-orange-500' : 'border-gray-200 dark:border-slate-700 text-gray-400 dark:text-gray-500'} bg-transparent" data-qidx="${idx}">
+                    <i class="${isFlagged ? 'fas' : 'far'} fa-bookmark text-xs"></i>
                 </button>
             </div>
         </div>
@@ -650,13 +650,14 @@ async function explainWithAI(idx, lengthMode = 'normal') {
                 </div>
             </div>`;
 
-        explainDiv.innerHTML = `<div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-purple-300 dark:border-purple-800 shadow-md relative overflow-visible">
-            <div class="font-bold text-purple-900 dark:text-purple-300 mb-3 flex items-center gap-2 text-sm">
+        explainDiv.innerHTML = `
+            <div class="font-bold text-purple-900 dark:text-purple-300 p-4 pb-0 flex items-center gap-2 text-sm">
                 <i class="fas fa-robot text-lg"></i> AI Tutor Giải thích
             </div>
-            ${toolbarHtml}
-            <div class="ai-text-content leading-relaxed text-gray-800 dark:text-gray-200 text-sm md:text-base relative z-10">${formattedText}</div>
-        </div>`;
+            <div class="p-4 pt-2 relative overflow-visible">
+                ${toolbarHtml}
+                <div class="ai-text-content leading-relaxed text-gray-800 dark:text-gray-200 text-sm md:text-base relative z-10">${formattedText}</div>
+            </div>`;
         explainDiv.dataset.loaded = 'true';
     } catch (error) {
         explainDiv.innerHTML = `<span class="text-red-500 p-3 block"><i class="fas fa-exclamation-triangle"></i> Lỗi phân tích: ${error.message}</span>`;
@@ -784,7 +785,33 @@ function renderQuestionGrid() {
     const questionGrid = document.getElementById('questionGrid'); if (!questionGrid) return;
     if (!currentQuestions.length) { questionGrid.innerHTML = '<div class="text-gray-400">Chưa có dữ liệu</div>'; return; }
     let html = ''; for (let i = 0; i < currentQuestions.length; i++) { let bg = 'bg-blue-200'; if (userAnswers[i]?.length > 0) bg = 'bg-green-500'; if (flagged[i]) bg = 'bg-yellow-400'; html += `<div class="question-grid-item w-10 h-10 rounded-md flex items-center justify-center text-xs font-bold text-white ${bg} shadow-sm cursor-pointer hover:opacity-80" data-qidx="${i}">${i + 1}</div>`; } questionGrid.innerHTML = html;
-    document.querySelectorAll('.question-grid-item').forEach(el => { el.addEventListener('click', () => { const idx = parseInt(el.dataset.qidx); const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn'); if (!document.getElementById(`question-${idx}`)) { if (searchInput) searchInput.value = ''; if (clearSearchBtn) clearSearchBtn.classList.add('hidden'); initLazyRender(() => { while (displayedCount <= idx && displayedCount < filteredIndices.length) renderNextBatch(''); setTimeout(() => document.getElementById(`question-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }); } else { document.getElementById(`question-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } document.getElementById('questionGridPanel')?.classList.add('hidden'); }); });
+    document.querySelectorAll('.question-grid-item').forEach(el => { el.addEventListener('click', () => { 
+        const idx = parseInt(el.dataset.qidx); 
+        const searchInput = document.getElementById('searchInput'); 
+        const clearSearchBtn = document.getElementById('clearSearchBtn'); 
+        const scrollToQuestion = (id) => {
+            setTimeout(() => {
+                const target = document.getElementById(id);
+                if (!target) return;
+                const progressArea = document.getElementById('progressArea');
+                const headerHeight = progressArea ? progressArea.offsetHeight : 160;
+                const elementPosition = target.getBoundingClientRect().top + window.pageYOffset;
+                const offsetPosition = elementPosition - headerHeight - 20; 
+                window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+            }, 100);
+        };
+        if (!document.getElementById(`question-${idx}`)) { 
+            if (searchInput) searchInput.value = ''; 
+            if (clearSearchBtn) clearSearchBtn.classList.add('hidden'); 
+            initLazyRender(() => { 
+                while (displayedCount <= idx && displayedCount < filteredIndices.length) renderNextBatch(''); 
+                setTimeout(() => scrollToQuestion(`question-${idx}`), 150); 
+            }); 
+        } else { 
+            scrollToQuestion(`question-${idx}`); 
+        } 
+        document.getElementById('questionGridPanel')?.classList.add('hidden'); 
+    }); });
 }
 
 function initExam(questionsArray, timeMinutes) {
