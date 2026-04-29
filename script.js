@@ -60,13 +60,14 @@ const VOICE_DICTIONARY = {
 let speechInterval = null;
 
 const SpeechManager = {
-    chunks: [],
+    queue: [],
     currentIdx: 0,
     isPaused: false,
     rate: 1.0,
-    pauseTimer: null,
-    currentUtterance: null,
     activeQIdx: null,
+    currentUtterance: null,
+    pauseTimer: null,
+    heartbeatInterval: null,
 
     init() {
         const savedRate = localStorage.getItem('voice_rate');
@@ -78,57 +79,58 @@ const SpeechManager = {
         localStorage.setItem('voice_rate', newRate);
     },
 
+    // Chia nhỏ văn bản < 140 ký tự để Android không bị ngắt
     chunkText(text) {
-        let remainingText = text;
-        const maxChunkLen = 140;
+        let remaining = text;
+        const maxLen = 140;
         const chunks = [];
-
-        while (remainingText.length > 0) {
-            if (remainingText.length <= maxChunkLen) {
-                chunks.push(remainingText);
+        while (remaining.length > 0) {
+            if (remaining.length <= maxLen) {
+                chunks.push(remaining);
                 break;
             }
             let splitIdx = -1;
-            const punctuation = [". ", "? ", "! ", "; ", ": ", ", ", " - "];
-            for (let p of punctuation) {
-                const last = remainingText.lastIndexOf(p, maxChunkLen);
+            const punctuations = [". ", "? ", "! ", "; ", ": ", ", ", " - "];
+            for (let p of punctuations) {
+                const last = remaining.lastIndexOf(p, maxLen);
                 if (last > splitIdx) splitIdx = last + p.length;
             }
-            if (splitIdx <= 0) splitIdx = remainingText.lastIndexOf(" ", maxChunkLen);
-            if (splitIdx <= 0) splitIdx = maxChunkLen;
-            chunks.push(remainingText.substring(0, splitIdx).trim());
-            remainingText = remainingText.substring(splitIdx).trim();
+            if (splitIdx <= 0) splitIdx = remaining.lastIndexOf(" ", maxLen);
+            if (splitIdx <= 0) splitIdx = maxLen;
+            chunks.push(remaining.substring(0, splitIdx).trim());
+            remaining = remaining.substring(splitIdx).trim();
         }
-        return chunks;
+        return chunks.filter(c => c.length > 0);
     },
 
-    start(text, id) {
+    async start(text, qIdx) {
         this.stop();
-        const normalizedText = text;
-        this.chunks = this.chunkText(normalizedText);
-        this.currentIdx = 0;
-        this.isPaused = false;
-        this.activeQIdx = id;
+        // Reset Engine Buffer
+        window.speechSynthesis.cancel();
+        await new Promise(r => setTimeout(r, 250));
 
-        setTimeout(() => {
-            this.play();
-        }, 150);
+        this.queue = this.chunkText(text);
+        this.currentIdx = 0;
+        this.activeQIdx = qIdx;
+        this.isPaused = false;
+        
+        if (this.queue.length > 0) this.play();
     },
 
     play() {
-        if (this.currentIdx >= this.chunks.length) {
+        if (this.currentIdx >= this.queue.length) {
             this.stop();
             return;
         }
 
-        const chunkText = this.chunks[this.currentIdx];
-        if (!chunkText || !/[a-zA-Z0-9à-ỹÀ-Ỹ]/.test(chunkText)) {
+        const chunk = this.queue[this.currentIdx];
+        if (!chunk || !/[a-zA-Z0-9à-ỹÀ-Ỹ]/.test(chunk)) {
             this.currentIdx++;
             this.play();
             return;
         }
 
-        this.currentUtterance = new SpeechSynthesisUtterance(chunkText);
+        this.currentUtterance = new SpeechSynthesisUtterance(chunk);
         if (vietnameseVoice) this.currentUtterance.voice = vietnameseVoice;
         this.currentUtterance.lang = 'vi-VN';
         this.currentUtterance.rate = this.rate;
@@ -136,37 +138,40 @@ const SpeechManager = {
         this.currentUtterance.onend = () => {
             if (!this.isPaused) {
                 this.currentIdx++;
-                setTimeout(() => this.play(), 50);
+                // Micro-delay để engine reset giữa các đoạn
+                setTimeout(() => this.play(), 60);
             }
         };
 
         this.currentUtterance.onerror = (e) => {
-            console.error("Speech error:", e);
+            console.error("Speech Error:", e);
             if (!this.isPaused) {
                 this.currentIdx++;
-                setTimeout(() => this.play(), 50);
+                setTimeout(() => this.play(), 60);
             }
         };
 
         window.speechSynthesis.speak(this.currentUtterance);
         this.updateUI();
 
-        if (speechInterval) clearInterval(speechInterval);
-        speechInterval = setInterval(() => {
+        // Heartbeat fix: Một số trình duyệt tự ngắt sau 15s. Pause/Resume mỗi 10s để đánh thức.
+        if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = setInterval(() => {
             if (window.speechSynthesis.speaking && !this.isPaused) {
                 window.speechSynthesis.pause();
                 window.speechSynthesis.resume();
             }
-        }, 7000);
+        }, 10000);
     },
 
     pause() {
         this.isPaused = true;
         window.speechSynthesis.cancel();
-        if (speechInterval) clearInterval(speechInterval);
+        if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         this.updateUI();
         if (this.pauseTimer) clearTimeout(this.pauseTimer);
-        this.pauseTimer = setTimeout(() => { if (this.isPaused) this.stop(); }, 15000);
+        // Tự tắt sau 15p nếu quên
+        this.pauseTimer = setTimeout(() => { if (this.isPaused) this.stop(); }, 900000);
     },
 
     resume() {
@@ -177,27 +182,26 @@ const SpeechManager = {
 
     stop() {
         window.speechSynthesis.cancel();
-        if (speechInterval) clearInterval(speechInterval);
+        if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         if (this.pauseTimer) clearTimeout(this.pauseTimer);
-        this.chunks = [];
+        this.queue = [];
         this.currentIdx = 0;
         this.isPaused = false;
         this.activeQIdx = null;
-        this.currentUtterance = null;
         this.updateUI();
     },
 
     updateUI() {
-        const btns = document.querySelectorAll('.speak-toggle-btn');
-        btns.forEach(btn => {
+        document.querySelectorAll('.speak-toggle-btn').forEach(btn => {
             const qIdx = btn.dataset.qidx;
             const icon = btn.querySelector('i');
             if (!icon) return;
-
             if (this.activeQIdx == qIdx) {
                 icon.className = this.isPaused ? 'fas fa-play' : 'fas fa-pause';
+                btn.classList.add('bg-blue-600', 'text-white', 'animate-pulse');
             } else {
                 icon.className = 'fas fa-volume-up';
+                btn.classList.remove('bg-blue-600', 'text-white', 'animate-pulse');
             }
         });
     }
@@ -207,50 +211,52 @@ SpeechManager.init();
 
 function normalizeText(text) {
     if (!text) return "";
-    let processed = text;
-    processed = processed.replace(/#{1,6}\s?/g, " ");
-    processed = processed.replace(/\*\*/g, "");
-    processed = processed.replace(/\*/g, "");
-    processed = processed.replace(/^-{3,}/gm, " ");
-    processed = processed.replace(/^[-*+]\s/gm, ". ");
-    processed = processed.replace(/["“”„‟«»‹›'‘’`_~]/g, "");
-    processed = processed.replace(/[\(\)\[\]\{\}]/g, " ");
-    processed = processed.replace(/^([A-D])\.\s/gim, "Đáp án $1. ");
-    processed = processed.replace(/^(\d+)\.\s/gim, "Câu $1. ");
-    Object.keys(VOICE_DICTIONARY).forEach(key => {
-        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(?<![a-zA-Z0-9à-ỹÀ-Ỹ])${escapedKey}(?![a-zA-Z0-9à-ỹÀ-Ỹ])`, "gi");
-        processed = processed.replace(regex, VOICE_DICTIONARY[key]);
+    let p = text;
+    // Xóa Markdown
+    p = p.replace(/#{1,6}\s?/g, " ")
+         .replace(/\*\*/g, "")
+         .replace(/\*/g, "")
+         .replace(/^-{3,}/gm, " ")
+         .replace(/^[-*+]\s/gm, ". ");
+    // Xóa ký tự đặc biệt gây treo engine
+    p = p.replace(/["“”„‟«»‹›'‘’`_~]/g, " ")
+         .replace(/[\(\)\[\]\{\}]/g, " ");
+    // Đọc số câu/đáp án chuyên nghiệp
+    p = p.replace(/^([A-D])\.\s/gim, "Đáp án $1. ")
+         .replace(/^(\d+)\.\s/gim, "Câu $1. ");
+    // Dictionary
+    Object.keys(VOICE_DICTIONARY).forEach(k => {
+        const regex = new RegExp(`\\b${k}\\b`, "gi");
+        p = p.replace(regex, VOICE_DICTIONARY[k]);
     });
-    processed = processed.replace(/,/g, " ");
-    processed = processed.replace(/([.?!;])/g, "$1 ");
-    processed = processed.replace(/\s+/g, " ");
-    return processed.trim();
+    // Làm sạch khoảng trắng và dấu câu
+    p = p.replace(/,/g, " , ")
+         .replace(/([.?!;])/g, "$1 ")
+         .replace(/\s+/g, " ");
+    return p.trim();
 }
 
 function initVoice() {
     const voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) return;
-    vietnameseVoice = voices.find(v => v.name.includes('An') && v.lang.includes('vi')) ||
-        voices.find(v => v.name.includes('Linh') && v.lang.includes('vi')) ||
-        voices.find(v => v.lang.includes('vi-VN')) ||
-        voices.find(v => v.lang.includes('vi'));
+    vietnameseVoice = voices.find(v => v.lang.includes('vi-VN') && v.name.includes('Google')) ||
+                      voices.find(v => v.lang.includes('vi')) ||
+                      voices.find(v => v.name.toLowerCase().includes('vietnam'));
 }
 
-if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = initVoice;
+if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = initVoice;
 }
 initVoice();
 
 function speak(text, qIdx) {
     if (!text) return;
-    const finalId = String(qIdx);
-    if (SpeechManager.activeQIdx === finalId) {
+    const sid = String(qIdx);
+    if (SpeechManager.activeQIdx === sid) {
         if (SpeechManager.isPaused) SpeechManager.resume();
         else SpeechManager.pause();
     } else {
-        const cleanedText = normalizeText(text);
-        SpeechManager.start(cleanedText, finalId);
+        SpeechManager.start(normalizeText(text), sid);
     }
 }
 
