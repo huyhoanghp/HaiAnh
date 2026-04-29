@@ -37,7 +37,7 @@ const VOICE_DICTIONARY = {
     "v.v": "vân vân", "v.v.": "vân vân", "HĐQT": "Hội đồng quản trị", "v/v": "về việc",
     "X4": "X bốn", "KNL": "Khung năng lực", "NV": "nhân viên", "GĐ": "Giám đốc",
     "PGĐ": "Phó Giám đốc", "TP": "Trưởng phòng", "PP": "Phó phòng", "CN": "Chi nhánh",
-    "P.": "Phòng", "TT": "Trung tâm", "TP.HCM": "thành phố Hồ Chí Minh"
+    "TT": "Trung tâm", "TP.HCM": "thành phố Hồ Chí Minh"
 };
 
 let speechInterval = null;
@@ -90,7 +90,6 @@ const SpeechManager = {
     },
 
     chunkText(text) {
-        // Tách theo dòng trước để xử lý ngắt nghỉ 500ms
         const lines = text.split(/\n+/);
         let chunks = [];
         const maxLen = 150;
@@ -101,26 +100,34 @@ const SpeechManager = {
 
             while (remaining.length > 0) {
                 if (remaining.length <= maxLen) {
-                    chunks.push(remaining + " [break]"); // Đánh dấu ngắt dòng
+                    chunks.push(remaining + " [break]"); 
                     break;
                 }
                 let splitIdx = -1;
+                // Ưu tiên ngắt mạnh (. ! ? ;)
                 const strongDelims = [". ", "? ", "! ", "; "];
                 for (let d of strongDelims) {
                     const last = remaining.lastIndexOf(d, maxLen);
                     if (last > splitIdx) splitIdx = last + d.length;
                 }
+                
+                // Nếu có dấu phẩy, ngắt tại dấu phẩy để kiểm soát thời gian nghỉ 500ms
                 if (splitIdx <= 0) {
-                    const weakDelims = [", ", " - "];
-                    for (let d of weakDelims) {
-                        const last = remaining.lastIndexOf(d, maxLen);
-                        if (last > splitIdx) splitIdx = last + d.length;
+                    const commaIdx = remaining.lastIndexOf(", ", maxLen);
+                    if (commaIdx > 0) {
+                        chunks.push(remaining.substring(0, commaIdx + 1).trim() + " [break]");
+                        remaining = remaining.substring(commaIdx + 1).trim();
+                        continue;
                     }
                 }
+
                 if (splitIdx <= 0) splitIdx = remaining.lastIndexOf(" ", maxLen);
                 if (splitIdx <= 0) splitIdx = maxLen;
                 
-                chunks.push(remaining.substring(0, splitIdx).trim());
+                const segment = remaining.substring(0, splitIdx).trim();
+                // Nếu kết thúc đoạn bằng dấu phẩy hoặc chấm, coi như một điểm nghỉ
+                const suffix = /[.,!?]$/.test(segment) ? " [break]" : "";
+                chunks.push(segment + suffix);
                 remaining = remaining.substring(splitIdx).trim();
             }
         });
@@ -139,7 +146,6 @@ const SpeechManager = {
 
         if (this.sessionId !== currentSession) return;
 
-        // Giữ lại \n để chunkText xử lý
         this.queue = this.chunkText(text);
         this.currentIdx = 0;
         this.activeQIdx = qIdx;
@@ -160,7 +166,6 @@ const SpeechManager = {
         let hasBreak = chunk.includes("[break]");
         chunk = chunk.replace("[break]", "");
 
-        // Chỉ đọc nếu có nội dung
         const cleanChunk = normalizeText(chunk);
         if (!cleanChunk) {
             this.currentIdx++;
@@ -177,8 +182,8 @@ const SpeechManager = {
             if (session !== this.sessionId) return;
             if (this.watchdogTimer) clearTimeout(this.watchdogTimer);
             this.currentIdx++;
-            // Nếu có dấu ngắt dòng, nghỉ 500ms, ngược lại 40ms
-            const delay = hasBreak ? 550 : 40;
+            // Ngắt dòng/Dấu phẩy nghỉ 500ms, ngược lại nghỉ 40ms
+            const delay = hasBreak ? 500 : 40;
             setTimeout(() => this.play(session), delay);
         };
 
