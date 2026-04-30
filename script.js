@@ -1038,67 +1038,192 @@ async function initGIA() {
         const uploadFileArea = document.getElementById('uploadFileArea');
         const fileInput = document.getElementById('fileInput');
 
-        openAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); currentFileData = null; currentMimeType = null; if (fileInput) fileInput.value = ''; document.getElementById('filePreviewContainer')?.classList.add('hidden'); uploadFileArea?.classList.remove('hidden'); if (document.getElementById('aiGenTextArea')) document.getElementById('aiGenTextArea').value = ''; });
+        let currentAiFiles = []; // Mảng chứa các file {name, type, data, size}
+
+        const updateAiFileListUI = () => {
+            const container = document.getElementById('multiFileContainer');
+            const listWrapper = document.getElementById('fileListWrapper');
+            const totalSizeDisplay = document.getElementById('totalSizeDisplay');
+            const uploadArea = document.getElementById('uploadFileArea');
+
+            if (!currentAiFiles.length) {
+                container?.classList.add('hidden');
+                uploadArea?.classList.remove('hidden');
+                return;
+            }
+
+            container?.classList.remove('hidden');
+            // uploadArea?.classList.add('hidden'); // Giữ lại để người dùng có thể bấm thêm file
+
+            if (listWrapper) {
+                listWrapper.innerHTML = currentAiFiles.map((f, i) => `
+                    <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100 dark:border-slate-700 shadow-sm">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <i class="${f.type.startsWith('image/') ? 'fas fa-image text-blue-500' : 'fas fa-file-pdf text-red-500'} text-lg"></i>
+                            <div class="flex flex-col overflow-hidden">
+                                <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
+                                <span class="text-[9px] text-gray-500">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
+                            </div>
+                        </div>
+                        <button class="remove-ai-file text-red-400 hover:text-red-600 p-1" data-index="${i}">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    </div>
+                `).join('');
+
+                listWrapper.querySelectorAll('.remove-ai-file').forEach(btn => {
+                    btn.onclick = (e) => {
+                        const idx = parseInt(e.currentTarget.dataset.index);
+                        currentAiFiles.splice(idx, 1);
+                        updateAiFileListUI();
+                    };
+                });
+            }
+
+            const totalSize = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
+            const totalMB = (totalSize / (1024 * 1024)).toFixed(1);
+            if (totalSizeDisplay) {
+                totalSizeDisplay.innerText = `${totalMB}MB / 100MB`;
+                totalSizeDisplay.className = totalSize > 100 * 1024 * 1024 ? "text-red-500 font-bold" : "text-gray-500 font-mono";
+            }
+        };
+
+        openAiGenBtn?.addEventListener('click', () => { 
+            aiGenModal?.classList.remove('hidden'); 
+            aiGenModal?.classList.add('flex'); 
+            currentAiFiles = []; 
+            updateAiFileListUI();
+            if (fileInput) fileInput.value = ''; 
+            if (document.getElementById('aiGenTextArea')) document.getElementById('aiGenTextArea').value = ''; 
+        });
+        
         closeAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex'); });
         uploadFileArea?.addEventListener('click', () => { fileInput?.click(); });
-        removeFileBtn?.addEventListener('click', () => { currentFileData = null; currentMimeType = null; document.getElementById('filePreviewContainer')?.classList.add('hidden'); uploadFileArea?.classList.remove('hidden'); });
 
         fileInput?.addEventListener('change', async (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            showLoading(true, "Đang xử lý file..."); const fileName = file.name.toLowerCase();
-            if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    let data = event.target.result.split(',')[1];
-                    if (file.type.startsWith('image/')) data = await compressImage(data);
-                    currentFileData = data; currentMimeType = file.type;
-                    const fileNameDisplay = document.getElementById('fileNameDisplay'); if (fileNameDisplay) fileNameDisplay.innerText = file.name;
-                    const icon = document.getElementById('fileIconPreview'); if (icon) icon.className = file.type.startsWith('image/') ? 'fas fa-image text-2xl text-blue-500' : 'fas fa-file-pdf text-2xl text-red-500';
-                    uploadFileArea?.classList.add('hidden'); document.getElementById('filePreviewContainer')?.classList.remove('hidden');
-                    showLoading(false);
-                };
-                reader.readAsDataURL(file);
-            } else if (fileName.endsWith('.docx')) {
-                const reader = new FileReader();
-                reader.onload = function (loadEvent) { mammoth.extractRawText({ arrayBuffer: loadEvent.target.result }).then(function (result) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += "\n" + result.value; showToast("Đã trích xuất chữ từ Word!"); showLoading(false); }).catch(err => { showToast("Lỗi đọc Word"); showLoading(false); }); };
-                reader.readAsArrayBuffer(file);
-            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
-                const reader = new FileReader();
-                reader.onload = function (event) {
-                    try { const wb = XLSX.read(event.target.result, { type: 'array' }); let allText = ""; wb.SheetNames.forEach(name => { const sheet = wb.Sheets[name]; const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }); allText += json.map(row => row.join(" ")).join("\n") + "\n"; }); const area = document.getElementById('aiGenTextArea'); if (area) area.value += "\n" + allText; showToast("Đã trích xuất chữ từ Excel!"); } catch (e) { showToast("Lỗi đọc Excel"); } showLoading(false);
-                }; reader.readAsArrayBuffer(file);
-            } else if (file.type.startsWith('text/')) {
-                const reader = new FileReader();
-                reader.onload = (event) => { const area = document.getElementById('aiGenTextArea'); if (area) area.value += "\n" + event.target.result; showLoading(false); }; reader.readAsText(file);
-            } else { showToast("Định dạng file chưa hỗ trợ."); showLoading(false); }
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+
+            showLoading(true, `Đang xử lý ${files.length} tệp tin...`);
+            
+            for (const file of files) {
+                const fileName = file.name.toLowerCase();
+                // Kiểm tra dung lượng tổng
+                const currentTotal = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
+                if (currentTotal + file.size > 100 * 1024 * 1024) {
+                    showToast(`⚠️ File "${file.name}" vượt quá hạn mức 100MB còn lại.`);
+                    continue;
+                }
+
+                if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+                    const data = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                        reader.readAsDataURL(file);
+                    });
+                    
+                    let finalData = data;
+                    if (file.type.startsWith('image/')) finalData = await compressImage(data);
+                    
+                    currentAiFiles.push({
+                        name: file.name,
+                        type: file.type,
+                        data: finalData,
+                        size: file.size
+                    });
+                } else if (fileName.endsWith('.docx')) {
+                    const text = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            mammoth.extractRawText({ arrayBuffer: ev.target.result })
+                                .then(res => resolve(res.value))
+                                .catch(() => resolve(""));
+                        };
+                        reader.readAsArrayBuffer(file);
+                    });
+                    if (text) {
+                        const area = document.getElementById('aiGenTextArea');
+                        if (area) area.value += `\n--- NỘI DUNG TỪ ${file.name} ---\n${text}\n`;
+                    }
+                } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+                    const text = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            try {
+                                const wb = XLSX.read(ev.target.result, { type: 'array' });
+                                let res = "";
+                                wb.SheetNames.forEach(name => {
+                                    const sheet = wb.Sheets[name];
+                                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                                    res += json.map(row => row.join(" ")).join("\n") + "\n";
+                                });
+                                resolve(res);
+                            } catch(e) { resolve(""); }
+                        };
+                        reader.readAsArrayBuffer(file);
+                    });
+                    if (text) {
+                        const area = document.getElementById('aiGenTextArea');
+                        if (area) area.value += `\n--- DỮ LIỆU TỪ ${file.name} ---\n${text}\n`;
+                    }
+                } else if (file.type.startsWith('text/')) {
+                    const text = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target.result);
+                        reader.readAsText(file);
+                    });
+                    if (text) {
+                        const area = document.getElementById('aiGenTextArea');
+                        if (area) area.value += `\n--- VĂN BẢN TỪ ${file.name} ---\n${text}\n`;
+                    }
+                }
+            }
+            
+            updateAiFileListUI();
+            showLoading(false);
             if (fileInput) fileInput.value = '';
         });
 
         submitAiGenBtn?.addEventListener('click', async () => {
             if (!checkAiReady()) return;
             const rawText = document.getElementById('aiGenTextArea')?.value.trim();
-            if (!currentFileData && !rawText) { showToast("Vui lòng tải file hoặc dán văn bản!"); return; }
+            if (!currentAiFiles.length && !rawText) { showToast("Vui lòng tải file hoặc dán văn bản!"); return; }
+            
+            const totalSize = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
+            if (totalSize > 100 * 1024 * 1024) { showToast("Tổng dung lượng vượt quá 100MB. Vui lòng gỡ bớt file!"); return; }
+
             const count = parseInt(document.getElementById('aiGenCount')?.value) || 10;
             let bankName = document.getElementById('aiGenName')?.value.trim(); if (!bankName) bankName = "Bộ đề AI - " + new Date().toLocaleString('vi-VN');
             const diff = document.getElementById('aiGenDifficulty')?.value;
             const difficultyText = diff !== 'Mặc định' ? `Mức độ câu hỏi: ${diff}.` : '';
+            
             aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex');
-            showLoading(true, "AI đang suy nghĩ... (Có thể mất 10-30 giây)");
-            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc tài liệu đính kèm (hoặc văn bản dưới đây). Trích xuất kiến thức và tạo ra chính xác ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array, không có markdown \`\`\`json.\nCấu trúc mẫu:\n[\n  {\n    "text": "Nội dung câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nLưu ý: correctIndices là mảng chứa index (từ 0). Nếu nhiều đáp án đúng, type="multiple". Tiếng Việt.`;
-            let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN:\n" + rawText;
-            const partsArray = [{ text: finalPrompt }]; if (currentFileData) { partsArray.push({ inlineData: { mimeType: currentMimeType, data: currentFileData } }); }
+            showLoading(true, "AI đang tổng hợp dữ liệu từ các file... (Có thể mất 20-40 giây)");
+
+            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc TẤT CẢ các tài liệu đính kèm (ảnh, PDF) và văn bản dưới đây. Tổng hợp kiến thức từ các nguồn này và tạo ra đúng ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array. Cấu trúc mẫu:\n[\n  {\n    "text": "Câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nTiếng Việt.`;
+            
+            let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN TỔNG HỢP:\n" + rawText;
+            
+            const partsArray = [{ text: finalPrompt }];
+            currentAiFiles.forEach(f => {
+                partsArray.push({ inlineData: { mimeType: f.type, data: f.data } });
+            });
+
             try {
                 const payload = { contents: [{ role: "user", parts: partsArray }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } };
                 const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
-                if (!data.candidates?.length || !data.candidates[0].content?.parts?.length) throw new Error("Gemini không trả về nội dung.");
+                if (!data.candidates?.length || !data.candidates[0].content?.parts?.length) throw new Error("AI không trả về nội dung.");
+                
                 let aiResponseText = data.candidates[0].content.parts[0].text;
                 aiResponseText = aiResponseText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+                
                 const jsonArray = JSON.parse(aiResponseText);
-                if (!Array.isArray(jsonArray) || jsonArray.length === 0) throw new Error("JSON rỗng");
+                if (!Array.isArray(jsonArray) || jsonArray.length === 0) throw new Error("Dữ liệu AI trả về không đúng định dạng.");
+                
                 await saveBank(bankName, jsonArray); await refreshBankDropdown();
                 const banks = await getAllBanks(); const newBank = banks[banks.length - 1];
                 showLoading(false);
-                showConfirm(`✅ Đã tạo xong ${jsonArray.length} câu hỏi! Bắt đầu làm bài thi này ngay?`, async (yes) => { if (yes) await loadBankById(newBank.id); else showToast("Đã lưu bộ đề vào hệ thống."); });
+                showConfirm(`✅ Đã tạo xong ${jsonArray.length} câu hỏi! Bắt đầu làm bài ngay?`, async (yes) => { if (yes) await loadBankById(newBank.id); });
             } catch (error) { showLoading(false); showToast("❌ Lỗi tạo đề: " + error.message, 7000); aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); }
         });
 
