@@ -540,7 +540,33 @@ const toastMsg = document.getElementById('toastMsg');
 function showLoading(show, text = 'Đang xử lý...') { if (show) { if (loadingText) loadingText.innerText = text; if (loadingOverlay) loadingOverlay.style.display = 'flex'; } else if (loadingOverlay) loadingOverlay.style.display = 'none'; }
 function showToast(msg, duration = 2500) { if (!toastMsg) return; toastMsg.innerHTML = msg; toastMsg.classList.remove('hidden'); if (window.toastTimeout) clearTimeout(window.toastTimeout); window.toastTimeout = setTimeout(() => toastMsg.classList.add('hidden'), duration); }
 const customModal = document.getElementById('customModal'), customModalText = document.getElementById('customModalText'), customModalInput = document.getElementById('customModalInput'), customModalCancel = document.getElementById('customModalCancel'), customModalConfirm = document.getElementById('customModalConfirm');
-function showConfirm(msg, callback) { if (!customModalText) return; customModalText.innerText = msg; customModalInput.classList.add('hidden'); customModal.classList.remove('hidden'); customModal.classList.add('flex'); customModalConfirm.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(true); }; customModalCancel.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(false); }; }
+function showConfirm(msg, callback, isInput = false) { 
+    if (!customModalText) return; 
+    customModalText.innerText = msg; 
+    if (isInput) {
+        customModalInput.classList.remove('hidden');
+        customModalInput.value = '';
+        customModalInput.placeholder = "Nhập yêu cầu tại đây...";
+    } else {
+        customModalInput.classList.add('hidden');
+    }
+    customModal.classList.remove('hidden'); 
+    customModal.classList.add('flex'); 
+    if (isInput) {
+        setTimeout(() => customModalInput.focus(), 100);
+    }
+    customModalConfirm.onclick = () => { 
+        const val = isInput ? customModalInput.value.trim() : null;
+        customModal.classList.add('hidden'); 
+        customModal.classList.remove('flex'); 
+        callback(true, val); 
+    }; 
+    customModalCancel.onclick = () => { 
+        customModal.classList.add('hidden'); 
+        customModal.classList.remove('flex'); 
+        callback(false); 
+    }; 
+}
 function showPrompt(msg, defaultVal, callback) { if (!customModalText) return; customModalText.innerText = msg; customModalInput.value = defaultVal || ''; customModalInput.classList.remove('hidden'); customModal.classList.remove('hidden'); customModal.classList.add('flex'); customModalInput.focus(); customModalConfirm.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(customModalInput.value); }; customModalCancel.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(null); }; }
 
 function initDarkMode() { const isDark = localStorage.getItem('darkMode') === 'true'; if (isDark) document.body.classList.add('dark'); const darkModeText = document.getElementById('darkModeText'); if (darkModeText) darkModeText.innerText = isDark ? 'Sáng' : 'Tối'; const darkModeToggle = document.getElementById('darkModeToggle'); if (darkModeToggle) darkModeToggle.onclick = () => { document.body.classList.toggle('dark'); const dark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', dark); if (darkModeText) darkModeText.innerText = dark ? 'Sáng' : 'Tối'; }; }
@@ -1184,6 +1210,220 @@ async function initGIA() {
             if (fileInput) fileInput.value = '';
         });
 
+        let tempAiQuestions = [];
+        let tempBankName = "";
+
+        const syncReviewData = () => {
+            const cards = document.querySelectorAll('.ai-review-card');
+            cards.forEach(card => {
+                const idx = parseInt(card.dataset.idx);
+                const qText = card.querySelector('textarea').value.trim();
+                const optRows = card.querySelectorAll('.opt-edit-row');
+                const options = [];
+                const correctIndices = [];
+                
+                optRows.forEach((row, oIdx) => {
+                    const optVal = row.querySelector('input[type="text"]').value.trim();
+                    const isCorrect = row.querySelector('.opt-edit-checkbox').checked;
+                    options.push(optVal);
+                    if (isCorrect) correctIndices.push(oIdx);
+                });
+
+                if (tempAiQuestions[idx]) {
+                    tempAiQuestions[idx].text = qText;
+                    tempAiQuestions[idx].options = options;
+                    tempAiQuestions[idx].correctIndices = correctIndices;
+                }
+            });
+        };
+
+        const showAiFixDialog = (idx) => {
+            const modal = document.getElementById('aiFixModal');
+            const input = document.getElementById('aiFixCustomInput');
+            const confirmBtn = document.getElementById('confirmAiFixBtn');
+            const closeBtn = document.getElementById('closeAiFixModal');
+            const chips = document.querySelectorAll('.fix-chip');
+
+            if (!modal || !input) return;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            input.value = "";
+            chips.forEach(c => c.classList.remove('active'));
+
+            chips.forEach(chip => {
+                chip.onclick = () => {
+                    chips.forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    input.value = chip.dataset.val;
+                    if (chip.dataset.val === "") input.focus();
+                };
+            });
+
+            confirmBtn.onclick = async () => {
+                const instruction = input.value.trim();
+                if (!instruction) { showToast("Vui lòng chọn hoặc nhập yêu cầu!"); return; }
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                await handleAiFixQuestion(idx, instruction);
+            };
+
+            closeBtn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+        };
+
+        const renderAiReviewList = () => {
+            const listWrapper = document.getElementById('aiReviewList');
+            const countBadge = document.getElementById('aiReviewCount');
+            if (!listWrapper) return;
+
+            countBadge.innerText = `${tempAiQuestions.length} câu hỏi`;
+            listWrapper.innerHTML = tempAiQuestions.map((q, idx) => `
+                <div class="ai-review-card space-y-4" data-idx="${idx}">
+                    <div class="flex justify-between items-start gap-4">
+                        <span class="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0">${idx + 1}</span>
+                        <div class="flex-1">
+                            <textarea class="q-edit-input font-bold text-gray-800" placeholder="Nội dung câu hỏi..." rows="2">${q.text}</textarea>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <button class="delete-btn" title="Xóa câu này" onclick="this.closest('.ai-review-card').remove();">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                            <button class="ai-fix-btn" title="AI Tinh chỉnh câu này" data-idx="${idx}">
+                                <i class="fas fa-wand-magic-sparkles"></i> AI FIX
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-2 pl-11">
+                        ${q.options.map((opt, optIdx) => `
+                            <div class="opt-edit-row">
+                                <input type="${q.type === 'multiple' ? 'checkbox' : 'radio'}" name="correct-${idx}" class="opt-edit-checkbox" ${q.correctIndices.includes(optIdx) ? 'checked' : ''} data-optidx="${optIdx}">
+                                <input type="text" class="q-edit-input flex-1" value="${opt}" placeholder="Lựa chọn ${optIdx + 1}">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            // Gán sự kiện AI FIX chuyên sâu
+            listWrapper.querySelectorAll('.ai-fix-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    syncReviewData();
+                    const idx = parseInt(e.currentTarget.dataset.idx);
+                    showAiFixDialog(idx);
+                };
+            });
+        };
+
+        const handleAiFixQuestion = async (idx, instruction) => {
+            if (!checkAiReady()) return;
+            showLoading(true, "AI đang tinh chỉnh câu hỏi...");
+            const currentQ = tempAiQuestions[idx];
+            const prompt = `Bạn là chuyên gia đề thi. Hãy sửa lại câu hỏi trắc nghiệm sau đây theo yêu cầu: "${instruction}"\n\nCÂU HỎI HIỆN TẠI:\n${JSON.stringify(currentQ)}\n\nBẮT BUỘC trả về duy nhất 1 đối tượng JSON (không markdown) theo cấu trúc cũ.`;
+            
+            try {
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, responseMimeType: "application/json" } };
+                const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+                if (!data.candidates || !data.candidates[0].content.parts[0].text) throw new Error("AI không phản hồi");
+                
+                let text = data.candidates[0].content.parts[0].text;
+                text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+                const newQ = JSON.parse(text);
+                tempAiQuestions[idx] = newQ;
+                renderAiReviewList();
+                showToast("✅ Đã cập nhật câu hỏi!");
+            } catch (err) {
+                showToast("❌ Lỗi AI: " + err.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+
+        const openAiReview = (bankName, questions) => {
+            tempBankName = bankName;
+            tempAiQuestions = JSON.parse(JSON.stringify(questions)); // Deep copy
+            const modal = document.getElementById('aiReviewModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                renderAiReviewList();
+            }
+        };
+
+        document.getElementById('saveAiReviewBtn')?.addEventListener('click', async () => {
+            // Thu thập dữ liệu từ các ô nhập liệu
+            const cards = document.querySelectorAll('.ai-review-card');
+            const updatedQuestions = [];
+            
+            cards.forEach(card => {
+                const qText = card.querySelector('textarea').value.trim();
+                const optRows = card.querySelectorAll('.opt-edit-row');
+                const options = [];
+                const correctIndices = [];
+                
+                optRows.forEach((row, oIdx) => {
+                    const optVal = row.querySelector('input[type="text"]').value.trim();
+                    const isCorrect = row.querySelector('.opt-edit-checkbox').checked;
+                    if (optVal) {
+                        options.push(optVal);
+                        if (isCorrect) correctIndices.push(options.length - 1);
+                    }
+                });
+
+                if (qText && options.length >= 2) {
+                    updatedQuestions.push({
+                        text: qText,
+                        options: options,
+                        correctIndices: correctIndices,
+                        type: correctIndices.length > 1 ? 'multiple' : 'single'
+                    });
+                }
+            });
+
+            if (updatedQuestions.length === 0) {
+                showToast("⚠️ Không có câu hỏi hợp lệ để lưu!");
+                return;
+            }
+
+            showLoading(true, "Đang lưu bộ đề...");
+            try {
+                await saveBank(tempBankName, updatedQuestions);
+                await refreshBankDropdown();
+                const banks = await getAllBanks();
+                const newBank = banks[banks.length - 1];
+                document.getElementById('aiReviewModal')?.classList.add('hidden');
+                showLoading(false);
+                showConfirm(`🎉 Đã lưu ${updatedQuestions.length} câu hỏi! Bắt đầu làm ngay?`, async (yes) => {
+                    if (yes) await loadBankById(newBank.id);
+                });
+            } catch (err) {
+                showLoading(false);
+                showToast("Lỗi lưu bộ đề: " + err.message);
+            }
+        });
+
+        document.getElementById('cancelAiReviewBtn')?.addEventListener('click', () => {
+            showConfirm("Hủy bỏ bộ đề vừa tạo? Toàn bộ nội dung sẽ bị mất.", (yes) => {
+                if (yes) document.getElementById('aiReviewModal')?.classList.add('hidden');
+            });
+        });
+
+        document.getElementById('addAiReviewQuestionBtn')?.addEventListener('click', () => {
+            syncReviewData();
+            tempAiQuestions.push({
+                text: "Câu hỏi mới...",
+                options: ["Đáp án 1", "Đáp án 2", "Đáp án 3", "Đáp án 4"],
+                correctIndices: [0],
+                type: "single"
+            });
+            renderAiReviewList();
+            // Cuộn xuống cuối
+            const list = document.getElementById('aiReviewList');
+            if (list) setTimeout(() => list.scrollTop = list.scrollHeight, 100);
+        });
+
         submitAiGenBtn?.addEventListener('click', async () => {
             if (!checkAiReady()) return;
             const rawText = document.getElementById('aiGenTextArea')?.value.trim();
@@ -1198,9 +1438,9 @@ async function initGIA() {
             const difficultyText = diff !== 'Mặc định' ? `Mức độ câu hỏi: ${diff}.` : '';
             
             aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex');
-            showLoading(true, "AI đang tổng hợp dữ liệu từ các file... (Có thể mất 20-40 giây)");
+            showLoading(true, "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
 
-            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc TẤT CẢ các tài liệu đính kèm (ảnh, PDF) và văn bản dưới đây. Tổng hợp kiến thức từ các nguồn này và tạo ra đúng ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array. Cấu trúc mẫu:\n[\n  {\n    "text": "Câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nTiếng Việt.`;
+            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc TẤT CẢ các tài liệu đính kèm và văn bản dưới đây. Tổng hợp kiến thức và tạo ra đúng ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array. Cấu trúc mẫu:\n[\n  {\n    "text": "Câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nTiếng Việt.`;
             
             let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN TỔNG HỢP:\n" + rawText;
             
@@ -1220,10 +1460,8 @@ async function initGIA() {
                 const jsonArray = JSON.parse(aiResponseText);
                 if (!Array.isArray(jsonArray) || jsonArray.length === 0) throw new Error("Dữ liệu AI trả về không đúng định dạng.");
                 
-                await saveBank(bankName, jsonArray); await refreshBankDropdown();
-                const banks = await getAllBanks(); const newBank = banks[banks.length - 1];
                 showLoading(false);
-                showConfirm(`✅ Đã tạo xong ${jsonArray.length} câu hỏi! Bắt đầu làm bài ngay?`, async (yes) => { if (yes) await loadBankById(newBank.id); });
+                openAiReview(bankName, jsonArray);
             } catch (error) { showLoading(false); showToast("❌ Lỗi tạo đề: " + error.message, 7000); aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); }
         });
 

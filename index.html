@@ -269,6 +269,66 @@
     </div>
 </div>
 
+<!-- Modal AI Fix Dialog -->
+<div id="aiFixModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[200] p-4">
+    <div id="aiFixModalContent" class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-transparent">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/40 rounded-xl flex items-center justify-center text-purple-600 dark:text-purple-400">
+                <i class="fas fa-wand-magic-sparkles text-xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-white">AI Tinh chỉnh câu hỏi</h3>
+        </div>
+        
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Chọn yêu cầu nhanh hoặc nhập nội dung tùy chỉnh:</p>
+        
+        <div id="fixChipsContainer" class="flex flex-wrap gap-2 mb-6">
+            <button class="fix-chip" data-val="Làm câu hỏi dễ hơn">Dễ hơn 🟢</button>
+            <button class="fix-chip" data-val="Làm câu hỏi khó hơn">Khó hơn 🔴</button>
+            <button class="fix-chip" data-val="Chuyển thành dạng đa đáp án (nhiều đáp án đúng)">Đa đáp án 🔄</button>
+            <button class="fix-chip" data-val="Thêm các đáp án gây nhiễu thuyết phục hơn">Thêm nhiễu 🎭</button>
+            <button class="fix-chip" data-val="Viết lại câu hỏi và đáp án chuyên nghiệp hơn">Viết lại 📝</button>
+            <button class="fix-chip" data-val="">Khác... ⌨️</button>
+        </div>
+
+        <textarea id="aiFixCustomInput" class="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl p-3 text-sm mb-6 outline-none focus:ring-2 focus:ring-purple-500 transition-all" rows="3" placeholder="Nhập yêu cầu chi tiết của bạn tại đây..."></textarea>
+
+        <div class="flex justify-end gap-3">
+            <button id="closeAiFixModal" class="px-4 py-2 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition">Đóng</button>
+            <button id="confirmAiFixBtn" class="px-6 py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 shadow-lg shadow-purple-200 dark:shadow-none transition">Thực hiện</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Review & Edit AI Questions -->
+<div id="aiReviewModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[100] p-4">
+    <div id="aiReviewModalContent" class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full p-6 border border-transparent max-h-[95vh] flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <i class="fas fa-tasks text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">Kiểm tra & Chỉnh sửa Đề AI</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Vui lòng kiểm tra kỹ nội dung trước khi lưu chính thức</p>
+                </div>
+            </div>
+            <span id="aiReviewCount" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">0 câu hỏi</span>
+        </div>
+        
+        <div id="aiReviewList" class="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar mb-4 py-2">
+            <!-- Danh sách câu hỏi AI để sửa -->
+        </div>
+
+        <div class="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <button id="cancelAiReviewBtn" class="px-6 py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-700 transition font-medium">Hủy bỏ</button>
+            <div class="flex gap-3">
+                <button id="addAiReviewQuestionBtn" class="px-4 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition font-medium border border-blue-100 dark:border-blue-800/50"><i class="fas fa-plus"></i> Thêm câu</button>
+                <button id="saveAiReviewBtn" class="px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none transition font-bold">Lưu Bộ đề ✅</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
