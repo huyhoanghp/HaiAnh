@@ -18,17 +18,8 @@
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="apple-mobile-web-app-title" content="Hai Anh Study">
-    <link rel="apple-touch-icon" href="BTS_Icon.webp">
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW Registered!', reg))
-                    .catch(err => console.log('SW Reg failed:', err));
-            });
-        }
-    </script>
 </head>
 <body class="font-sans antialiased bg-gray-100">
 <div id="loadingOverlay"><div class="spinner"></div><div id="loadingText">Đang xử lý, vui lòng chờ...</div></div>

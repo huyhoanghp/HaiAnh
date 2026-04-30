@@ -8,14 +8,16 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "BTS_Icon.webp",
+      "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/webp"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "BTS_Icon.webp",
+      "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/webp"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

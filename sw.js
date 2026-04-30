@@ -5,7 +5,8 @@ const ASSETS = [
   './AI_Hello-X4_index.html',
   './style.css',
   './script.js',
-  './BTS_Icon.webp',
+  './icon-192.png',
+  './icon-512.png',
   './manifest.json'
 ];
 

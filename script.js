@@ -1657,3 +1657,16 @@ async function initGIA() {
 }
 
 initGIA();
+
+// ======================== PWA SERVICE WORKER REGISTRATION ========================
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => {
+                console.log('🚀 Hai Anh Study: Service Worker Registered!', reg.scope);
+            })
+            .catch(err => {
+                console.error('❌ Hai Anh Study: Service Worker Registration Failed:', err);
+            });
+    });
+}
