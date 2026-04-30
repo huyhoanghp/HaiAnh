@@ -80,13 +80,14 @@ const FontSizeManager = {
     },
 
     initEvents() {
-        const toggleBtn = document.getElementById('fontSizeToggle');
-        const panel = document.getElementById('fontSizePanel');
+        const toggleBtn = document.getElementById('settingsToggleBtn');
+        const dropdown = document.getElementById('settingsDropdown');
         const slider = document.getElementById('fontSizeSlider');
         
         toggleBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
-            panel?.classList.toggle('hidden');
+            const isShowing = dropdown?.classList.toggle('show');
+            toggleBtn.classList.toggle('active', isShowing);
         });
 
         slider?.addEventListener('input', (e) => {
@@ -96,8 +97,9 @@ const FontSizeManager = {
         });
 
         document.addEventListener('click', (e) => {
-            if (panel && !panel.contains(e.target) && !toggleBtn.contains(e.target)) {
-                panel.classList.add('hidden');
+            if (dropdown && !dropdown.contains(e.target) && !toggleBtn?.contains(e.target)) {
+                dropdown.classList.remove('show');
+                toggleBtn?.classList.remove('active');
             }
         });
     },
@@ -107,11 +109,9 @@ const FontSizeManager = {
         document.documentElement.style.setProperty('--font-scale', decimal);
         document.body.style.setProperty('--font-scale', decimal);
         
-        const label = document.getElementById('fontSizeLabel');
         const valDisplay = document.getElementById('fontSizeVal');
         const slider = document.getElementById('fontSizeSlider');
 
-        if (label) label.innerText = `${this.scale}%`;
         if (valDisplay) valDisplay.innerText = `${this.scale}%`;
         if (slider) slider.value = this.scale;
     }
@@ -534,6 +534,110 @@ async function saveHistory(bankId, bankName, totalQuestions, correctCount, wrong
 async function getAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readonly'); const req = tx.objectStore(STORE_HISTORY).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function clearAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readwrite'); const req = tx.objectStore(STORE_HISTORY).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 
+// ======================== DATA CENTER (BACKUP/RESTORE) ========================
+async function exportAllData() {
+    try {
+        const banks = await getAllBanks();
+        const history = await getAllHistory();
+        const backupData = {
+            version: '1.0',
+            timestamp: new Date().toISOString(),
+            banks: banks,
+            history: history,
+            settings: {
+                apiKey: localStorage.getItem('gemini_api_key'),
+                darkMode: localStorage.getItem('darkMode')
+            }
+        };
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `HaiAnh_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("✅ Đã xuất dữ liệu thành công!");
+    } catch (err) {
+        showToast("❌ Lỗi xuất dữ liệu: " + err.message);
+    }
+}
+
+async function exportSingleBank(id) {
+    if (!id) return;
+    try {
+        const bank = await getBankById(parseInt(id));
+        if (!bank) throw new Error("Không tìm thấy bộ đề");
+        const blob = new Blob([JSON.stringify(bank, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Bank_${bank.name.replace(/\s+/g, '_')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("✅ Đã xuất bộ đề!");
+    } catch (err) {
+        showToast("❌ Lỗi: " + err.message);
+    }
+}
+
+async function importData(file) {
+    if (!file) return;
+    showLoading(true, "Đang nạp dữ liệu...");
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            await openDB();
+            
+            if (data.banks && Array.isArray(data.banks)) {
+                const tx = db.transaction([STORE_BANKS, STORE_HISTORY], 'readwrite');
+                const bankStore = tx.objectStore(STORE_BANKS);
+                const historyStore = tx.objectStore(STORE_HISTORY);
+
+                for (const b of data.banks) {
+                    const cleanBank = { ...b };
+                    delete cleanBank.id;
+                    await new Promise((res, rej) => {
+                        const req = bankStore.add(cleanBank);
+                        req.onsuccess = res; req.onerror = rej;
+                    });
+                }
+                if (data.history && Array.isArray(data.history)) {
+                    for (const h of data.history) {
+                        const cleanH = { ...h };
+                        delete cleanH.id;
+                        await new Promise((res, rej) => {
+                            const req = historyStore.add(cleanH);
+                            req.onsuccess = res; req.onerror = rej;
+                        });
+                    }
+                }
+                showToast("✅ Đã khôi phục toàn bộ dữ liệu!");
+            } 
+            else if (data.questions && data.name) {
+                const cleanBank = { ...data };
+                delete cleanBank.id;
+                await saveBank(cleanBank.name, cleanBank.questions);
+                showToast(`✅ Đã nạp bộ đề: ${cleanBank.name}`);
+            } else {
+                throw new Error("Định dạng file không hợp lệ");
+            }
+
+            await refreshBankDropdown();
+            showLoading(false);
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ Lỗi nạp file: " + err.message);
+        }
+    };
+    reader.onerror = () => { showLoading(false); showToast("❌ Lỗi đọc file"); };
+    reader.readAsText(file);
+}
+
 // ======================== DOM CACHING & UTILS ========================
 const loadingOverlay = document.getElementById('loadingOverlay'), loadingText = document.getElementById('loadingText');
 const toastMsg = document.getElementById('toastMsg');
@@ -569,11 +673,41 @@ function showConfirm(msg, callback, isInput = false) {
 }
 function showPrompt(msg, defaultVal, callback) { if (!customModalText) return; customModalText.innerText = msg; customModalInput.value = defaultVal || ''; customModalInput.classList.remove('hidden'); customModal.classList.remove('hidden'); customModal.classList.add('flex'); customModalInput.focus(); customModalConfirm.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(customModalInput.value); }; customModalCancel.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(null); }; }
 
-function initDarkMode() { const isDark = localStorage.getItem('darkMode') === 'true'; if (isDark) document.body.classList.add('dark'); const darkModeText = document.getElementById('darkModeText'); if (darkModeText) darkModeText.innerText = isDark ? 'Sáng' : 'Tối'; const darkModeToggle = document.getElementById('darkModeToggle'); if (darkModeToggle) darkModeToggle.onclick = () => { document.body.classList.toggle('dark'); const dark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', dark); if (darkModeText) darkModeText.innerText = dark ? 'Sáng' : 'Tối'; }; }
+function initDarkMode() { 
+    const isDark = localStorage.getItem('darkMode') === 'true'; 
+    if (isDark) document.body.classList.add('dark'); 
+    
+    const darkModeToggle = document.getElementById('darkModeToggle'); 
+    if (darkModeToggle) {
+        darkModeToggle.onclick = () => {
+            document.body.classList.toggle('dark');
+            const dark = document.body.classList.contains('dark');
+            localStorage.setItem('darkMode', dark);
+            updateDarkModeUI();
+        };
+    }
+    updateDarkModeUI();
+}
+
+function updateDarkModeUI() {
+    const isDark = document.body.classList.contains('dark');
+    const darkModeText = document.getElementById('darkModeText');
+    if (darkModeText) darkModeText.innerText = isDark ? 'Chuyển sang: Sáng' : 'Chuyển sang: Tối';
+}
 
 // ======================== API SETTINGS ========================
 function getApiKey() { return localStorage.getItem('gemini_api_key') || ""; }
-function updateApiKeyBadge() { const badge = document.getElementById('apiKeyBadge'); if (!badge) return; if (getApiKey()) { badge.className = 'inline-block w-2 h-2 rounded-full ml-1 bg-green-500'; badge.title = 'API Key đã được lưu'; } else { badge.className = 'inline-block w-2 h-2 rounded-full ml-1 bg-red-500'; badge.title = 'Chưa có API Key'; } }
+function updateApiKeyBadge() { 
+    const badge = document.getElementById('apiKeyBadge'); 
+    if (!badge) return; 
+    if (getApiKey()) { 
+        badge.className = 'w-2 h-2 rounded-full bg-green-500'; 
+        badge.title = 'API Key đã được lưu'; 
+    } else { 
+        badge.className = 'w-2 h-2 rounded-full bg-red-500'; 
+        badge.title = 'Chưa có API Key'; 
+    } 
+}
 let cachedWorkingModel = localStorage.getItem('last_working_model') || null;
 
 async function compressImage(base64Str) {
@@ -1488,6 +1622,34 @@ async function initGIA() {
             if (toast && !toast.classList.contains('hidden') && !toast.contains(e.target) && !isHintBtn) {
                 toast.classList.add('hidden');
             }
+        });
+
+        // Data Center Events
+        document.getElementById('dataCenterBtn')?.addEventListener('click', () => {
+            document.getElementById('dataCenterModal')?.classList.remove('hidden');
+            document.getElementById('dataCenterModal')?.classList.add('flex');
+        });
+
+        document.getElementById('exportAllBtn')?.addEventListener('click', exportAllData);
+
+        document.getElementById('importDataBtn')?.addEventListener('click', () => {
+            document.getElementById('importFileInput')?.click();
+        });
+
+        document.getElementById('importFileInput')?.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                importData(e.target.files[0]);
+                e.target.value = ''; // Reset
+            }
+        });
+
+        document.getElementById('shareBankBtn')?.addEventListener('click', () => {
+            const bankId = document.getElementById('bankSelect')?.value;
+            if (!bankId) {
+                showToast("Vui lòng chọn bộ đề muốn chia sẻ!");
+                return;
+            }
+            exportSingleBank(bankId);
         });
 
         attachGlobalEvents();

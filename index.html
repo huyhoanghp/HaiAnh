@@ -46,21 +46,50 @@
             <h1 class="text-2xl font-bold text-blue-800 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> Hai Anh Study</h1>
             
             <div class="flex gap-2 flex-wrap justify-center md:justify-end">
-                <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa magic"></i> AI Gen</button>
-                <button id="aiSettingsBtn" class="btn-unified btn-ghost">
-                    <i class="fas fa-key"></i> API <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
-                </button>
-                <button id="darkModeToggle" class="btn-unified btn-ghost"><i class="fas fa-circle-half-stroke"></i> <span id="darkModeText">Tối</span></button>
+                <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa-magic"></i> AI Gen</button>
+                
                 <div class="relative">
-                    <button id="fontSizeToggle" class="btn-unified btn-ghost" title="Cỡ chữ">
-                        <i class="fas fa-font"></i> <span id="fontSizeLabel">100%</span>
+                    <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
+                        <i class="fas fa-cog text-lg"></i>
                     </button>
-                    <div id="fontSizePanel" class="font-size-panel hidden">
-                        <div class="text-xs font-bold text-gray-500 mb-2 flex justify-between">
-                            <span>Cỡ chữ</span>
-                            <span id="fontSizeVal">100%</span>
+
+                    <div id="settingsDropdown">
+                        <!-- Cấu hình AI -->
+                        <button id="aiSettingsBtn" class="menu-item">
+                            <i class="fas fa-robot text-purple-600"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Cấu hình AI</div>
+                                <div class="text-[10px] text-gray-400">Thiết lập API Key & Model</div>
+                            </div>
+                            <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
+                        </button>
+
+                        <!-- Dữ liệu -->
+                        <button id="dataCenterBtn" class="menu-item">
+                            <i class="fas fa-database text-emerald-600"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Trung tâm Dữ liệu</div>
+                                <div class="text-[10px] text-gray-400">Sao lưu & Khôi phục file</div>
+                            </div>
+                        </button>
+
+                        <!-- Dark Mode -->
+                        <button id="darkModeToggle" class="menu-item">
+                            <i class="fas fa-circle-half-stroke text-blue-600"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Chế độ hiển thị</div>
+                                <div id="darkModeText" class="text-[10px] text-gray-400">Chuyển Sáng / Tối</div>
+                            </div>
+                        </button>
+
+                        <!-- Font Size -->
+                        <div class="p-4 bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cỡ chữ hệ thống</span>
+                                <span id="fontSizeVal" class="text-xs font-bold text-indigo-600">100%</span>
+                            </div>
+                            <input type="range" id="fontSizeSlider" min="80" max="250" value="100" class="font-range-input">
                         </div>
-                        <input type="range" id="fontSizeSlider" min="80" max="250" value="100" class="font-range-input">
                     </div>
                 </div>
                 
@@ -81,7 +110,8 @@
                 <div class="flex-1 min-w-[200px]"><label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 ml-1">📚 Bộ câu hỏi đã lưu</label><select id="bankSelect" class="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"><option value="">-- Chọn bộ câu hỏi --</option></select></div>
                 <div class="flex gap-2 w-full md:w-auto">
                     <button id="loadSelectedBankBtn" class="flex-1 md:flex-none bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm"><i class="fas fa-cloud-arrow-down"></i> Tải</button>
-                    <button id="deleteBankBtn" class="md:flex-none bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-100"><i class="fas fa-trash-can"></i></button>
+                    <button id="deleteBankBtn" class="md:flex-none bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-100" title="Xóa bộ đề"><i class="fas fa-trash-can"></i></button>
+                    <button id="shareBankBtn" class="md:flex-none bg-cyan-50 hover:bg-cyan-100 text-cyan-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-cyan-100" title="Chia sẻ bộ đề"><i class="fas fa-share-nodes"></i></button>
                     <button id="showStatsBtn" class="flex-1 md:flex-none bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm"><i class="fas fa-chart-pie"></i> Báo cáo</button>
                 </div>
             </div>
@@ -265,6 +295,54 @@
         <div class="flex justify-end gap-3 mt-6">
             <button id="closeAiGenBtn" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Đóng</button>
             <button id="submitAiGenBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"><i class="fas fa-bolt mr-1"></i> Bắt đầu tạo</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Data Center (Backup/Restore) -->
+<div id="dataCenterModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[200] p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-transparent">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <i class="fas fa-database text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">Trung tâm Dữ liệu</h3>
+            </div>
+            <button class="close-modal-btn text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="document.getElementById('dataCenterModal').classList.add('hidden')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="space-y-4">
+            <!-- Xuất dữ liệu -->
+            <div class="p-4 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50">
+                <h4 class="font-bold text-gray-800 dark:text-gray-200 mb-1 flex items-center gap-2">
+                    <i class="fas fa-file-export text-emerald-500"></i> Sao lưu (Export)
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Tải toàn bộ đề thi và lịch sử về máy để lưu trữ hoặc chuyển sang máy khác.</p>
+                <button id="exportAllBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-md shadow-emerald-100 dark:shadow-none">
+                    <i class="fas fa-download mr-2"></i> Tải về file Backup (.json)
+                </button>
+            </div>
+
+            <!-- Nhập dữ liệu -->
+            <div class="p-4 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50">
+                <h4 class="font-bold text-gray-800 dark:text-gray-200 mb-1 flex items-center gap-2">
+                    <i class="fas fa-file-import text-blue-500"></i> Khôi phục (Import)
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Chọn file backup đã lưu để nạp lại dữ liệu vào ứng dụng.</p>
+                <input type="file" id="importFileInput" class="hidden" accept=".json">
+                <button id="importDataBtn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-md shadow-blue-100 dark:shadow-none">
+                    <i class="fas fa-upload mr-2"></i> Chọn file để nạp
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <p class="text-[11px] text-gray-400 italic">
+                <i class="fas fa-info-circle mr-1"></i> Lưu ý: Khi nạp dữ liệu, các bộ đề trùng tên sẽ được tự động cập nhật hoặc thêm mới.
+            </p>
         </div>
     </div>
 </div>
