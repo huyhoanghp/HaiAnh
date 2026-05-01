@@ -7,6 +7,9 @@ body.dark .bg-white, body.dark .bg-gray-50, body.dark .sticky-nav, body.dark .ca
 body.dark .border-gray-200, body.dark .border-gray-100 { border-color: #334155 !important; }
 body.dark .bg-gray-100, body.dark .bg-gray-200 { background-color: #0f172a !important; }
 body.dark .text-gray-700, body.dark .text-gray-600, body.dark .text-gray-500, body.dark .text-gray-800, body.dark .text-black { color: #cbd5e1 !important; }
+body.dark .btn-primary { background: #2563eb !important; color: #ffffff !important; border: 1px solid #3b82f6 !important; }
+body.dark .btn-secondary { background: #d97706 !important; color: #ffffff !important; border: 1px solid #f59e0b !important; }
+body.dark .btn-ghost { background: #1e293b !important; color: #cbd5e1 !important; border: 1px solid #334155 !important; }
 body.dark input, body.dark select, body.dark textarea, body.dark .border { background-color: #0f172a !important; color: #e2e8f0 !important; border-color: #475569 !important; }
 
 /* Tăng độ tương phản cho chế độ sáng */
@@ -14,6 +17,11 @@ body.dark input, body.dark select, body.dark textarea, body.dark .border { backg
 .bg-gray-50 { background-color: #f8fafc !important; }
 .speak-toggle-btn { color: #1e40af !important; border-color: #bfdbfe !important; }
 .dark .speak-toggle-btn { color: #60a5fa !important; border-color: #1e3a8a !important; }
+
+/* Tăng cường hiển thị Toggle trong Dark Mode */
+body.dark .peer { background-color: #334155 !important; border: 1px solid #475569 !important; }
+body.dark .peer-checked { background-color: #2563eb !important; border-color: #3b82f6 !important; }
+body.dark .peer:after { background-color: #f8fafc !important; }
 
 body.dark #resultContent { color: #e2e8f0; }
 body.dark #resultContent .bg-gray-50 { background-color: #1e293b !important; border: 1px solid #475569; }
@@ -24,8 +32,7 @@ body.dark mark { background-color: #b45309 !important; color: #fff !important; }
 
 body.dark #customModalContent, body.dark #aiSettingsModalContent, body.dark #aiGenModalContent { background-color: #1e293b; border-color: #475569; }
 body.dark #customModalText { color: #cbd5e1; }
-body.dark .btn-secondary { background-color: #334155; color: #e2e8f0; }
-body.dark .btn-secondary:hover { background-color: #475569; }
+body.dark #customModalText { color: #cbd5e1; }
 
 .ai-explanation-box { 
     background-color: #f5f3ff !important; 
@@ -213,7 +220,12 @@ body.dark .wrong-table th { background-color: #334155; }
 #openAiGenBtn { background-color: #e0e7ff !important; color: #3730a3 !important; border: 1px solid #c7d2fe !important; }
 #aiSettingsBtn { background-color: #f5f3ff !important; color: #701a75 !important; border: 1px solid #ddd6fe !important; }
 
-.dark .btn-grid button { color: #f1f5f9 !important; background-color: transparent !important; }
+/* Nút Thi trong Chế độ tối */
+body.dark #startFullTestBtn { background-color: #059669 !important; color: #ffffff !important; border: 1px solid #10b981 !important; }
+body.dark #startRandomTestBtn { background-color: #7c3aed !important; color: #ffffff !important; border: 1px solid #8b5cf6 !important; }
+body.dark #reviewWrongMainBtn { background-color: #ea580c !important; color: #ffffff !important; border: 1px solid #f97316 !important; }
+
+body.dark .btn-grid button:hover { filter: brightness(1.1); }
 
 @media (max-width: 640px) {
     .btn-grid {
@@ -340,7 +352,7 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
 @media (max-width: 768px) {
     #settingsDropdown {
         position: fixed !important;
-        top: 5.5rem !important;
+        top: 6.5rem !important;
         left: 50% !important;
         right: auto !important;
         width: 92vw !important;
