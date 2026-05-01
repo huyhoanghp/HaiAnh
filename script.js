@@ -21,6 +21,7 @@ const BATCH_SIZE = 20;
 let filteredIndices = [];
 let scrollObserver = null;
 let currentFileData = null, currentMimeType = null;
+let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false'; // Default true
 
 // ======================== VOICE ENGINE (NEW) ========================
 let vietnameseVoice = null;
@@ -66,6 +67,73 @@ function normalizeText(text) {
     });
     return p.replace(/\s+/g, " ").trim();
 }
+
+const FontSizeManager = {
+    scale: 100, // percentage
+
+    init() {
+        const saved = localStorage.getItem('haianh_font_scale');
+        if (saved !== null) {
+            this.scale = parseInt(saved);
+        }
+        this.apply();
+        this.initEvents();
+    },
+
+    initEvents() {
+        const toggleBtn = document.getElementById('settingsToggleBtn');
+        const dropdown = document.getElementById('settingsDropdown');
+        const slider = document.getElementById('fontSizeSlider');
+        
+        toggleBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isShowing = dropdown?.classList.toggle('show');
+            toggleBtn.classList.toggle('active', isShowing);
+        });
+
+        slider?.addEventListener('input', (e) => {
+            this.scale = parseInt(e.target.value);
+            this.apply();
+            localStorage.setItem('haianh_font_scale', this.scale);
+        });
+
+        const hintToggle = document.getElementById('hintToggle');
+        if (hintToggle) {
+            hintToggle.checked = hintEnabled;
+            hintToggle.addEventListener('change', (e) => {
+                hintEnabled = e.target.checked;
+                localStorage.setItem('haianh_hint_enabled', hintEnabled);
+                this.applyHintVisibility();
+            });
+        }
+
+        document.addEventListener('click', (e) => {
+            if (dropdown && !dropdown.contains(e.target) && !toggleBtn?.contains(e.target)) {
+                dropdown.classList.remove('show');
+                toggleBtn?.classList.remove('active');
+            }
+        });
+    },
+
+    apply() {
+        const decimal = this.scale / 100;
+        document.documentElement.style.setProperty('--font-scale', decimal);
+        document.body.style.setProperty('--font-scale', decimal);
+        
+        const valDisplay = document.getElementById('fontSizeVal');
+        const slider = document.getElementById('fontSizeSlider');
+
+        if (valDisplay) valDisplay.innerText = `${this.scale}%`;
+        if (slider) slider.value = this.scale;
+    },
+
+    applyHintVisibility() {
+        document.querySelectorAll('.hint-btn').forEach(btn => {
+            if (hintEnabled) btn.classList.remove('hidden');
+            else btn.classList.add('hidden');
+        });
+    }
+};
 
 const SpeechManager = {
     queue: [],
@@ -435,12 +503,12 @@ function generateQuestionHTML(idx, rawSearch = "") {
         </div>
         
         <div class="mb-5">
-            <h3 class="q-text-focus leading-relaxed mb-4">${getHighlightedText(q.text, rawSearch)}</h3>
+            <h3 id="q-text-${idx}" class="q-text-focus leading-relaxed mb-4">${getHighlightedText(q.text, rawSearch)}</h3>
             <div class="space-y-2">${optionsHtml}</div>
         </div>
         <div class="flex items-center gap-3 mt-5 pt-4 border-t border-gray-50 dark:border-slate-800">
             ${aiExplainBtn}
-            <button class="hint-btn text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 transition font-medium" data-qidx="${idx}"><i class="fas fa-lightbulb"></i> Gợi ý</button>
+            <button class="hint-btn text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 transition font-medium ${hintEnabled ? '' : 'hidden'}" data-qidx="${idx}"><i class="fas fa-lightbulb"></i> Gợi ý</button>
         </div>
         ${feedback}${aiExplainBox}
     </div>`;
@@ -479,10 +547,115 @@ async function openDB() {
 async function getAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function saveBank(name, questions) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).add({ name, questions, createdAt: new Date().toISOString() }); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
 async function deleteBank(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).delete(id); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
+async function clearAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 async function getBankById(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).get(id); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function saveHistory(bankId, bankName, totalQuestions, correctCount, wrongDetails, wrongQuestionsText) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readwrite'); const req = tx.objectStore(STORE_HISTORY).add({ bankId, bankName, totalQuestions, correctCount, wrongCount: totalQuestions - correctCount, wrongDetails, wrongQuestionsText, date: new Date().toISOString(), timestamp: Date.now() }); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 async function getAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readonly'); const req = tx.objectStore(STORE_HISTORY).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function clearAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readwrite'); const req = tx.objectStore(STORE_HISTORY).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
+
+// ======================== DATA CENTER (BACKUP/RESTORE) ========================
+async function exportAllData() {
+    try {
+        const banks = await getAllBanks();
+        const history = await getAllHistory();
+        const backupData = {
+            version: '1.0',
+            timestamp: new Date().toISOString(),
+            banks: banks,
+            history: history,
+            settings: {
+                apiKey: localStorage.getItem('gemini_api_key'),
+                darkMode: localStorage.getItem('darkMode')
+            }
+        };
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `HaiAnh_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("✅ Đã xuất dữ liệu thành công!");
+    } catch (err) {
+        showToast("❌ Lỗi xuất dữ liệu: " + err.message);
+    }
+}
+
+async function exportSingleBank(id) {
+    if (!id) return;
+    try {
+        const bank = await getBankById(parseInt(id));
+        if (!bank) throw new Error("Không tìm thấy bộ đề");
+        const blob = new Blob([JSON.stringify(bank, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Bank_${bank.name.replace(/\s+/g, '_')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("✅ Đã xuất bộ đề!");
+    } catch (err) {
+        showToast("❌ Lỗi: " + err.message);
+    }
+}
+
+async function importData(file) {
+    if (!file) return;
+    showLoading(true, "Đang nạp dữ liệu...");
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            await openDB();
+            
+            if (data.banks && Array.isArray(data.banks)) {
+                const tx = db.transaction([STORE_BANKS, STORE_HISTORY], 'readwrite');
+                const bankStore = tx.objectStore(STORE_BANKS);
+                const historyStore = tx.objectStore(STORE_HISTORY);
+
+                for (const b of data.banks) {
+                    const cleanBank = { ...b };
+                    delete cleanBank.id;
+                    await new Promise((res, rej) => {
+                        const req = bankStore.add(cleanBank);
+                        req.onsuccess = res; req.onerror = rej;
+                    });
+                }
+                if (data.history && Array.isArray(data.history)) {
+                    for (const h of data.history) {
+                        const cleanH = { ...h };
+                        delete cleanH.id;
+                        await new Promise((res, rej) => {
+                            const req = historyStore.add(cleanH);
+                            req.onsuccess = res; req.onerror = rej;
+                        });
+                    }
+                }
+                showToast("✅ Đã khôi phục toàn bộ dữ liệu!");
+            } 
+            else if (data.questions && data.name) {
+                const cleanBank = { ...data };
+                delete cleanBank.id;
+                await saveBank(cleanBank.name, cleanBank.questions);
+                showToast(`✅ Đã nạp bộ đề: ${cleanBank.name}`);
+            } else {
+                throw new Error("Định dạng file không hợp lệ");
+            }
+
+            await refreshBankDropdown();
+            showLoading(false);
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ Lỗi nạp file: " + err.message);
+        }
+    };
+    reader.onerror = () => { showLoading(false); showToast("❌ Lỗi đọc file"); };
+    reader.readAsText(file);
+}
 
 // ======================== DOM CACHING & UTILS ========================
 const loadingOverlay = document.getElementById('loadingOverlay'), loadingText = document.getElementById('loadingText');
@@ -490,14 +663,70 @@ const toastMsg = document.getElementById('toastMsg');
 function showLoading(show, text = 'Đang xử lý...') { if (show) { if (loadingText) loadingText.innerText = text; if (loadingOverlay) loadingOverlay.style.display = 'flex'; } else if (loadingOverlay) loadingOverlay.style.display = 'none'; }
 function showToast(msg, duration = 2500) { if (!toastMsg) return; toastMsg.innerHTML = msg; toastMsg.classList.remove('hidden'); if (window.toastTimeout) clearTimeout(window.toastTimeout); window.toastTimeout = setTimeout(() => toastMsg.classList.add('hidden'), duration); }
 const customModal = document.getElementById('customModal'), customModalText = document.getElementById('customModalText'), customModalInput = document.getElementById('customModalInput'), customModalCancel = document.getElementById('customModalCancel'), customModalConfirm = document.getElementById('customModalConfirm');
-function showConfirm(msg, callback) { if (!customModalText) return; customModalText.innerText = msg; customModalInput.classList.add('hidden'); customModal.classList.remove('hidden'); customModal.classList.add('flex'); customModalConfirm.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(true); }; customModalCancel.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(false); }; }
+function showConfirm(msg, callback, isInput = false) { 
+    if (!customModalText) return; 
+    customModalText.innerText = msg; 
+    if (isInput) {
+        customModalInput.classList.remove('hidden');
+        customModalInput.value = '';
+        customModalInput.placeholder = "Nhập yêu cầu tại đây...";
+    } else {
+        customModalInput.classList.add('hidden');
+    }
+    customModal.classList.remove('hidden'); 
+    customModal.classList.add('flex'); 
+    if (isInput) {
+        setTimeout(() => customModalInput.focus(), 100);
+    }
+    customModalConfirm.onclick = () => { 
+        const val = isInput ? customModalInput.value.trim() : null;
+        customModal.classList.add('hidden'); 
+        customModal.classList.remove('flex'); 
+        callback(true, val); 
+    }; 
+    customModalCancel.onclick = () => { 
+        customModal.classList.add('hidden'); 
+        customModal.classList.remove('flex'); 
+        callback(false); 
+    }; 
+}
 function showPrompt(msg, defaultVal, callback) { if (!customModalText) return; customModalText.innerText = msg; customModalInput.value = defaultVal || ''; customModalInput.classList.remove('hidden'); customModal.classList.remove('hidden'); customModal.classList.add('flex'); customModalInput.focus(); customModalConfirm.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(customModalInput.value); }; customModalCancel.onclick = () => { customModal.classList.add('hidden'); customModal.classList.remove('flex'); callback(null); }; }
 
-function initDarkMode() { const isDark = localStorage.getItem('darkMode') === 'true'; if (isDark) document.body.classList.add('dark'); const darkModeText = document.getElementById('darkModeText'); if (darkModeText) darkModeText.innerText = isDark ? 'Sáng' : 'Tối'; const darkModeToggle = document.getElementById('darkModeToggle'); if (darkModeToggle) darkModeToggle.onclick = () => { document.body.classList.toggle('dark'); const dark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', dark); if (darkModeText) darkModeText.innerText = dark ? 'Sáng' : 'Tối'; }; }
+function initDarkMode() { 
+    const isDark = localStorage.getItem('darkMode') === 'true'; 
+    if (isDark) document.body.classList.add('dark'); 
+    
+    const darkModeToggle = document.getElementById('darkModeToggle'); 
+    if (darkModeToggle) {
+        darkModeToggle.onclick = () => {
+            document.body.classList.toggle('dark');
+            const dark = document.body.classList.contains('dark');
+            localStorage.setItem('darkMode', dark);
+            updateDarkModeUI();
+        };
+    }
+    updateDarkModeUI();
+}
+
+function updateDarkModeUI() {
+    const isDark = document.body.classList.contains('dark');
+    const darkModeText = document.getElementById('darkModeText');
+    if (darkModeText) darkModeText.innerText = isDark ? 'Chuyển sang: Sáng' : 'Chuyển sang: Tối';
+}
 
 // ======================== API SETTINGS ========================
 function getApiKey() { return localStorage.getItem('gemini_api_key') || ""; }
-function updateApiKeyBadge() { const badge = document.getElementById('apiKeyBadge'); if (!badge) return; if (getApiKey()) { badge.className = 'inline-block w-2 h-2 rounded-full ml-1 bg-green-500'; badge.title = 'API Key đã được lưu'; } else { badge.className = 'inline-block w-2 h-2 rounded-full ml-1 bg-red-500'; badge.title = 'Chưa có API Key'; } }
+function updateApiKeyBadge() { 
+    const badge = document.getElementById('apiKeyBadge'); 
+    if (!badge) return; 
+    if (getApiKey()) { 
+        badge.className = 'w-2 h-2 rounded-full bg-green-500'; 
+        badge.title = 'API Key đã được lưu'; 
+    } else { 
+        badge.className = 'w-2 h-2 rounded-full bg-red-500'; 
+        badge.title = 'Chưa có API Key'; 
+    } 
+}
 let cachedWorkingModel = localStorage.getItem('last_working_model') || null;
 
 async function compressImage(base64Str) {
@@ -667,25 +896,315 @@ async function explainWithAI(idx, lengthMode = 'normal') {
 // ======================== APP CORE LOGIC ========================
 function evaluateAll() { let correct = 0, details = []; for (let i = 0; i < currentQuestions.length; i++) { const res = checkAnswer(i); details.push({ index: i, correct: res.correct, correctIndices: res.correctAnswers, userIndices: res.userAnswers }); if (res.correct) correct++; } return { correctCount: correct, total: currentQuestions.length, details }; }
 
-function parseExcelToQuestions(dataBuffer) {
-    const wb = XLSX.read(dataBuffer, { type: 'array' }); const qList = [];
-    for (const sheetName of wb.SheetNames) {
-        const sheet = wb.Sheets[sheetName]; const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }); if (!rows || rows.length < 2) continue;
-        let headerIdx = -1; let colMap = { question: -1, answer: -1, type: -1, options: [] };
-        for (let i = 0; i < Math.min(rows.length, 30); i++) { const row = rows[i]; if (!row) continue; const rowStr = row.map(c => String(c || "").trim().toLowerCase()); const rowFullText = rowStr.join(" "); if ((rowFullText.includes("câu hỏi") || rowFullText.includes("nội dung")) && rowFullText.includes("đáp án")) { headerIdx = i; for (let j = 0; j < rowStr.length; j++) { const cell = rowStr[j]; if (cell === "câu hỏi" || cell.includes("nội dung câu hỏi")) colMap.question = j; else if (cell === "đáp án" || cell.includes("trả lời")) colMap.answer = j; else if (cell.includes("loại câu hỏi") || cell === "loại" || cell === "type") colMap.type = j; else if (cell.includes("phương án") || cell.includes("lựa chọn") || cell.includes("option") || /^[a-f]$/.test(cell) || /^đáp án [a-f]$/.test(cell)) colMap.options.push(j); } break; } }
-        if (headerIdx === -1 || colMap.question === -1 || colMap.answer === -1 || colMap.options.length === 0) continue;
-        for (let i = headerIdx + 1; i < rows.length; i++) { const row = rows[i]; if (!row) continue; const qText = String(row[colMap.question] || "").trim(); if (!qText) continue; let qType = 'single'; let typeRaw = colMap.type !== -1 ? String(row[colMap.type] || "").toUpperCase() : ""; if (typeRaw.includes('MC') || typeRaw.includes('MA')) qType = 'multiple'; else if (typeRaw.includes('SC') || typeRaw.includes('SA')) qType = 'single'; const opts = []; colMap.options.forEach(colIdx => { const optVal = String(row[colIdx] || "").trim(); if (optVal !== "") opts.push(optVal); }); if (opts.length === 0) continue; let ansRaw = String(row[colMap.answer] || "").trim().toUpperCase(); let ansIdx = []; const ansParts = ansRaw.split(/[,;]+/).map(s => s.trim()).filter(s => s); ansParts.forEach(part => { if (/^\d+$/.test(part)) { const idx = parseInt(part) - 1; if (idx >= 0 && idx < opts.length) ansIdx.push(idx); } else if (/^[A-Z]$/.test(part)) { const idx = part.charCodeAt(0) - 65; if (idx >= 0 && idx < opts.length) ansIdx.push(idx); } }); if (qType === 'single' && ansIdx.length > 1) qType = 'multiple'; if (ansIdx.length === 0) continue; qList.push({ text: qText, options: opts, correctIndices: ansIdx, type: qType }); }
+function normalizeHeaderText(text) {
+    if (!text) return "";
+    return removeAccents(String(text))
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .trim();
+}
+
+const EXCEL_KEYWORDS = {
+    question: ['cauhoi', 'noidung', 'question', 'ques', 'q', 'content', 'noidungcauhoi'],
+    answer: ['dapan', 'answer', 'ans', 'a', 'key', 'result', 'dung', 'correct', 'dapandung', 'da'],
+    type: ['loai', 'type', 'dang', 'loaicauhoi'],
+    options: ['phuongan', 'luachon', 'option', 'choice', 'lua', 'phuong', 'traloi']
+};
+
+function detectExcelHeaders(rows) {
+    let headerIdx = -1;
+    let colMap = { question: -1, answer: -1, type: -1, options: [], allHeaders: [] };
+
+    // --- GIAI ĐOẠN 1: KHỚP TỪ KHÓA NGUYÊN BẢN (STRICT) ---
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        const row = rows[i];
+        if (!row || row.length < 2) continue;
+        const rowStr = row.map(c => String(c || "").trim().toLowerCase());
+        const rowFullText = rowStr.join(" ");
+        
+        // Ưu tiên logic nguyên bản: Phải có cả "câu hỏi" (hoặc nội dung) và "đáp án" (hoặc đa, key)
+        if ((rowFullText.includes("câu hỏi") || rowFullText.includes("nội dung")) && (rowFullText.includes("đáp án") || rowFullText.includes("đa") || rowFullText.includes("key"))) {
+            headerIdx = i;
+            colMap.allHeaders = row.map(c => String(c || "").trim());
+            for (let j = 0; j < rowStr.length; j++) {
+                const cell = rowStr[j];
+                if (cell === "câu hỏi" || cell.includes("nội dung câu hỏi")) colMap.question = j;
+                else if (cell === "đáp án" || cell.includes("trả lời")) colMap.answer = j;
+                else if (cell.includes("loại câu hỏi") || cell === "loại" || cell === "type") colMap.type = j;
+                else if (cell.includes("phương án") || cell.includes("lựa chọn") || cell.includes("option") || /^[a-f]$/.test(cell) || /^đáp án [a-f]$/.test(cell)) {
+                    colMap.options.push(j);
+                }
+            }
+            if (colMap.question !== -1 && colMap.answer !== -1) return { headerIdx, colMap };
+        }
     }
-    if (qList.length === 0) throw new Error("Không nhận diện được câu hỏi hợp lệ nào."); return qList;
+
+    // --- GIAI ĐOẠN 2: KHỚP TỪ KHÓA CHUẨN HÓA (FUZZY) ---
+    // (Nếu GĐ1 thất bại hoặc thiếu cột chính)
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const normalizedRow = row.map(c => normalizeHeaderText(c));
+        const rowFullText = normalizedRow.join("");
+        
+        if (EXCEL_KEYWORDS.question.some(k => rowFullText.includes(k)) && EXCEL_KEYWORDS.answer.some(k => rowFullText.includes(k))) {
+            headerIdx = i;
+            colMap.allHeaders = row.map(c => String(c || "").trim());
+            colMap.options = []; // Reset options để tìm theo kiểu fuzzy
+            
+            for (let j = 0; j < normalizedRow.length; j++) {
+                const cell = normalizedRow[j];
+                if (!cell) continue;
+                if (EXCEL_KEYWORDS.question.some(k => cell === k || (cell.includes(k) && cell.length < k.length + 3))) colMap.question = j;
+                else if (EXCEL_KEYWORDS.answer.some(k => cell === k || (cell.includes(k) && cell.length < k.length + 3))) colMap.answer = j;
+                else if (EXCEL_KEYWORDS.type.some(k => cell === k)) colMap.type = j;
+                else if (EXCEL_KEYWORDS.options.some(k => cell.includes(k)) || /^[a-f]$/.test(cell) || /^dapan[a-f]$/.test(cell)) {
+                    colMap.options.push(j);
+                }
+            }
+            if (colMap.question !== -1 && colMap.answer !== -1) return { headerIdx, colMap };
+        }
+    }
+
+    // --- GIAI ĐOẠN 3: PHÂN TÍCH CẤU TRÚC DỮ LIỆU (HEURISTICS) ---
+    // Áp dụng khi không tìm thấy dòng tiêu đề rõ ràng
+    const scanRows = rows.slice(0, 50).filter(r => r && r.length > 1);
+    if (scanRows.length > 2) { // Cần ít nhất 3 dòng dữ liệu để phân tích
+        const colCount = Math.max(...scanRows.map(r => r.length));
+        const colStats = Array.from({ length: colCount }, () => ({ avgLen: 0, ansScore: 0, optScore: 0, emptyCount: 0 }));
+
+        scanRows.forEach(row => {
+            for (let j = 0; j < colCount; j++) {
+                const val = String(row[j] || "").trim();
+                if (!val) { colStats[j].emptyCount++; continue; }
+                colStats[j].avgLen += val.length;
+                // Điểm đáp án: ngắn, thường là A-F hoặc 1-6, hoặc chuỗi số/chữ cách nhau bởi dấu phẩy (1,2 hoặc A,B)
+                if (/^[A-Fa-f1-6]([ ,;]+[A-Fa-f1-6])*$/.test(val)) colStats[j].ansScore++;
+                // Điểm phương án: độ dài vừa phải
+                if (val.length > 0 && val.length < 200) colStats[j].optScore++;
+            }
+        });
+
+        colStats.forEach(s => s.avgLen /= scanRows.length);
+
+        // Đoán cột Câu hỏi: Cột có độ dài trung bình lớn nhất (thường > 20 ký tự)
+        let bestQ = -1, maxLen = 15; 
+        colStats.forEach((s, idx) => { if (s.avgLen > maxLen) { maxLen = s.avgLen; bestQ = idx; } });
+
+        // Đoán cột Đáp án: Cột có nhiều ký tự đơn nhất, không phải cột câu hỏi
+        let bestA = -1, maxAns = scanRows.length * 0.4; // Ít nhất 40% dòng phải khớp định dạng đáp án
+        colStats.forEach((s, idx) => { if (idx !== bestQ && s.ansScore > maxAns) { maxAns = s.ansScore; bestA = idx; } });
+
+        if (bestQ !== -1 && bestA !== -1) {
+            colMap.question = bestQ;
+            colMap.answer = bestA;
+            headerIdx = -1; 
+            colMap.options = [];
+            colStats.forEach((s, idx) => {
+                if (idx !== bestQ && idx !== bestA && s.emptyCount < scanRows.length * 0.5) {
+                    colMap.options.push(idx);
+                }
+            });
+            // Nếu tìm thấy ít nhất 2 cột phương án thì tự tin tự động nạp
+            if (colMap.options.length >= 2) return { headerIdx, colMap };
+        }
+    }
+
+    return { headerIdx: -1, colMap: { question: -1, answer: -1, type: -1, options: [] } };
+}
+
+function extractQuestionsFromRows(rows, colMap, headerIdx) {
+    const qList = [];
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row[colMap.question]) continue;
+
+        const qText = String(row[colMap.question]).trim();
+        if (!qText) continue;
+
+        let qType = 'single';
+        if (colMap.type !== -1) {
+            const typeRaw = String(row[colMap.type] || "").toUpperCase();
+            if (typeRaw.includes('MC') || typeRaw.includes('MA')) qType = 'multiple';
+        }
+
+        const opts = [];
+        colMap.options.forEach(colIdx => {
+            const optVal = String(row[colIdx] || "").trim();
+            if (optVal !== "") opts.push(optVal);
+        });
+
+        if (opts.length === 0) continue;
+
+        let ansRaw = String(row[colMap.answer] || "").trim().toUpperCase();
+        let ansIdx = [];
+        const ansParts = ansRaw.split(/[,;|\s]+/).map(s => s.trim()).filter(s => s);
+        
+        ansParts.forEach(part => {
+            if (/^\d+$/.test(part)) {
+                const idx = parseInt(part) - 1;
+                if (idx >= 0 && idx < opts.length) ansIdx.push(idx);
+            } else if (/^[A-Z]$/.test(part)) {
+                const idx = part.charCodeAt(0) - 65;
+                if (idx >= 0 && idx < opts.length) ansIdx.push(idx);
+            }
+        });
+
+        if (qType === 'single' && ansIdx.length > 1) qType = 'multiple';
+        if (ansIdx.length === 0) continue;
+
+        qList.push({ text: qText, options: opts, correctIndices: ansIdx, type: qType });
+    }
+    return qList;
+}
+
+function showExcelMappingModal(rows, fileName, sheetName) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('excelMappingModal');
+        const previewArea = document.getElementById('excelPreviewTable');
+        const selQuestion = document.getElementById('mapColQuestion');
+        const selAnswer = document.getElementById('mapColAnswer');
+        const selType = document.getElementById('mapColType');
+        const optContainer = document.getElementById('mapColOptionsContainer');
+        const confirmBtn = document.getElementById('confirmExcelMappingBtn');
+        const cancelBtn = document.getElementById('cancelExcelMappingBtn');
+        const closeBtn = document.getElementById('closeExcelMappingBtn');
+        const modalDesc = modal?.querySelector('p.text-xs');
+
+        if (!modal || !rows.length) return resolve(null);
+
+        // Hiển thị thông tin file và sheet
+        if (modalDesc) modalDesc.innerHTML = `File: <b>${fileName}</b> | Sheet: <span class="text-indigo-600 font-bold">${sheetName}</span><br>Vui lòng gán cột thủ công cho sheet này.`;
+
+        // Xác định số cột thực tế (quét 5 dòng đầu)
+        const maxCols = Math.max(...rows.slice(0, 5).map(r => r.length));
+        const allColIndices = Array.from({ length: maxCols }, (_, i) => i);
+        
+        // Preview 3 dòng đầu
+        let tableHtml = `<table class="min-w-full text-[10px] border"><thead><tr class="bg-gray-100">`;
+        allColIndices.forEach(idx => tableHtml += `<th class="border p-1">Cột ${idx + 1}</th>`);
+        tableHtml += `</tr></thead><tbody>`;
+        rows.slice(0, 3).forEach(row => {
+            tableHtml += `<tr>`;
+            allColIndices.forEach(idx => tableHtml += `<td class="border p-1 truncate max-w-[100px]">${escapeHtml(row[idx] || "")}</td>`);
+            tableHtml += `</tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+        previewArea.innerHTML = tableHtml;
+
+        // Điền Dropdowns (Lấy text từ dòng đầu tiên làm gợi ý nếu có)
+        const firstRow = rows[0] || [];
+        const colOptions = allColIndices.map(idx => {
+            const val = String(firstRow[idx] || "").trim();
+            return `<option value="${idx}">Cột ${idx+1}${val ? `: ${val.substring(0,20)}` : ''}</option>`;
+        }).join('');
+
+        selQuestion.innerHTML = colOptions;
+        selAnswer.innerHTML = colOptions;
+        selType.innerHTML = `<option value="-1">-- Không có / Tự động --</option>` + colOptions;
+        
+        optContainer.innerHTML = allColIndices.map(idx => {
+            const val = String(firstRow[idx] || "").trim();
+            return `
+                <label class="flex items-center gap-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded cursor-pointer text-xs">
+                    <input type="checkbox" class="col-opt-check" value="${idx}">
+                    <span class="truncate">Cột ${idx+1}${val ? `: ${val.substring(0,15)}` : ''}</span>
+                </label>
+            `;
+        }).join('');
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        confirmBtn.onclick = () => {
+            const colMap = {
+                question: parseInt(selQuestion.value),
+                answer: parseInt(selAnswer.value),
+                type: parseInt(selType.value),
+                options: Array.from(modal.querySelectorAll('.col-opt-check:checked')).map(cb => parseInt(cb.value))
+            };
+            if (colMap.options.length === 0) { showToast("Vui lòng chọn ít nhất 1 cột phương án!"); return; }
+            cleanup();
+            resolve({ colMap, headerIdx: 0 }); 
+        };
+
+        cancelBtn.onclick = closeBtn.onclick = () => { cleanup(); resolve(null); };
+    });
 }
 
 async function uploadAndSaveFile(file) {
     showLoading(true, "Đang đọc file Excel...");
     try {
-        const data = await new Promise((res, rej) => { const reader = new FileReader(); reader.onload = e => res(new Uint8Array(e.target.result)); reader.onerror = rej; reader.readAsArrayBuffer(file); });
-        const parsed = parseExcelToQuestions(data); showLoading(false);
-        showPrompt("Nhập tên bộ câu hỏi:", file.name.replace(/\.(xlsx|xls)$/i, ''), async (name) => { if (!name) { showToast("Đã hủy lưu."); return; } showLoading(true, "Đang lưu..."); try { await saveBank(name, parsed); await refreshBankDropdown(); const banks = await getAllBanks(); await loadBankById(banks[banks.length - 1].id); if (document.getElementById('uploadStatus')) document.getElementById('uploadStatus').innerHTML = `✅ Đã lưu bộ "${name}" với ${parsed.length} câu.`; showToast(`Đã tải bộ "${name}"`); } catch (err) { if (document.getElementById('uploadStatus')) document.getElementById('uploadStatus').innerHTML = `❌ ${err.message}`; showToast(err.message); } finally { showLoading(false); } });
-    } catch (err) { showLoading(false); if (document.getElementById('uploadStatus')) document.getElementById('uploadStatus').innerHTML = `❌ ${err.message}`; showToast(err.message); }
+        const dataBuffer = await new Promise((res, rej) => {
+            const reader = new FileReader();
+            reader.onload = e => res(new Uint8Array(e.target.result));
+            reader.onerror = rej;
+            reader.readAsArrayBuffer(file);
+        });
+
+        const wb = XLSX.read(dataBuffer, { type: 'array' });
+        let finalQuestions = [];
+
+        for (const sheetName of wb.SheetNames) {
+            const sheet = wb.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            if (!rows || rows.length < 2) continue;
+
+            let { headerIdx, colMap } = detectExcelHeaders(rows);
+            let parsed = [];
+
+            // Thử trích xuất nếu đã tìm thấy cột chính
+            if (colMap.question !== -1 && colMap.answer !== -1) {
+                parsed = extractQuestionsFromRows(rows, colMap, headerIdx);
+            }
+
+            // Nếu không tìm thấy cột hoặc trích xuất ra 0 câu -> Hiện bảng thủ công
+            if (parsed.length === 0) {
+                showLoading(false);
+                const manual = await showExcelMappingModal(rows, file.name, sheetName);
+                if (manual) {
+                    headerIdx = manual.headerIdx;
+                    colMap = manual.colMap;
+                    showLoading(true, `Đang xử lý Sheet "${sheetName}"...`);
+                    parsed = extractQuestionsFromRows(rows, colMap, headerIdx);
+                }
+            }
+
+            if (parsed.length > 0) {
+                finalQuestions = finalQuestions.concat(parsed);
+            }
+        }
+
+        showLoading(false);
+        if (finalQuestions.length === 0) {
+            showToast("❌ Không tìm thấy câu hỏi hợp lệ nào trong file.");
+            return;
+        }
+
+        showPrompt(`Nạp thành công ${finalQuestions.length} câu từ tất cả các sheet. Nhập tên bộ đề:`, file.name.replace(/\.(xlsx|xls|csv)$/i, ''), async (name) => {
+            if (!name) return;
+            showLoading(true, "Đang lưu bộ đề...");
+            try {
+                await saveBank(name, finalQuestions);
+                await refreshBankDropdown();
+                const banks = await getAllBanks();
+                await loadBankById(banks[banks.length - 1].id);
+                showToast(`✅ Đã lưu bộ đề: ${name}`);
+            } catch (err) {
+                showToast("Lỗi: " + err.message);
+            } finally {
+                showLoading(false);
+            }
+        });
+    } catch (err) {
+        showLoading(false);
+        showToast("❌ Lỗi: " + err.message);
+    }
 }
 
 async function refreshBankDropdown() { const bankSelect = document.getElementById('bankSelect'); const banks = await getAllBanks(); if (bankSelect) { bankSelect.innerHTML = '<option value="">-- Chọn bộ câu hỏi --</option>'; banks.forEach(b => { const opt = document.createElement('option'); opt.value = b.id; opt.textContent = `${b.name} (${b.questions.length} câu)`; bankSelect.appendChild(opt); }); if (currentBankId) bankSelect.value = currentBankId; } }
@@ -784,7 +1303,18 @@ function setupScrollObserver(rawSearch) { const loadMoreTrigger = document.getEl
 function renderQuestionGrid() {
     const questionGrid = document.getElementById('questionGrid'); if (!questionGrid) return;
     if (!currentQuestions.length) { questionGrid.innerHTML = '<div class="text-gray-400">Chưa có dữ liệu</div>'; return; }
-    let html = ''; for (let i = 0; i < currentQuestions.length; i++) { let bg = 'bg-blue-200'; if (userAnswers[i]?.length > 0) bg = 'bg-green-500'; if (flagged[i]) bg = 'bg-yellow-400'; html += `<div class="question-grid-item w-10 h-10 rounded-md flex items-center justify-center text-xs font-bold text-white ${bg} shadow-sm cursor-pointer hover:opacity-80" data-qidx="${i}">${i + 1}</div>`; } questionGrid.innerHTML = html;
+    let html = ''; for (let i = 0; i < currentQuestions.length; i++) { 
+        let bg = 'bg-blue-50 text-blue-300'; // Default
+        if (submitted) {
+            if (userAnswers[i]?.length === 0) bg = 'bg-gray-100 text-gray-400'; // Chưa làm
+            else if (scoreDetails[i]?.correct) bg = 'bg-green-500 text-white'; // Đúng
+            else bg = 'bg-red-500 text-white'; // Sai
+        } else {
+            if (userAnswers[i]?.length > 0) bg = 'bg-blue-600 text-white'; 
+            if (flagged[i]) bg = 'bg-yellow-400 text-white'; 
+        }
+        html += `<div class="question-grid-item w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold ${bg} shadow-sm cursor-pointer hover:scale-105 transition-all" data-qidx="${i}">${i + 1}</div>`; 
+    } questionGrid.innerHTML = html;
     document.querySelectorAll('.question-grid-item').forEach(el => { el.addEventListener('click', () => { 
         const idx = parseInt(el.dataset.qidx); 
         const searchInput = document.getElementById('searchInput'); 
@@ -810,6 +1340,8 @@ function renderQuestionGrid() {
         } else { 
             scrollToQuestion(`question-${idx}`); 
         } 
+        document.getElementById('questionsContainer')?.classList.remove('hidden');
+        document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
         document.getElementById('questionGridPanel')?.classList.add('hidden'); 
     }); });
 }
@@ -821,6 +1353,10 @@ function initExam(questionsArray, timeMinutes) {
         const pauseResumeBtn = document.getElementById('pauseResumeBtn'); if (pauseResumeBtn) pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng';
         const pauseResumeBtnHeader = document.getElementById('pauseResumeBtnHeader'); if (pauseResumeBtnHeader) pauseResumeBtnHeader.innerHTML = '<i class="fas fa-pause"></i>';
         updateProgress(); initLazyRender();
+        document.getElementById('questionsContainer')?.classList.remove('hidden');
+        document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+        document.getElementById('bottomActions')?.classList.remove('hidden');
+        document.getElementById('questionGridPanel')?.classList.add('hidden');
         const resultPanel = document.getElementById('resultPanel'); if (resultPanel) resultPanel.classList.add('hidden');
         const setupArea = document.getElementById('setupArea'); if (setupArea) setupArea.classList.add('hidden');
         const progressArea = document.getElementById('progressArea'); if (progressArea) progressArea.classList.remove('hidden');
@@ -852,8 +1388,29 @@ function submitExam() {
             const wrongIndices = [], wrongTexts = []; for (let i = 0; i < currentQuestions.length; i++) { if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { wrongIndices.push(i); wrongTexts.push(currentQuestions[i].text); } }
             if (currentBankId) { await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); }
             const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.add('hidden');
+            renderQuestionGrid();
             showToast("Đã lưu kết quả."); clearProgress();
         } catch (err) { console.error(err); showToast("Lỗi nộp bài!"); }
+    });
+}
+
+function cancelExam() {
+    if (!examActive && !submitted) return;
+    showConfirm("Bạn có muốn huỷ bài thi hiện tại và quay về màn hình chính?", (yes) => {
+        if (!yes) return;
+        stopTimer();
+        examActive = false;
+        submitted = false;
+        clearProgress();
+        
+        document.getElementById('progressArea')?.classList.add('hidden');
+        document.getElementById('setupArea')?.classList.remove('hidden');
+        document.getElementById('resultPanel')?.classList.add('hidden');
+        document.getElementById('questionGridPanel')?.classList.add('hidden');
+        document.getElementById('questionsContainer')?.classList.add('hidden');
+        document.getElementById('loadMoreTrigger')?.classList.add('hidden');
+        
+        showToast("Đã huỷ bài thi.");
     });
 }
 
@@ -936,8 +1493,46 @@ async function restoreProgress() {
         const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return false; }
         masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
         const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
-        if (saved.submitted) { currentQuestions = [...masterQuestions]; userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); flagged = saved.flagged || Array(currentQuestions.length).fill(false); submitted = true; examActive = false; isPaused = false; timeRemainingSeconds = 0; updateProgress(); initLazyRender(); showToast(`♻️ Đã khôi phục phiên làm bài: ${bank.name}`); }
-        else if (saved.examActive) { currentQuestions = [...masterQuestions]; userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); flagged = saved.flagged || Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = saved.isPaused || false; timeRemainingSeconds = saved.timeRemainingSeconds || 0; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; showToast(`♻️ Đã khôi phục bài thi đang làm dở: ${bank.name}`); }
+        if (saved.submitted) { 
+            currentQuestions = [...masterQuestions]; 
+            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+            submitted = true; examActive = false; isPaused = false; 
+            timeRemainingSeconds = 0; 
+            updateProgress(); 
+            initLazyRender(); 
+            document.getElementById('questionsContainer')?.classList.remove('hidden');
+            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+            const evalRes = evaluateAll();
+            scoreDetails = evalRes.details;
+            const resultPanel = document.getElementById('resultPanel');
+            if (resultPanel) {
+                const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
+                const resultContent = document.getElementById('resultContent');
+                if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p></div>`;
+                resultPanel.classList.remove('hidden');
+            }
+            renderQuestionGrid();
+            showToast(`♻️ Đã khôi phục phiên làm bài: ${bank.name}`); 
+        }
+        else if (saved.examActive) { 
+            currentQuestions = [...masterQuestions]; 
+            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+            submitted = false; examActive = true; isPaused = saved.isPaused || false; 
+            timeRemainingSeconds = saved.timeRemainingSeconds || 0; 
+            const btn = document.getElementById('pauseResumeBtn'); 
+            if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; 
+            updateProgress(); initLazyRender(); 
+            document.getElementById('questionsContainer')?.classList.remove('hidden');
+            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+            document.getElementById('progressArea')?.classList.remove('hidden');
+            document.getElementById('setupArea')?.classList.add('hidden');
+            renderQuestionGrid();
+            if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); 
+            if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; 
+            showToast(`♻️ Đã khôi phục bài thi đang làm dở: ${bank.name}`); 
+        }
         else { return false; }
         return true;
     } catch (e) { clearProgress(); return false; }
@@ -946,6 +1541,7 @@ async function restoreProgress() {
 async function initGIA() {
     try {
         await openDB(); await refreshBankDropdown(); initDarkMode(); updateApiKeyBadge();
+        FontSizeManager.init();
         const restored = await restoreProgress(); if (!restored) { const banks = await getAllBanks(); if (banks.length) await loadBankById(banks[0].id); }
         const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn');
         searchInput?.addEventListener('input', () => { if (searchInput.value.length > 0) clearSearchBtn?.classList.remove('hidden'); else clearSearchBtn?.classList.add('hidden'); if (searchDebounceTimer) clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => { initLazyRender(); }, 300); });
@@ -961,8 +1557,51 @@ async function initGIA() {
         document.getElementById('pauseResumeBtnHeader')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
-        document.getElementById('showGridBtn')?.addEventListener('click', () => { if (currentQuestions.length) { const panel = document.getElementById('questionGridPanel'); panel?.classList.toggle('hidden'); if (panel && !panel.classList.contains('hidden')) renderQuestionGrid(); } else showToast("Chưa có bài thi."); });
-        document.getElementById('showGridBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length) { const panel = document.getElementById('questionGridPanel'); panel?.classList.toggle('hidden'); if (panel && !panel.classList.contains('hidden')) renderQuestionGrid(); } else showToast("Chưa có bài thi."); });
+        const toggleGridView = () => {
+            if (currentQuestions.length) {
+                const panel = document.getElementById('questionGridPanel');
+                const container = document.getElementById('questionsContainer');
+                const trigger = document.getElementById('loadMoreTrigger');
+                if (!panel) return;
+
+                const isCurrentlyHidden = panel.classList.contains('hidden');
+                if (isCurrentlyHidden) {
+                    // Chuyển sang chế độ Tổng quan
+                    window.scrollTo(0, 0); // Reset cuộn về 0 trước
+                    panel.classList.remove('hidden');
+                    container?.classList.add('hidden');
+                    trigger?.classList.add('hidden');
+                    renderQuestionGrid();
+                    setTimeout(() => {
+                        const progressArea = document.getElementById('progressArea');
+                        if (progressArea) {
+                            window.scrollTo(0, progressArea.offsetTop);
+                        }
+                    }, 50);
+                } else {
+                    // Quay lại chế độ Câu hỏi
+                    panel.classList.add('hidden');
+                    container?.classList.remove('hidden');
+                    trigger?.classList.remove('hidden');
+                }
+            } else {
+                showToast("Chưa có bài thi.");
+            }
+        };
+        document.getElementById('showGridBtn')?.addEventListener('click', toggleGridView);
+        document.getElementById('showGridBtnHeader')?.addEventListener('click', toggleGridView);
+        document.getElementById('cancelExamBtn')?.addEventListener('click', cancelExam);
+        document.getElementById('cancelExamBtnHeader')?.addEventListener('click', cancelExam);
+        document.getElementById('deleteAllBanksBtn')?.addEventListener('click', () => {
+            document.getElementById('settingsDropdown')?.classList.remove('show');
+            showConfirm("CẢNH BÁO: Bạn có chắc chắn muốn xoá TOÀN BỘ bộ đề đã lưu không? Hành động này không thể hoàn tác.", async (yes) => {
+                if (!yes) return;
+                await clearAllBanks();
+                await clearAllHistory();
+                clearProgress();
+                location.reload();
+            });
+        });
         document.getElementById('goTopBtn')?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
         document.getElementById('goBottomBtn')?.addEventListener('click', () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
         document.getElementById('reviewWrongBtn')?.addEventListener('click', () => { if (!submitted) showToast("Hãy nộp bài trước."); else { const wrongs = scoreDetails.filter(d => !d.correct).map(d => d.index); if (wrongs.length) { if (!document.getElementById(`question-${wrongs[0]}`)) { initLazyRender(() => { while (displayedCount <= wrongs[0] && displayedCount < filteredIndices.length) renderNextBatch(''); setTimeout(() => document.getElementById(`question-${wrongs[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }); } else { document.getElementById(`question-${wrongs[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } } });
@@ -973,7 +1612,13 @@ async function initGIA() {
         document.getElementById('reviewWrongMainBtn')?.addEventListener('click', async () => { const history = await getAllHistory(); if (history.length === 0) { showToast("Chưa có lịch sử để ôn tập."); return; } const currentBankWrongTexts = new Set(); for (const h of history) { if (h.bankId === currentBankId && h.wrongQuestionsText) { h.wrongQuestionsText.forEach(txt => currentBankWrongTexts.add(txt)); } } if (currentBankWrongTexts.size === 0) { showToast("Không có câu sai nào trong bộ hiện tại."); return; } const wrongQuestions = masterQuestions.filter(q => currentBankWrongTexts.has(q.text)); if (wrongQuestions.length === 0) { showToast("Không tìm thấy câu hỏi tương ứng."); return; } initExam(wrongQuestions, parseInt(document.getElementById('timeMinutes')?.value) || 30); showToast(`Đã tạo bài ôn tập với ${wrongQuestions.length} câu sai.`); });
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => { if (!submitted) { showToast("Hãy nộp bài trước."); return; } showLoading(true, "Đang chuẩn bị báo cáo..."); try { const correctCount = scoreDetails.filter(d => d.correct).length; const percent = (correctCount / currentQuestions.length * 100).toFixed(1); const canvasChart = document.createElement('canvas'); canvasChart.width = 400; canvasChart.height = 200; const ctx = canvasChart.getContext('2d'); if (!ctx) return; new Chart(ctx, { type: 'doughnut', data: { labels: ['Đúng', 'Sai'], datasets: [{ data: [correctCount, currentQuestions.length - correctCount], backgroundColor: ['#22c55e', '#ef4444'] }] }, options: { animation: false, responsive: false, plugins: { legend: { position: 'top' } } } }); const chartImg = canvasChart.toDataURL(); let printWindow = window.open('', '_blank'); if (!printWindow) return; let html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo kết quả thi<\/title><style>body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; line-height: 1.5; } h1 { color: #1e40af; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; } th, td { border: 1px solid #ccc; padding: 10px; text-align: left; } th { background-color: #f2f2f2; } .correct { color: #166534; font-weight: bold; } .wrong { color: #991b1b; font-weight: bold; } img { max-width: 300px; margin-bottom: 20px; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; } }<\/style><\/head><body><h1>Báo cáo kết quả thi<\/h1><p><strong>Bộ câu hỏi:<\/strong> ${currentBankName}<\/p><p><strong>Ngày thi:<\/strong> ${new Date().toLocaleString()}<\/p><p><strong>Điểm số:<\/strong> ${correctCount}\/${currentQuestions.length} (${percent}%)<\/p><img src="${chartImg}" alt="Biểu đồ kết quả" \/><hr\/><h3>Chi tiết từng câu hỏi<\/h3><table><thead><tr><th style="width:5%">STT<\/th><th style="width:40%">Nội dung<\/th><th style="width:25%">Đáp án đã chọn<\/th><th style="width:20%">Đáp án đúng<\/th><th style="width:10%">Kết quả<\/th><\/tr><\/thead><tbody>`; for (let i = 0; i < currentQuestions.length; i++) { const q = currentQuestions[i]; const userAns = userAnswers[i] || []; const userText = userAns.length ? userAns.map(a => q.options[a]).join('<br>') : '(Chưa trả lời)'; const correctText = q.correctIndices.map(i => q.options[i]).join('<br>'); const status = scoreDetails[i].correct ? 'Đúng' : (userAns.length ? 'Sai' : 'Chưa trả lời'); const statusClass = scoreDetails[i].correct ? 'correct' : 'wrong'; html += `<tr><td>${i + 1}<\/td><td>${escapeHtml(q.text)}<\/td><td>${userText}<\/td><td>${correctText}<\/td><td class="${statusClass}">${status}<\/td><\/tr>`; } html += `<\/tbody><\/table><\/body><\/html>`; printWindow.document.open(); printWindow.document.write(html); printWindow.document.close(); setTimeout(() => { showLoading(false); printWindow.print(); }, 500); } catch (e) { console.error(e); showToast("Lỗi xuất báo cáo: " + e.message); showLoading(false); } });
         document.getElementById('clearHistoryBtn')?.addEventListener('click', () => { showConfirm("Xóa toàn bộ lịch sử?", async (yes) => { if (!yes) return; await clearAllHistory(); showToast("Đã xóa lịch sử."); document.getElementById('statsModal')?.classList.add('hidden'); }); });
-        document.getElementById('aiSettingsBtn')?.addEventListener('click', () => { const input = document.getElementById('geminiApiKeyInput'); if (input) input.value = localStorage.getItem('gemini_api_key') || ''; const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); } });
+        document.getElementById('aiSettingsBtn')?.addEventListener('click', () => {
+            document.getElementById('settingsDropdown')?.classList.remove('show');
+            const input = document.getElementById('geminiApiKeyInput');
+            if (input) input.value = localStorage.getItem('gemini_api_key') || '';
+            const modal = document.getElementById('aiSettingsModal');
+            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+        });
         document.getElementById('closeAiSettingsBtn')?.addEventListener('click', () => { const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } });
         document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => { const input = document.getElementById('geminiApiKeyInput'); const key = input?.value.trim(); if (key) { localStorage.setItem('gemini_api_key', key); showToast('✅ Đã lưu API Key!'); } else { localStorage.removeItem('gemini_api_key'); showToast('Đã xoá API Key!'); } const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } updateApiKeyBadge(); });
         document.getElementById('checkModelsBtn')?.addEventListener('click', checkAvailableModels);
@@ -987,67 +1632,404 @@ async function initGIA() {
         const uploadFileArea = document.getElementById('uploadFileArea');
         const fileInput = document.getElementById('fileInput');
 
-        openAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); currentFileData = null; currentMimeType = null; if (fileInput) fileInput.value = ''; document.getElementById('filePreviewContainer')?.classList.add('hidden'); uploadFileArea?.classList.remove('hidden'); if (document.getElementById('aiGenTextArea')) document.getElementById('aiGenTextArea').value = ''; });
+        let currentAiFiles = []; // Mảng chứa các file {name, type, data, size}
+
+        const updateAiFileListUI = () => {
+            const container = document.getElementById('multiFileContainer');
+            const listWrapper = document.getElementById('fileListWrapper');
+            const totalSizeDisplay = document.getElementById('totalSizeDisplay');
+            const uploadArea = document.getElementById('uploadFileArea');
+
+            if (!currentAiFiles.length) {
+                container?.classList.add('hidden');
+                uploadArea?.classList.remove('hidden');
+                return;
+            }
+
+            container?.classList.remove('hidden');
+            // uploadArea?.classList.add('hidden'); // Giữ lại để người dùng có thể bấm thêm file
+
+            if (listWrapper) {
+                listWrapper.innerHTML = currentAiFiles.map((f, i) => `
+                    <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100 dark:border-slate-700 shadow-sm">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <i class="${f.type.startsWith('image/') ? 'fas fa-image text-blue-500' : 'fas fa-file-pdf text-red-500'} text-lg"></i>
+                            <div class="flex flex-col overflow-hidden">
+                                <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
+                                <span class="text-[9px] text-gray-500">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
+                            </div>
+                        </div>
+                        <button class="remove-ai-file text-red-400 hover:text-red-600 p-1" data-index="${i}">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    </div>
+                `).join('');
+
+                listWrapper.querySelectorAll('.remove-ai-file').forEach(btn => {
+                    btn.onclick = (e) => {
+                        const idx = parseInt(e.currentTarget.dataset.index);
+                        currentAiFiles.splice(idx, 1);
+                        updateAiFileListUI();
+                    };
+                });
+            }
+
+            const totalSize = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
+            const totalMB = (totalSize / (1024 * 1024)).toFixed(1);
+            if (totalSizeDisplay) {
+                totalSizeDisplay.innerText = `${totalMB}MB / 100MB`;
+                totalSizeDisplay.className = totalSize > 100 * 1024 * 1024 ? "text-red-500 font-bold" : "text-gray-500 font-mono";
+            }
+        };
+
+        openAiGenBtn?.addEventListener('click', () => { 
+            aiGenModal?.classList.remove('hidden'); 
+            aiGenModal?.classList.add('flex'); 
+            currentAiFiles = []; 
+            updateAiFileListUI();
+            if (fileInput) fileInput.value = ''; 
+            if (document.getElementById('aiGenTextArea')) document.getElementById('aiGenTextArea').value = ''; 
+        });
+        
         closeAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex'); });
         uploadFileArea?.addEventListener('click', () => { fileInput?.click(); });
-        removeFileBtn?.addEventListener('click', () => { currentFileData = null; currentMimeType = null; document.getElementById('filePreviewContainer')?.classList.add('hidden'); uploadFileArea?.classList.remove('hidden'); });
 
         fileInput?.addEventListener('change', async (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            showLoading(true, "Đang xử lý file..."); const fileName = file.name.toLowerCase();
-            if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    let data = event.target.result.split(',')[1];
-                    if (file.type.startsWith('image/')) data = await compressImage(data);
-                    currentFileData = data; currentMimeType = file.type;
-                    const fileNameDisplay = document.getElementById('fileNameDisplay'); if (fileNameDisplay) fileNameDisplay.innerText = file.name;
-                    const icon = document.getElementById('fileIconPreview'); if (icon) icon.className = file.type.startsWith('image/') ? 'fas fa-image text-2xl text-blue-500' : 'fas fa-file-pdf text-2xl text-red-500';
-                    uploadFileArea?.classList.add('hidden'); document.getElementById('filePreviewContainer')?.classList.remove('hidden');
-                    showLoading(false);
-                };
-                reader.readAsDataURL(file);
-            } else if (fileName.endsWith('.docx')) {
-                const reader = new FileReader();
-                reader.onload = function (loadEvent) { mammoth.extractRawText({ arrayBuffer: loadEvent.target.result }).then(function (result) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += "\n" + result.value; showToast("Đã trích xuất chữ từ Word!"); showLoading(false); }).catch(err => { showToast("Lỗi đọc Word"); showLoading(false); }); };
-                reader.readAsArrayBuffer(file);
-            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
-                const reader = new FileReader();
-                reader.onload = function (event) {
-                    try { const wb = XLSX.read(event.target.result, { type: 'array' }); let allText = ""; wb.SheetNames.forEach(name => { const sheet = wb.Sheets[name]; const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }); allText += json.map(row => row.join(" ")).join("\n") + "\n"; }); const area = document.getElementById('aiGenTextArea'); if (area) area.value += "\n" + allText; showToast("Đã trích xuất chữ từ Excel!"); } catch (e) { showToast("Lỗi đọc Excel"); } showLoading(false);
-                }; reader.readAsArrayBuffer(file);
-            } else if (file.type.startsWith('text/')) {
-                const reader = new FileReader();
-                reader.onload = (event) => { const area = document.getElementById('aiGenTextArea'); if (area) area.value += "\n" + event.target.result; showLoading(false); }; reader.readAsText(file);
-            } else { showToast("Định dạng file chưa hỗ trợ."); showLoading(false); }
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+
+            showLoading(true, `Đang xử lý ${files.length} tệp tin...`);
+            
+            for (const file of files) {
+                const fileName = file.name.toLowerCase();
+                // Kiểm tra dung lượng tổng
+                const currentTotal = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
+                if (currentTotal + file.size > 100 * 1024 * 1024) {
+                    showToast(`⚠️ File "${file.name}" vượt quá hạn mức 100MB còn lại.`);
+                    continue;
+                }
+
+                if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+                    const data = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                        reader.readAsDataURL(file);
+                    });
+                    
+                    let finalData = data;
+                    if (file.type.startsWith('image/')) finalData = await compressImage(data);
+                    
+                    currentAiFiles.push({
+                        name: file.name,
+                        type: file.type,
+                        data: finalData,
+                        size: file.size
+                    });
+                } else if (fileName.endsWith('.docx')) {
+                    const text = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            mammoth.extractRawText({ arrayBuffer: ev.target.result })
+                                .then(res => resolve(res.value))
+                                .catch(() => resolve(""));
+                        };
+                        reader.readAsArrayBuffer(file);
+                    });
+                    if (text) {
+                        const area = document.getElementById('aiGenTextArea');
+                        if (area) area.value += `\n--- NỘI DUNG TỪ ${file.name} ---\n${text}\n`;
+                    }
+                } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+                    const text = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            try {
+                                const wb = XLSX.read(ev.target.result, { type: 'array' });
+                                let res = "";
+                                wb.SheetNames.forEach(name => {
+                                    const sheet = wb.Sheets[name];
+                                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                                    res += json.map(row => row.join(" ")).join("\n") + "\n";
+                                });
+                                resolve(res);
+                            } catch(e) { resolve(""); }
+                        };
+                        reader.readAsArrayBuffer(file);
+                    });
+                    if (text) {
+                        const area = document.getElementById('aiGenTextArea');
+                        if (area) area.value += `\n--- DỮ LIỆU TỪ ${file.name} ---\n${text}\n`;
+                    }
+                } else if (file.type.startsWith('text/')) {
+                    const text = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target.result);
+                        reader.readAsText(file);
+                    });
+                    if (text) {
+                        const area = document.getElementById('aiGenTextArea');
+                        if (area) area.value += `\n--- VĂN BẢN TỪ ${file.name} ---\n${text}\n`;
+                    }
+                }
+            }
+            
+            updateAiFileListUI();
+            showLoading(false);
             if (fileInput) fileInput.value = '';
+        });
+
+        let tempAiQuestions = [];
+        let tempBankName = "";
+
+        const syncReviewData = () => {
+            const cards = document.querySelectorAll('.ai-review-card');
+            cards.forEach(card => {
+                const idx = parseInt(card.dataset.idx);
+                const qText = card.querySelector('textarea').value.trim();
+                const optRows = card.querySelectorAll('.opt-edit-row');
+                const options = [];
+                const correctIndices = [];
+                
+                optRows.forEach((row, oIdx) => {
+                    const optVal = row.querySelector('input[type="text"]').value.trim();
+                    const isCorrect = row.querySelector('.opt-edit-checkbox').checked;
+                    options.push(optVal);
+                    if (isCorrect) correctIndices.push(oIdx);
+                });
+
+                if (tempAiQuestions[idx]) {
+                    tempAiQuestions[idx].text = qText;
+                    tempAiQuestions[idx].options = options;
+                    tempAiQuestions[idx].correctIndices = correctIndices;
+                }
+            });
+        };
+
+        const showAiFixDialog = (idx) => {
+            const modal = document.getElementById('aiFixModal');
+            const input = document.getElementById('aiFixCustomInput');
+            const confirmBtn = document.getElementById('confirmAiFixBtn');
+            const closeBtn = document.getElementById('closeAiFixModal');
+            const chips = document.querySelectorAll('.fix-chip');
+
+            if (!modal || !input) return;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            input.value = "";
+            chips.forEach(c => c.classList.remove('active'));
+
+            chips.forEach(chip => {
+                chip.onclick = () => {
+                    chips.forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    input.value = chip.dataset.val;
+                    if (chip.dataset.val === "") input.focus();
+                };
+            });
+
+            confirmBtn.onclick = async () => {
+                const instruction = input.value.trim();
+                if (!instruction) { showToast("Vui lòng chọn hoặc nhập yêu cầu!"); return; }
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                await handleAiFixQuestion(idx, instruction);
+            };
+
+            closeBtn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+        };
+
+        const renderAiReviewList = () => {
+            const listWrapper = document.getElementById('aiReviewList');
+            const countBadge = document.getElementById('aiReviewCount');
+            if (!listWrapper) return;
+
+            countBadge.innerText = `${tempAiQuestions.length} câu hỏi`;
+            listWrapper.innerHTML = tempAiQuestions.map((q, idx) => `
+                <div class="ai-review-card space-y-4" data-idx="${idx}">
+                    <div class="flex justify-between items-start gap-4">
+                        <span class="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0">${idx + 1}</span>
+                        <div class="flex-1">
+                            <textarea class="q-edit-input font-bold text-gray-800" placeholder="Nội dung câu hỏi..." rows="2">${q.text}</textarea>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <button class="delete-btn" title="Xóa câu này" onclick="this.closest('.ai-review-card').remove();">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                            <button class="ai-fix-btn" title="AI Tinh chỉnh câu này" data-idx="${idx}">
+                                <i class="fas fa-wand-magic-sparkles"></i> AI FIX
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-2 pl-11">
+                        ${q.options.map((opt, optIdx) => `
+                            <div class="opt-edit-row">
+                                <input type="${q.type === 'multiple' ? 'checkbox' : 'radio'}" name="correct-${idx}" class="opt-edit-checkbox" ${q.correctIndices.includes(optIdx) ? 'checked' : ''} data-optidx="${optIdx}">
+                                <input type="text" class="q-edit-input flex-1" value="${opt}" placeholder="Lựa chọn ${optIdx + 1}">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            // Gán sự kiện AI FIX chuyên sâu
+            listWrapper.querySelectorAll('.ai-fix-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    syncReviewData();
+                    const idx = parseInt(e.currentTarget.dataset.idx);
+                    showAiFixDialog(idx);
+                };
+            });
+        };
+
+        const handleAiFixQuestion = async (idx, instruction) => {
+            if (!checkAiReady()) return;
+            showLoading(true, "AI đang tinh chỉnh câu hỏi...");
+            const currentQ = tempAiQuestions[idx];
+            const prompt = `Bạn là chuyên gia đề thi. Hãy sửa lại câu hỏi trắc nghiệm sau đây theo yêu cầu: "${instruction}"\n\nCÂU HỎI HIỆN TẠI:\n${JSON.stringify(currentQ)}\n\nBẮT BUỘC trả về duy nhất 1 đối tượng JSON (không markdown) theo cấu trúc cũ.`;
+            
+            try {
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, responseMimeType: "application/json" } };
+                const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+                if (!data.candidates || !data.candidates[0].content.parts[0].text) throw new Error("AI không phản hồi");
+                
+                let text = data.candidates[0].content.parts[0].text;
+                text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+                const newQ = JSON.parse(text);
+                tempAiQuestions[idx] = newQ;
+                renderAiReviewList();
+                showToast("✅ Đã cập nhật câu hỏi!");
+            } catch (err) {
+                showToast("❌ Lỗi AI: " + err.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+
+        const openAiReview = (bankName, questions) => {
+            tempBankName = bankName;
+            tempAiQuestions = JSON.parse(JSON.stringify(questions)); // Deep copy
+            const modal = document.getElementById('aiReviewModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                renderAiReviewList();
+            }
+        };
+
+        document.getElementById('saveAiReviewBtn')?.addEventListener('click', async () => {
+            // Thu thập dữ liệu từ các ô nhập liệu
+            const cards = document.querySelectorAll('.ai-review-card');
+            const updatedQuestions = [];
+            
+            cards.forEach(card => {
+                const qText = card.querySelector('textarea').value.trim();
+                const optRows = card.querySelectorAll('.opt-edit-row');
+                const options = [];
+                const correctIndices = [];
+                
+                optRows.forEach((row, oIdx) => {
+                    const optVal = row.querySelector('input[type="text"]').value.trim();
+                    const isCorrect = row.querySelector('.opt-edit-checkbox').checked;
+                    if (optVal) {
+                        options.push(optVal);
+                        if (isCorrect) correctIndices.push(options.length - 1);
+                    }
+                });
+
+                if (qText && options.length >= 2) {
+                    updatedQuestions.push({
+                        text: qText,
+                        options: options,
+                        correctIndices: correctIndices,
+                        type: correctIndices.length > 1 ? 'multiple' : 'single'
+                    });
+                }
+            });
+
+            if (updatedQuestions.length === 0) {
+                showToast("⚠️ Không có câu hỏi hợp lệ để lưu!");
+                return;
+            }
+
+            showLoading(true, "Đang lưu bộ đề...");
+            try {
+                await saveBank(tempBankName, updatedQuestions);
+                await refreshBankDropdown();
+                const banks = await getAllBanks();
+                const newBank = banks[banks.length - 1];
+                document.getElementById('aiReviewModal')?.classList.add('hidden');
+                showLoading(false);
+                showConfirm(`🎉 Đã lưu ${updatedQuestions.length} câu hỏi! Bắt đầu làm ngay?`, async (yes) => {
+                    if (yes) await loadBankById(newBank.id);
+                });
+            } catch (err) {
+                showLoading(false);
+                showToast("Lỗi lưu bộ đề: " + err.message);
+            }
+        });
+
+        document.getElementById('cancelAiReviewBtn')?.addEventListener('click', () => {
+            showConfirm("Hủy bỏ bộ đề vừa tạo? Toàn bộ nội dung sẽ bị mất.", (yes) => {
+                if (yes) document.getElementById('aiReviewModal')?.classList.add('hidden');
+            });
+        });
+
+        document.getElementById('addAiReviewQuestionBtn')?.addEventListener('click', () => {
+            syncReviewData();
+            tempAiQuestions.push({
+                text: "Câu hỏi mới...",
+                options: ["Đáp án 1", "Đáp án 2", "Đáp án 3", "Đáp án 4"],
+                correctIndices: [0],
+                type: "single"
+            });
+            renderAiReviewList();
+            // Cuộn xuống cuối
+            const list = document.getElementById('aiReviewList');
+            if (list) setTimeout(() => list.scrollTop = list.scrollHeight, 100);
         });
 
         submitAiGenBtn?.addEventListener('click', async () => {
             if (!checkAiReady()) return;
             const rawText = document.getElementById('aiGenTextArea')?.value.trim();
-            if (!currentFileData && !rawText) { showToast("Vui lòng tải file hoặc dán văn bản!"); return; }
+            if (!currentAiFiles.length && !rawText) { showToast("Vui lòng tải file hoặc dán văn bản!"); return; }
+            
+            const totalSize = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
+            if (totalSize > 100 * 1024 * 1024) { showToast("Tổng dung lượng vượt quá 100MB. Vui lòng gỡ bớt file!"); return; }
+
             const count = parseInt(document.getElementById('aiGenCount')?.value) || 10;
             let bankName = document.getElementById('aiGenName')?.value.trim(); if (!bankName) bankName = "Bộ đề AI - " + new Date().toLocaleString('vi-VN');
             const diff = document.getElementById('aiGenDifficulty')?.value;
             const difficultyText = diff !== 'Mặc định' ? `Mức độ câu hỏi: ${diff}.` : '';
+            
             aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex');
-            showLoading(true, "AI đang suy nghĩ... (Có thể mất 10-30 giây)");
-            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc tài liệu đính kèm (hoặc văn bản dưới đây). Trích xuất kiến thức và tạo ra chính xác ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array, không có markdown \`\`\`json.\nCấu trúc mẫu:\n[\n  {\n    "text": "Nội dung câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nLưu ý: correctIndices là mảng chứa index (từ 0). Nếu nhiều đáp án đúng, type="multiple". Tiếng Việt.`;
-            let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN:\n" + rawText;
-            const partsArray = [{ text: finalPrompt }]; if (currentFileData) { partsArray.push({ inlineData: { mimeType: currentMimeType, data: currentFileData } }); }
+            showLoading(true, "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
+
+            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc TẤT CẢ các tài liệu đính kèm và văn bản dưới đây. Tổng hợp kiến thức và tạo ra đúng ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array. Cấu trúc mẫu:\n[\n  {\n    "text": "Câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nTiếng Việt.`;
+            
+            let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN TỔNG HỢP:\n" + rawText;
+            
+            const partsArray = [{ text: finalPrompt }];
+            currentAiFiles.forEach(f => {
+                partsArray.push({ inlineData: { mimeType: f.type, data: f.data } });
+            });
+
             try {
                 const payload = { contents: [{ role: "user", parts: partsArray }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } };
                 const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
-                if (!data.candidates?.length || !data.candidates[0].content?.parts?.length) throw new Error("Gemini không trả về nội dung.");
+                if (!data.candidates?.length || !data.candidates[0].content?.parts?.length) throw new Error("AI không trả về nội dung.");
+                
                 let aiResponseText = data.candidates[0].content.parts[0].text;
                 aiResponseText = aiResponseText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+                
                 const jsonArray = JSON.parse(aiResponseText);
-                if (!Array.isArray(jsonArray) || jsonArray.length === 0) throw new Error("JSON rỗng");
-                await saveBank(bankName, jsonArray); await refreshBankDropdown();
-                const banks = await getAllBanks(); const newBank = banks[banks.length - 1];
+                if (!Array.isArray(jsonArray) || jsonArray.length === 0) throw new Error("Dữ liệu AI trả về không đúng định dạng.");
+                
                 showLoading(false);
-                showConfirm(`✅ Đã tạo xong ${jsonArray.length} câu hỏi! Bắt đầu làm bài thi này ngay?`, async (yes) => { if (yes) await loadBankById(newBank.id); else showToast("Đã lưu bộ đề vào hệ thống."); });
+                openAiReview(bankName, jsonArray);
             } catch (error) { showLoading(false); showToast("❌ Lỗi tạo đề: " + error.message, 7000); aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); }
         });
 
@@ -1076,8 +2058,50 @@ async function initGIA() {
             }
         });
 
+        // Data Center Events
+        document.getElementById('dataCenterBtn')?.addEventListener('click', () => {
+            document.getElementById('settingsDropdown')?.classList.remove('show');
+            document.getElementById('dataCenterModal')?.classList.remove('hidden');
+            document.getElementById('dataCenterModal')?.classList.add('flex');
+        });
+
+        document.getElementById('exportAllBtn')?.addEventListener('click', exportAllData);
+
+        document.getElementById('importDataBtn')?.addEventListener('click', () => {
+            document.getElementById('importFileInput')?.click();
+        });
+
+        document.getElementById('importFileInput')?.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                importData(e.target.files[0]);
+                e.target.value = ''; // Reset
+            }
+        });
+
+        document.getElementById('shareBankBtn')?.addEventListener('click', () => {
+            const bankId = document.getElementById('bankSelect')?.value;
+            if (!bankId) {
+                showToast("Vui lòng chọn bộ đề muốn chia sẻ!");
+                return;
+            }
+            exportSingleBank(bankId);
+        });
+
         attachGlobalEvents();
     } catch (e) { console.error("Lỗi Khởi tạo Hệ thống:", e); }
 }
 
 initGIA();
+
+// ======================== PWA SERVICE WORKER REGISTRATION ========================
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => {
+                console.log('🚀 Hai Anh Study: Service Worker Registered!', reg.scope);
+            })
+            .catch(err => {
+                console.error('❌ Hai Anh Study: Service Worker Registration Failed:', err);
+            });
+    });
+}
