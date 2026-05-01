@@ -688,6 +688,7 @@ const VoiceTutor = {
     },
 
     async askGemini(userText) {
+        if (!checkAiReady()) return;
         this.updateUI('thinking', 'Đang phân tích...');
         try {
             const q = currentQuestions[this.activeQIdx];
@@ -699,12 +700,16 @@ const VoiceTutor = {
             Hãy trả lời câu hỏi của người dùng một cách ngắn gọn, súc tích (dưới 100 từ), sử dụng ngôn ngữ tự nhiên như đang nói chuyện trực tiếp. Đừng quá cứng nhắc. Nếu người dùng hỏi lạc đề, hãy khéo léo dẫn dắt họ quay lại nội dung bài học.
             Người dùng nói: "${userText}"`;
 
-            const response = await callGemini(systemPrompt);
+            const payload = { contents: [{ role: "user", parts: [{ text: systemPrompt }] }], generationConfig: { temperature: 0.7 } };
+            const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+            const response = data.candidates[0].content.parts[0].text;
+            
             this.updateUI('speaking', response);
             SpeechManager.speak(response, 'voice-tutor', () => {
                 if (this.isCalling) this.startListening();
             });
         } catch (err) {
+            console.error("Voice Gemini Error:", err);
             this.updateUI('speaking', "Có lỗi xảy ra khi kết nối với não bộ của tôi. Thử lại sau nhé!");
             SpeechManager.speak("Có lỗi xảy ra. Thử lại sau nhé!", 'voice-tutor');
         }
