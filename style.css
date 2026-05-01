@@ -18,10 +18,10 @@ body.dark input, body.dark select, body.dark textarea, body.dark .border { backg
 .speak-toggle-btn { color: #1e40af !important; border-color: #bfdbfe !important; }
 .dark .speak-toggle-btn { color: #60a5fa !important; border-color: #1e3a8a !important; }
 
-/* Tăng cường hiển thị Toggle trong Dark Mode */
-body.dark .peer { background-color: #334155 !important; border: 1px solid #475569 !important; }
-body.dark .peer-checked { background-color: #2563eb !important; border-color: #3b82f6 !important; }
-body.dark .peer:after { background-color: #f8fafc !important; }
+/* Tăng cường hiển thị Toggle trong Dark Mode - Độ tương phản tuyệt đối */
+body.dark .peer + div { background-color: #334155 !important; border: 1.5px solid #475569 !important; }
+body.dark .peer:checked + div { background-color: #2563eb !important; border-color: #60a5fa !important; }
+body.dark .peer + div:after { background-color: #ffffff !important; box-shadow: 0 0 6px rgba(255,255,255,0.9) !important; }
 
 body.dark #resultContent { color: #e2e8f0; }
 body.dark #resultContent .bg-gray-50 { background-color: #1e293b !important; border: 1px solid #475569; }
@@ -219,6 +219,7 @@ body.dark .wrong-table th { background-color: #334155; }
 /* Tăng độ rõ nét cho từng loại nút trong Light Mode */
 #openAiGenBtn { background-color: #e0e7ff !important; color: #3730a3 !important; border: 1px solid #c7d2fe !important; }
 #aiSettingsBtn { background-color: #f5f3ff !important; color: #701a75 !important; border: 1px solid #ddd6fe !important; }
+body.dark #aiSettingsBtn { background-color: #2e106540 !important; color: #a78bfa !important; border-color: #7c3aed40 !important; }
 
 /* Nút Thi trong Chế độ tối */
 body.dark #startFullTestBtn { background-color: #059669 !important; color: #ffffff !important; border: 1px solid #10b981 !important; }

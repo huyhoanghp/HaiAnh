@@ -82,7 +82,7 @@
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" id="hintToggle" class="sr-only peer" checked>
-                                <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-blue-500"></div>
+                                <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-blue-500"></div>
                             </label>
                         </div>
 
@@ -247,7 +247,7 @@
 
 <!-- Modal Cài đặt API -->
 <div id="aiSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
-    <div id="aiSettingsModalContent" class="bg-white rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent">
+    <div id="aiSettingsModalContent" class="bg-white dark:bg-slate-900 rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
         <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
         <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Để sử dụng AI ở môi trường thật (Internet), bạn cần cung cấp API Key của Google Gemini.</p>
         <input type="password" id="geminiApiKeyInput" placeholder="Nhập Google Gemini API Key..." class="w-full border rounded-lg p-2 mb-4 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:border-purple-500">
@@ -318,7 +318,7 @@
 
 <!-- Modal Data Center (Backup/Restore) -->
 <div id="dataCenterModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[200] p-4">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-transparent">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
