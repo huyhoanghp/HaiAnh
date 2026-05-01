@@ -18,17 +18,8 @@
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="apple-mobile-web-app-title" content="Hai Anh Study">
-    <link rel="apple-touch-icon" href="BTS_Icon.webp">
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW Registered!', reg))
-                    .catch(err => console.log('SW Reg failed:', err));
-            });
-        }
-    </script>
 </head>
 <body class="font-sans antialiased bg-gray-100">
 <div id="loadingOverlay"><div class="spinner"></div><div id="loadingText">Đang xử lý, vui lòng chờ...</div></div>
@@ -46,16 +37,80 @@
             <h1 class="text-2xl font-bold text-blue-800 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> Hai Anh Study</h1>
             
             <div class="flex gap-2 flex-wrap justify-center md:justify-end">
-                <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa magic"></i> AI Gen</button>
-                <button id="aiSettingsBtn" class="btn-unified btn-ghost">
-                    <i class="fas fa-key"></i> API <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
-                </button>
-                <button id="darkModeToggle" class="btn-unified btn-ghost"><i class="fas fa-circle-half-stroke"></i> <span id="darkModeText">Tối</span></button>
+                <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa-magic"></i> AI Gen</button>
+                
+                <div class="relative">
+                    <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
+                        <i class="fas fa-cog text-lg"></i>
+                    </button>
+
+                    <div id="settingsDropdown">
+                        <!-- Cấu hình AI -->
+                        <button id="aiSettingsBtn" class="menu-item">
+                            <i class="fas fa-robot text-purple-600"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Cấu hình AI</div>
+                                <div class="text-[10px] text-gray-400">Thiết lập API Key & Model</div>
+                            </div>
+                            <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
+                        </button>
+
+                        <!-- Dữ liệu -->
+                        <button id="dataCenterBtn" class="menu-item">
+                            <i class="fas fa-database text-emerald-600"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Trung tâm Dữ liệu</div>
+                                <div class="text-[10px] text-gray-400">Sao lưu & Khôi phục file</div>
+                            </div>
+                        </button>
+
+                        <!-- Dark Mode -->
+                        <button id="darkModeToggle" class="menu-item">
+                            <i class="fas fa-circle-half-stroke text-blue-600"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Chế độ hiển thị</div>
+                                <div id="darkModeText" class="text-[10px] text-gray-400">Chuyển Sáng / Tối</div>
+                            </div>
+                        </button>
+
+                        <!-- Gợi ý đáp án -->
+                        <div class="menu-item py-3">
+                            <i class="fas fa-lightbulb text-amber-500"></i>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 dark:text-white text-sm">Gợi ý đáp án</div>
+                                <div class="text-[10px] text-gray-400">Hiển thị nút xem nhanh đáp án</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="hintToggle" class="sr-only peer" checked>
+                                <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-blue-500"></div>
+                            </label>
+                        </div>
+
+                        <!-- Xoá bộ câu hỏi (Mới) -->
+                        <button id="deleteAllBanksBtn" class="menu-item text-red-600 border-t border-gray-100 dark:border-slate-800">
+                            <i class="fas fa-trash-can text-red-500"></i>
+                            <div class="flex-1 text-left">
+                                <div class="font-bold text-sm">Xoá TẤT CẢ bộ đề</div>
+                                <div class="text-[10px] text-red-400">Xoá vĩnh viễn toàn bộ dữ liệu đã lưu</div>
+                            </div>
+                        </button>
+
+                        <!-- Font Size -->
+                        <div class="p-4 bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cỡ chữ hệ thống</span>
+                                <span id="fontSizeVal" class="text-xs font-bold text-indigo-600">100%</span>
+                            </div>
+                            <input type="range" id="fontSizeSlider" min="80" max="250" value="100" class="font-range-input">
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">
                     <button id="pauseResumeBtn" class="btn-unified btn-secondary text-xs px-3 py-1.5"><i class="fas fa-pause"></i> Tạm dừng</button>
                     <button id="resetExamBtn" class="btn-unified btn-ghost text-xs px-3 py-1.5"><i class="fas fa-rotate-right"></i> Làm lại</button>
+                    <button id="cancelExamBtn" class="btn-unified btn-cancel text-xs px-3 py-1.5"><i class="fas fa-xmark"></i> Huỷ bài</button>
                     <button id="submitBtn" class="btn-unified btn-primary text-xs px-3 py-1.5"><i class="fas fa-paper-plane"></i> Nộp bài</button>
                 </div>
             </div>
@@ -69,7 +124,8 @@
                 <div class="flex-1 min-w-[200px]"><label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 ml-1">📚 Bộ câu hỏi đã lưu</label><select id="bankSelect" class="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"><option value="">-- Chọn bộ câu hỏi --</option></select></div>
                 <div class="flex gap-2 w-full md:w-auto">
                     <button id="loadSelectedBankBtn" class="flex-1 md:flex-none bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm"><i class="fas fa-cloud-arrow-down"></i> Tải</button>
-                    <button id="deleteBankBtn" class="md:flex-none bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-100"><i class="fas fa-trash-can"></i></button>
+                    <button id="deleteBankBtn" class="md:flex-none bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-100" title="Xóa bộ đề"><i class="fas fa-trash-can"></i></button>
+                    <button id="shareBankBtn" class="md:flex-none bg-cyan-50 hover:bg-cyan-100 text-cyan-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-cyan-100" title="Chia sẻ bộ đề"><i class="fas fa-share-nodes"></i></button>
                     <button id="showStatsBtn" class="flex-1 md:flex-none bg-green-500 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm"><i class="fas fa-chart-pie"></i> Báo cáo</button>
                 </div>
             </div>
@@ -118,6 +174,9 @@
                 </button>
                 <button id="resetExamBtnHeader" title="Làm lại" class="action-icon-btn ghost">
                     <i class="fas fa-rotate-right"></i>
+                </button>
+                <button id="cancelExamBtnHeader" title="Huỷ bài thi" class="action-icon-btn cancel">
+                    <i class="fas fa-xmark"></i>
                 </button>
                 <button id="submitBtnHeader" title="Nộp bài" class="action-icon-btn primary">
                     <i class="fas fa-paper-plane"></i>
@@ -188,7 +247,7 @@
 
 <!-- Modal Cài đặt API -->
 <div id="aiSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
-    <div id="aiSettingsModalContent" class="bg-white rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent">
+    <div id="aiSettingsModalContent" class="bg-white dark:bg-slate-900 rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
         <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
         <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Để sử dụng AI ở môi trường thật (Internet), bạn cần cung cấp API Key của Google Gemini.</p>
         <input type="password" id="geminiApiKeyInput" placeholder="Nhập Google Gemini API Key..." class="w-full border rounded-lg p-2 mb-4 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:border-purple-500">
@@ -211,15 +270,17 @@
                 <i class="fas fa-cloud-upload-alt text-3xl text-indigo-400 mb-2"></i>
                 <div class="text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-1">Nhấn để Tải lên Ảnh, PDF, Word, Excel, TXT</div>
                 <div class="text-xs text-gray-500">(Hoặc dùng điện thoại để chụp ảnh trực tiếp)</div>
-                <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.txt,.csv,.xlsx,.xls" class="hidden">
+                <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.txt,.csv,.xlsx,.xls" class="hidden" multiple>
             </div>
 
-            <div id="filePreviewContainer" class="hidden relative p-3 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-between border border-indigo-100 dark:border-slate-700">
-                <div class="flex items-center gap-3 overflow-hidden">
-                    <i id="fileIconPreview" class="fas fa-file-alt text-2xl text-indigo-500"></i>
-                    <span id="fileNameDisplay" class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate whitespace-nowrap max-w-[250px]"></span>
+            <div id="multiFileContainer" class="hidden space-y-2">
+                <div class="flex justify-between items-center text-[10px] px-1">
+                    <span class="font-bold text-indigo-600 uppercase tracking-wider">Tệp tin đã chọn:</span>
+                    <span id="totalSizeDisplay" class="text-gray-500 font-mono">0MB / 100MB</span>
                 </div>
-                <button id="removeFileBtn" class="text-red-500 hover:text-red-700 p-1"><i class="fas fa-times-circle text-lg"></i></button>
+                <div id="fileListWrapper" class="max-h-[150px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    <!-- Danh sách file sẽ được render tại đây -->
+                </div>
             </div>
 
             <div class="flex-1 flex flex-col min-h-[120px]">
@@ -251,6 +312,205 @@
         <div class="flex justify-end gap-3 mt-6">
             <button id="closeAiGenBtn" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Đóng</button>
             <button id="submitAiGenBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"><i class="fas fa-bolt mr-1"></i> Bắt đầu tạo</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Data Center (Backup/Restore) -->
+<div id="dataCenterModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[200] p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <i class="fas fa-database text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">Trung tâm Dữ liệu</h3>
+            </div>
+            <button class="close-modal-btn text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="document.getElementById('dataCenterModal').classList.add('hidden')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="space-y-4">
+            <!-- Xuất dữ liệu -->
+            <div class="p-4 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50">
+                <h4 class="font-bold text-gray-800 dark:text-gray-200 mb-1 flex items-center gap-2">
+                    <i class="fas fa-file-export text-emerald-500"></i> Sao lưu (Export)
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Tải toàn bộ đề thi và lịch sử về máy để lưu trữ hoặc chuyển sang máy khác.</p>
+                <button id="exportAllBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-md shadow-emerald-100 dark:shadow-none">
+                    <i class="fas fa-download mr-2"></i> Tải về file Backup (.json)
+                </button>
+            </div>
+
+            <!-- Nhập dữ liệu -->
+            <div class="p-4 rounded-xl border border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950/50">
+                <h4 class="font-bold text-gray-800 dark:text-gray-200 mb-1 flex items-center gap-2">
+                    <i class="fas fa-file-import text-blue-500"></i> Khôi phục (Import)
+                </h4>
+                <p class="text-xs text-gray-500 mb-3">Chọn file backup đã lưu để nạp lại dữ liệu vào ứng dụng.</p>
+                <input type="file" id="importFileInput" class="hidden" accept=".json">
+                <button id="importDataBtn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-md shadow-blue-100 dark:shadow-none">
+                    <i class="fas fa-upload mr-2"></i> Chọn file để nạp
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <p class="text-[11px] text-gray-400 italic">
+                <i class="fas fa-info-circle mr-1"></i> Lưu ý: Khi nạp dữ liệu, các bộ đề trùng tên sẽ được tự động cập nhật hoặc thêm mới.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AI Fix Dialog -->
+<div id="aiFixModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[200] p-4">
+    <div id="aiFixModalContent" class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-transparent">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/40 rounded-xl flex items-center justify-center text-purple-600 dark:text-purple-400">
+                <i class="fas fa-wand-magic-sparkles text-xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 dark:text-white">AI Tinh chỉnh câu hỏi</h3>
+        </div>
+        
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Chọn yêu cầu nhanh hoặc nhập nội dung tùy chỉnh:</p>
+        
+        <div id="fixChipsContainer" class="flex flex-wrap gap-2 mb-6">
+            <button class="fix-chip" data-val="Làm câu hỏi dễ hơn">Dễ hơn 🟢</button>
+            <button class="fix-chip" data-val="Làm câu hỏi khó hơn">Khó hơn 🔴</button>
+            <button class="fix-chip" data-val="Chuyển thành dạng đa đáp án (nhiều đáp án đúng)">Đa đáp án 🔄</button>
+            <button class="fix-chip" data-val="Thêm các đáp án gây nhiễu thuyết phục hơn">Thêm nhiễu 🎭</button>
+            <button class="fix-chip" data-val="Viết lại câu hỏi và đáp án chuyên nghiệp hơn">Viết lại 📝</button>
+            <button class="fix-chip" data-val="">Khác... ⌨️</button>
+        </div>
+
+        <textarea id="aiFixCustomInput" class="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl p-3 text-sm mb-6 outline-none focus:ring-2 focus:ring-purple-500 transition-all" rows="3" placeholder="Nhập yêu cầu chi tiết của bạn tại đây..."></textarea>
+
+        <div class="flex justify-end gap-3">
+            <button id="closeAiFixModal" class="px-4 py-2 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition">Đóng</button>
+            <button id="confirmAiFixBtn" class="px-6 py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 shadow-lg shadow-purple-200 dark:shadow-none transition">Thực hiện</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Review & Edit AI Questions -->
+<div id="aiReviewModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[100] p-4">
+    <div id="aiReviewModalContent" class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full p-6 border border-transparent max-h-[95vh] flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <i class="fas fa-tasks text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">Kiểm tra & Chỉnh sửa Đề AI</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Vui lòng kiểm tra kỹ nội dung trước khi lưu chính thức</p>
+                </div>
+            </div>
+            <span id="aiReviewCount" class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">0 câu hỏi</span>
+        </div>
+        
+        <div id="aiReviewList" class="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar mb-4 py-2">
+            <!-- Danh sách câu hỏi AI để sửa -->
+        </div>
+
+        <div class="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <button id="cancelAiReviewBtn" class="px-6 py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-700 transition font-medium">Hủy bỏ</button>
+            <div class="flex gap-3">
+                <button id="addAiReviewQuestionBtn" class="px-4 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition font-medium border border-blue-100 dark:border-blue-800/50"><i class="fas fa-plus"></i> Thêm câu</button>
+                <button id="saveAiReviewBtn" class="px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none transition font-bold">Lưu Bộ đề ✅</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ánh xạ Cột Excel (Dùng khi tự động nhận diện thất bại) -->
+<div id="excelMappingModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-[200] p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <i class="fas fa-columns text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">Ánh xạ cột Excel</h3>
+                    <p class="text-xs text-gray-500">App không tự nhận diện được tiêu đề. Vui lòng gán cột thủ công.</p>
+                </div>
+            </div>
+            <button id="closeExcelMappingBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"><i class="fas fa-times text-xl"></i></button>
+        </div>
+
+        <div class="space-y-6">
+            <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 p-4 rounded-xl">
+                <p class="text-xs text-amber-800 dark:text-amber-400 font-medium"><i class="fas fa-info-circle mr-1"></i> Xem trước 3 dòng đầu tiên của file:</p>
+                <div id="excelPreviewTable" class="mt-2 overflow-x-auto">
+                    <!-- Preview table will be injected here -->
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Cột chứa Câu hỏi</label>
+                        <select id="mapColQuestion" class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-2.5 text-sm bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-400 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Cột chứa Đáp án đúng</label>
+                        <select id="mapColAnswer" class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-2.5 text-sm bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-400 focus:outline-none"></select>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Cột chứa Loại câu hỏi (Tùy chọn)</label>
+                        <select id="mapColType" class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-2.5 text-sm bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+                            <option value="-1">-- Không có / Tự động --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Các cột chứa Phương án (A, B, C...)</label>
+                        <div id="mapColOptionsContainer" class="max-h-40 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-xl p-2 bg-gray-50 dark:bg-slate-800/50">
+                            <!-- Checkboxes for options will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
+                <button id="cancelExcelMappingBtn" class="px-6 py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-xl text-sm font-bold hover:bg-gray-200 transition">Hủy bỏ</button>
+                <button id="confirmExcelMappingBtn" class="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 dark:shadow-none transition">Hoàn tất & Nạp đề</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Voice Call AI Tutor Modal -->
+<div id="voiceCallModal" class="fixed inset-0 voice-modal hidden items-center justify-center z-[10000] p-4">
+    <div class="voice-card max-w-sm w-full rounded-[2.5rem] overflow-hidden p-8 flex flex-col items-center">
+        <!-- AI Status -->
+        <div id="voiceStatusBadge" class="voice-status-badge voice-status-thinking mb-8">Đang chờ...</div>
+        
+        <!-- AI Avatar & Wave -->
+        <div class="relative mb-10">
+            <div id="aiAvatar" class="ai-avatar">🤖</div>
+            <div id="aiWaveform" class="wave-container absolute -bottom-6 left-1/2 -translate-x-1/2 hidden">
+                <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+            </div>
+            <div id="userMicPulse" class="absolute inset-0 mic-pulse hidden"></div>
+        </div>
+
+        <h3 class="text-xl font-extrabold text-gray-800 dark:text-white mb-2">Gia sư AI 24/7</h3>
+        <p class="text-gray-500 dark:text-slate-400 text-sm mb-6 text-center">Tôi đang lắng nghe, hãy hỏi tôi bất cứ điều gì!</p>
+        
+        <!-- Realtime Transcript -->
+        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[100px] mb-8 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32">
+            <span id="voiceTranscript">"Đang kết nối với gia sư..."</span>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex gap-4">
+            <button id="endCallBtn" class="w-16 h-16 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-200 dark:shadow-none transition-all hover:scale-110 active:scale-95">
+                <i class="fas fa-phone-slash text-2xl"></i>
+            </button>
         </div>
     </div>
 </div>

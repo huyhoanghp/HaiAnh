@@ -471,7 +471,9 @@ function generateQuestionHTML(idx, rawSearch = "") {
 
     const feedback = isSubmitted ? (isCorrect ? `<div class="mt-3 text-sm text-green-700 bg-green-50 p-2 rounded-lg"><i class="fas fa-check-circle"></i> Chính xác!</div>` : `<div class="mt-3 text-sm bg-amber-50 p-2 rounded-lg text-amber-800"><i class="fas fa-info-circle"></i> Đáp án đúng: ${correctIndices.map(i => q.options[i]).join('; ')}</div>`) : "";
     const aiExplainBtn = `<button class="ai-explain-btn text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 transition" data-qidx="${idx}"><i class="fas fa-magic"></i> Giải thích AI</button>`;
+    const aiCallBtn = `<button class="ai-call-btn text-xs px-3 py-1.5 rounded-lg border transition font-bold" data-qidx="${idx}"><i class="fas fa-phone"></i> Gọi Gia sư AI</button>`;
     const aiExplainBox = `<div id="ai-explanation-${idx}" class="ai-explanation-box mt-3 rounded-lg hidden shadow-sm" data-loaded="false"></div>`;
+    
     return `<div id="question-${idx}" class="card-question bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 overflow-visible transition-all">
         <div class="q-toolbar flex justify-between items-center mb-4 pb-3 border-b border-gray-100 dark:border-slate-800">
             <div class="flex items-center gap-3">
@@ -487,14 +489,6 @@ function generateQuestionHTML(idx, rawSearch = "") {
                     <button class="speak-toggle-btn w-8 h-8 flex items-center justify-center bg-gray-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-900/50" data-qidx="${idx}-q">
                         <i class="fas fa-volume-up text-xs"></i>
                     </button>
-                    <div class="relative speed-container">
-                        <button class="speed-btn h-7 px-1.5 flex items-center gap-1 bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-md text-[9px] font-bold border border-gray-200">
-                            <span class="current-speed">${SpeechManager.rate.toFixed(1)}x</span>
-                        </button>
-                        <div class="speed-menu absolute top-full left-0 mt-1 w-14 bg-white dark:bg-slate-800 shadow-xl border border-gray-200 rounded-md hidden z-[100] overflow-hidden">
-                            ${[0.8, 1.0, 1.2, 1.5, 2.0].map(r => `<div class="speed-opt px-1 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer text-[9px] text-center text-gray-800 dark:text-gray-200" data-rate="${r}" data-qidx="${idx}-q">${r.toFixed(1)}x</div>`).join('')}
-                        </div>
-                    </div>
                 </div>
                 <button class="flag-btn w-8 h-8 flex items-center justify-center rounded-lg transition-all border-2 ${isFlagged ? 'border-orange-500 text-orange-500' : 'border-gray-200 dark:border-slate-700 text-gray-400 dark:text-gray-500'} bg-transparent" data-qidx="${idx}">
                     <i class="${isFlagged ? 'fas' : 'far'} fa-bookmark text-xs"></i>
@@ -508,11 +502,144 @@ function generateQuestionHTML(idx, rawSearch = "") {
         </div>
         <div class="flex items-center gap-3 mt-5 pt-4 border-t border-gray-50 dark:border-slate-800">
             ${aiExplainBtn}
+            ${aiCallBtn}
             <button class="hint-btn text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 transition font-medium ${hintEnabled ? '' : 'hidden'}" data-qidx="${idx}"><i class="fas fa-lightbulb"></i> Gợi ý</button>
         </div>
         ${feedback}${aiExplainBox}
     </div>`;
 }
+
+// ======================== VOICE TUTOR (STT + TTS + GEMINI) ========================
+class SpeechToTextManager {
+    constructor() {
+        this.recognition = null;
+        this.isListening = false;
+        this.onResult = null;
+        this.onEnd = null;
+
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            this.recognition = new SpeechRecognition();
+            this.recognition.lang = 'vi-VN';
+            this.recognition.continuous = false;
+            this.recognition.interimResults = true;
+
+            this.recognition.onresult = (e) => {
+                const transcript = Array.from(e.results).map(res => res[0].transcript).join('');
+                if (this.onResult) this.onResult(transcript, e.results[0].isFinal);
+            };
+
+            this.recognition.onend = () => {
+                this.isListening = false;
+                if (this.onEnd) this.onEnd();
+            };
+
+            this.recognition.onerror = (e) => {
+                console.error("STT Error:", e.error);
+                this.stop();
+            };
+        }
+    }
+
+    start() { if (this.recognition && !this.isListening) { this.recognition.start(); this.isListening = true; } }
+    stop() { if (this.recognition && this.isListening) { this.recognition.stop(); this.isListening = false; } }
+}
+
+const VoiceTutor = {
+    stt: new SpeechToTextManager(),
+    activeQIdx: null,
+    isCalling: false,
+
+    async startCall(qIdx) {
+        if (!localStorage.getItem('gemini_api_key')) { showToast("Vui lòng cài đặt API Key để dùng tính năng này."); return; }
+        SpeechManager.stop(); // Ngắt các âm thanh đang phát khác
+        this.activeQIdx = qIdx;
+        this.isCalling = true;
+        
+        const modal = document.getElementById('voiceCallModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        this.updateUI('speaking', 'Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?');
+        SpeechManager.speak('Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?', 'voice-tutor', () => {
+            this.startListening();
+        });
+    },
+
+    updateUI(state, text = "") {
+        const badge = document.getElementById('voiceStatusBadge');
+        const transcript = document.getElementById('voiceTranscript');
+        const avatar = document.getElementById('aiAvatar');
+        const wave = document.getElementById('aiWaveform');
+        const pulse = document.getElementById('userMicPulse');
+
+        if (text) transcript.innerText = text;
+
+        badge.className = 'voice-status-badge';
+        wave.classList.add('hidden');
+        pulse.classList.add('hidden');
+        avatar.classList.remove('speaking');
+
+        if (state === 'listening') {
+            badge.innerText = 'Đang lắng nghe...';
+            badge.classList.add('voice-status-listening');
+            pulse.classList.remove('hidden');
+        } else if (state === 'speaking') {
+            badge.innerText = 'Gia sư đang nói...';
+            badge.classList.add('voice-status-speaking');
+            wave.classList.remove('hidden');
+            avatar.classList.add('speaking');
+        } else if (state === 'thinking') {
+            badge.innerText = 'Đang suy nghĩ...';
+            badge.classList.add('voice-status-thinking');
+        }
+    },
+
+    startListening() {
+        if (!this.isCalling) return;
+        this.updateUI('listening', 'Hãy nói đi, tôi đang nghe...');
+        this.stt.onResult = (text, isFinal) => {
+            document.getElementById('voiceTranscript').innerText = text;
+            if (isFinal && text.trim().length > 2) {
+                this.stt.stop();
+                this.askGemini(text);
+            }
+        };
+        this.stt.start();
+    },
+
+    async askGemini(userText) {
+        this.updateUI('thinking', 'Đang phân tích...');
+        try {
+            const q = currentQuestions[this.activeQIdx];
+            const systemPrompt = `Bạn là một gia sư AI thân thiện và am hiểu. Người dùng đang hỏi bạn về một câu hỏi trắc nghiệm sau đây:
+            Câu hỏi: ${q.text}
+            Các phương án: ${q.options.map((o, i) => String.fromCharCode(65 + i) + ". " + o).join(", ")}
+            Đáp án đúng là: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
+            
+            Hãy trả lời câu hỏi của người dùng một cách ngắn gọn, súc tích (dưới 100 từ), sử dụng ngôn ngữ tự nhiên như đang nói chuyện trực tiếp. Đừng quá cứng nhắc. Nếu người dùng hỏi lạc đề, hãy khéo léo dẫn dắt họ quay lại nội dung bài học.
+            Người dùng nói: "${userText}"`;
+
+            const response = await callGemini(systemPrompt);
+            this.updateUI('speaking', response);
+            SpeechManager.speak(response, 'voice-tutor', () => {
+                if (this.isCalling) this.startListening();
+            });
+        } catch (err) {
+            this.updateUI('speaking', "Có lỗi xảy ra khi kết nối với não bộ của tôi. Thử lại sau nhé!");
+            SpeechManager.speak("Có lỗi xảy ra. Thử lại sau nhé!", 'voice-tutor');
+        }
+    },
+
+    endCall() {
+        this.isCalling = false;
+        this.stt.stop();
+        SpeechManager.stop();
+        const modal = document.getElementById('voiceCallModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+};
 
 function renderSingleQuestion(idx) {
     const oldDiv = document.getElementById(`question-${idx}`);
@@ -1484,6 +1611,7 @@ function handleContainerClick(e) {
     const hint = e.target.closest('.hint-btn'); if (hint) { e.preventDefault(); showHint(parseInt(hint.dataset.qidx)); return; }
     const aiBtn = e.target.closest('.ai-explain-btn'); if (aiBtn) { e.preventDefault(); explainWithAI(parseInt(aiBtn.dataset.qidx)); return; }
     const aiLengthBtn = e.target.closest('.ai-length-btn'); if (aiLengthBtn) { e.preventDefault(); explainWithAI(parseInt(aiLengthBtn.dataset.qidx), aiLengthBtn.dataset.len); return; }
+    const callBtn = e.target.closest('.ai-call-btn'); if (callBtn) { e.preventDefault(); VoiceTutor.startCall(parseInt(callBtn.dataset.qidx)); return; }
 }
 function attachGlobalEvents() { const container = document.getElementById('questionsContainer'); if (!container) return; container.removeEventListener('change', handleContainerChange); container.removeEventListener('click', handleContainerClick); container.addEventListener('change', handleContainerChange); container.addEventListener('click', handleContainerClick); }
 
@@ -1557,6 +1685,7 @@ async function initGIA() {
         document.getElementById('pauseResumeBtnHeader')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
+        document.getElementById('endCallBtn')?.addEventListener('click', () => VoiceTutor.endCall());
         const toggleGridView = () => {
             if (currentQuestions.length) {
                 const panel = document.getElementById('questionGridPanel');
