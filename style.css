@@ -174,6 +174,12 @@ body.dark .wrong-table th { background-color: #334155; }
 .dark .action-icon-btn { background: #1e293b; border-color: #334155; }
 .dark .action-icon-btn.primary { background: #1e3a8a; color: #60a5fa; }
 .dark .action-icon-btn.secondary { background: #78350f; color: #fbbf24; }
+.action-icon-btn.cancel { color: #e11d48; background: #fff1f2; border-color: #ffe4e6; }
+.dark .action-icon-btn.cancel { background: #4c051940; color: #fb7185; border-color: #e11d4840; }
+
+.btn-cancel { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; }
+.btn-cancel:hover { background: #ffe4e6; }
+.dark .btn-cancel { background: #4c051940; color: #fb7185; border-color: #e11d4840; }
 
 .header-actions-desktop { display: none !important; }
 
@@ -329,6 +335,27 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
     pointer-events: none;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     transform-origin: top right;
+}
+
+@media (max-width: 768px) {
+    #settingsDropdown {
+        position: fixed !important;
+        top: 5.5rem !important;
+        left: 50% !important;
+        right: auto !important;
+        width: 92vw !important;
+        max-width: 360px !important;
+        transform: translateX(-50%) scale(0.95) !important;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s ease;
+        transform-origin: top center;
+    }
+    #settingsDropdown.show {
+        transform: translateX(-50%) scale(1) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
 }
 
 body.dark #settingsDropdown {

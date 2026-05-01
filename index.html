@@ -86,6 +86,15 @@
                             </label>
                         </div>
 
+                        <!-- Xoá bộ câu hỏi (Mới) -->
+                        <button id="deleteAllBanksBtn" class="menu-item text-red-600 border-t border-gray-100 dark:border-slate-800">
+                            <i class="fas fa-trash-can text-red-500"></i>
+                            <div class="flex-1 text-left">
+                                <div class="font-bold text-sm">Xoá TẤT CẢ bộ đề</div>
+                                <div class="text-[10px] text-red-400">Xoá vĩnh viễn toàn bộ dữ liệu đã lưu</div>
+                            </div>
+                        </button>
+
                         <!-- Font Size -->
                         <div class="p-4 bg-gray-50/50 dark:bg-slate-950/20">
                             <div class="flex justify-between items-center mb-2">
@@ -101,6 +110,7 @@
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">
                     <button id="pauseResumeBtn" class="btn-unified btn-secondary text-xs px-3 py-1.5"><i class="fas fa-pause"></i> Tạm dừng</button>
                     <button id="resetExamBtn" class="btn-unified btn-ghost text-xs px-3 py-1.5"><i class="fas fa-rotate-right"></i> Làm lại</button>
+                    <button id="cancelExamBtn" class="btn-unified btn-cancel text-xs px-3 py-1.5"><i class="fas fa-xmark"></i> Huỷ bài</button>
                     <button id="submitBtn" class="btn-unified btn-primary text-xs px-3 py-1.5"><i class="fas fa-paper-plane"></i> Nộp bài</button>
                 </div>
             </div>
@@ -164,6 +174,9 @@
                 </button>
                 <button id="resetExamBtnHeader" title="Làm lại" class="action-icon-btn ghost">
                     <i class="fas fa-rotate-right"></i>
+                </button>
+                <button id="cancelExamBtnHeader" title="Huỷ bài thi" class="action-icon-btn cancel">
+                    <i class="fas fa-xmark"></i>
                 </button>
                 <button id="submitBtnHeader" title="Nộp bài" class="action-icon-btn primary">
                     <i class="fas fa-paper-plane"></i>

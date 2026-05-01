@@ -547,6 +547,7 @@ async function openDB() {
 async function getAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function saveBank(name, questions) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).add({ name, questions, createdAt: new Date().toISOString() }); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
 async function deleteBank(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).delete(id); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
+async function clearAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 async function getBankById(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).get(id); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function saveHistory(bankId, bankName, totalQuestions, correctCount, wrongDetails, wrongQuestionsText) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readwrite'); const req = tx.objectStore(STORE_HISTORY).add({ bankId, bankName, totalQuestions, correctCount, wrongCount: totalQuestions - correctCount, wrongDetails, wrongQuestionsText, date: new Date().toISOString(), timestamp: Date.now() }); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 async function getAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readonly'); const req = tx.objectStore(STORE_HISTORY).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
@@ -1092,6 +1093,26 @@ function submitExam() {
     });
 }
 
+function cancelExam() {
+    if (!examActive && !submitted) return;
+    showConfirm("Bạn có muốn huỷ bài thi hiện tại và quay về màn hình chính?", (yes) => {
+        if (!yes) return;
+        stopTimer();
+        examActive = false;
+        submitted = false;
+        clearProgress();
+        
+        document.getElementById('progressArea')?.classList.add('hidden');
+        document.getElementById('setupArea')?.classList.remove('hidden');
+        document.getElementById('resultPanel')?.classList.add('hidden');
+        document.getElementById('questionGridPanel')?.classList.add('hidden');
+        document.getElementById('questionsContainer')?.classList.add('hidden');
+        document.getElementById('loadMoreTrigger')?.classList.add('hidden');
+        
+        showToast("Đã huỷ bài thi.");
+    });
+}
+
 function handleContainerChange(e) { const inp = e.target; if (inp.classList.contains('option-input')) { const qIdx = parseInt(inp.dataset.qidx); const container = document.getElementById(`question-${qIdx}`); if (!container) return; const all = container.querySelectorAll(`.option-input[name="q${qIdx}"]`); let sel = []; all.forEach(i => { if (i.checked) sel.push(parseInt(i.dataset.optidx)); }); setAnswer(qIdx, sel); } }
 function handleContainerClick(e) {
     // 1. Nút Nghe/Tạm dừng (Speak Toggle)
@@ -1230,6 +1251,18 @@ async function initGIA() {
         };
         document.getElementById('showGridBtn')?.addEventListener('click', toggleGridView);
         document.getElementById('showGridBtnHeader')?.addEventListener('click', toggleGridView);
+        document.getElementById('cancelExamBtn')?.addEventListener('click', cancelExam);
+        document.getElementById('cancelExamBtnHeader')?.addEventListener('click', cancelExam);
+        document.getElementById('deleteAllBanksBtn')?.addEventListener('click', () => {
+            document.getElementById('settingsDropdown')?.classList.remove('show');
+            showConfirm("CẢNH BÁO: Bạn có chắc chắn muốn xoá TOÀN BỘ bộ đề đã lưu không? Hành động này không thể hoàn tác.", async (yes) => {
+                if (!yes) return;
+                await clearAllBanks();
+                await clearAllHistory();
+                clearProgress();
+                location.reload();
+            });
+        });
         document.getElementById('goTopBtn')?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
         document.getElementById('goBottomBtn')?.addEventListener('click', () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
         document.getElementById('reviewWrongBtn')?.addEventListener('click', () => { if (!submitted) showToast("Hãy nộp bài trước."); else { const wrongs = scoreDetails.filter(d => !d.correct).map(d => d.index); if (wrongs.length) { if (!document.getElementById(`question-${wrongs[0]}`)) { initLazyRender(() => { while (displayedCount <= wrongs[0] && displayedCount < filteredIndices.length) renderNextBatch(''); setTimeout(() => document.getElementById(`question-${wrongs[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }); } else { document.getElementById(`question-${wrongs[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } } });
