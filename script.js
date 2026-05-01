@@ -527,33 +527,61 @@ class SpeechToTextManager {
         this.isListening = false;
         this.onResult = null;
         this.onEnd = null;
+    }
 
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            this.recognition = new SpeechRecognition();
-            this.recognition.lang = 'vi-VN';
-            this.recognition.continuous = false;
-            this.recognition.interimResults = true;
+    initRecognition() {
+        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return null;
+        
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'vi-VN';
+        recognition.continuous = false;
+        recognition.interimResults = true;
 
-            this.recognition.onresult = (e) => {
-                const transcript = Array.from(e.results).map(res => res[0].transcript).join('');
-                if (this.onResult) this.onResult(transcript, e.results[0].isFinal);
-            };
+        recognition.onresult = (e) => {
+            const transcript = Array.from(e.results).map(res => res[0].transcript).join('');
+            if (this.onResult) this.onResult(transcript, e.results[0].isFinal);
+        };
 
-            this.recognition.onend = () => {
-                this.isListening = false;
-                if (this.onEnd) this.onEnd();
-            };
+        recognition.onstart = () => { this.isListening = true; };
+        recognition.onend = () => { 
+            this.isListening = false; 
+            if (this.onEnd) this.onEnd(); 
+        };
 
-            this.recognition.onerror = (e) => {
-                console.error("STT Error:", e.error);
-                this.stop();
-            };
+        recognition.onerror = (e) => {
+            console.error("STT Error:", e.error);
+            let msg = "Lỗi Micro: " + e.error;
+            if (e.error === 'not-allowed') msg = "Cảnh báo: Bạn chưa cấp quyền Micro!";
+            else if (e.error === 'network') msg = "Lỗi mạng: Không thể nhận diện giọng nói.";
+            else if (e.error === 'no-speech') return; // Bỏ qua nếu không nghe thấy gì
+            
+            const transcriptDiv = document.getElementById('voiceTranscript');
+            if (transcriptDiv) transcriptDiv.innerHTML = `<span class="text-red-500 text-xs">${msg}</span>`;
+            this.stop();
+        };
+        return recognition;
+    }
+
+    start() {
+        if (this.isListening) this.stop();
+        this.recognition = this.initRecognition();
+        if (this.recognition) {
+            try {
+                this.recognition.start();
+            } catch (err) {
+                console.error("Start Recognition Failed:", err);
+            }
         }
     }
 
-    start() { if (this.recognition && !this.isListening) { this.recognition.start(); this.isListening = true; } }
-    stop() { if (this.recognition && this.isListening) { this.recognition.stop(); this.isListening = false; } }
+    stop() {
+        if (this.recognition) {
+            try { this.recognition.stop(); } catch(e) {}
+            this.recognition = null;
+        }
+        this.isListening = false;
+    }
 }
 
 const VoiceTutor = {
@@ -608,6 +636,14 @@ const VoiceTutor = {
 
     startListening() {
         if (!this.isCalling) return;
+        
+        // Kiểm tra giao thức file://
+        if (location.protocol === 'file:') {
+            this.updateUI('speaking', 'Lưu ý quan trọng: Tính năng đàm thoại (STT) yêu cầu chạy app qua máy chủ (http/https) mới có thể yêu cầu quyền Micro. Hãy sử dụng Live Server hoặc tải lên hosting nhé!');
+            SpeechManager.speak('Lưu ý: Tính năng đàm thoại yêu cầu chạy app qua máy chủ để truy cập micro.', 'voice-tutor');
+            return;
+        }
+
         if (!this.stt.recognition) {
             this.updateUI('speaking', 'Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Hãy dùng Chrome hoặc Edge nhé!');
             return;
