@@ -529,6 +529,10 @@ class SpeechToTextManager {
         this.onEnd = null;
     }
 
+    static isSupported() {
+        return !!(window.webkitSpeechRecognition || window.SpeechRecognition);
+    }
+
     initRecognition() {
         const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
         if (!SpeechRecognition) return null;
@@ -537,9 +541,16 @@ class SpeechToTextManager {
         recognition.lang = 'vi-VN';
         recognition.continuous = true;
         recognition.interimResults = true;
+        
         recognition.onresult = (e) => {
-            const transcript = Array.from(e.results).map(res => res[0].transcript).join('');
-            if (this.onResult) this.onResult(transcript, e.results[0].isFinal);
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = e.resultIndex; i < e.results.length; ++i) {
+                if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+                else interimTranscript += e.results[i][0].transcript;
+            }
+            const transcript = finalTranscript || interimTranscript;
+            if (this.onResult) this.onResult(transcript, !!finalTranscript);
         };
 
         recognition.onstart = () => { this.isListening = true; };
@@ -689,7 +700,7 @@ const VoiceTutor = {
             return;
         }
 
-        if (!this.stt.recognition) {
+        if (!SpeechToTextManager.isSupported()) {
             this.updateUI('speaking', 'Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Hãy dùng Chrome hoặc Edge nhé!');
             return;
         }
