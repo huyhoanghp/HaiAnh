@@ -599,7 +599,19 @@ const VoiceTutor = {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
-        // KÍCH HOẠT MICRO NGAY LẬP TỨC (User Gesture) để trình duyệt hiện bảng xin quyền
+        // Luôn xóa nội dung cũ
+        document.getElementById('voiceTranscript').innerText = "Đang kết nối...";
+        document.getElementById('voiceTextInput').value = "";
+        
+        // Hiện ô nhập liệu nếu không có STT hoặc người dùng muốn
+        const inputContainer = document.getElementById('voiceInputContainer');
+        if (!this.stt.recognition || location.protocol === 'file:') {
+            inputContainer?.classList.remove('hidden');
+        } else {
+            inputContainer?.classList.add('hidden');
+        }
+
+        // KÍCH HOẠT MICRO NGAY LẬP TỨC (User Gesture)
         this.stt.start(); 
         setTimeout(() => { if (this.isCalling && this.stt.isListening) this.stt.stop(); }, 100);
 
@@ -635,6 +647,18 @@ const VoiceTutor = {
         } else if (state === 'thinking') {
             badge.innerText = 'Đang suy nghĩ...';
             badge.classList.add('voice-status-thinking');
+        }
+    },
+
+    handleTextSubmit() {
+        const input = document.getElementById('voiceTextInput');
+        const text = input.value.trim();
+        if (text && this.isCalling) {
+            SpeechManager.stop();
+            this.stt.stop();
+            input.value = '';
+            document.getElementById('voiceTranscript').innerText = text;
+            this.askGemini(text);
         }
     },
 
@@ -1745,7 +1769,13 @@ async function initGIA() {
             if (VoiceTutor.isCalling) {
                 SpeechManager.stop();
                 VoiceTutor.startListening();
+                // Hiện ô nhập liệu khi nhấn mic (để người dùng có thêm lựa chọn)
+                document.getElementById('voiceInputContainer')?.classList.remove('hidden');
             }
+        });
+        document.getElementById('sendVoiceTextBtn')?.addEventListener('click', () => VoiceTutor.handleTextSubmit());
+        document.getElementById('voiceTextInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') VoiceTutor.handleTextSubmit();
         });
         const toggleGridView = () => {
             if (currentQuestions.length) {

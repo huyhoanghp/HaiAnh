@@ -502,8 +502,18 @@
         <p class="text-gray-500 dark:text-slate-400 text-sm mb-6 text-center">Tôi đang lắng nghe, hãy hỏi tôi bất cứ điều gì!</p>
         
         <!-- Realtime Transcript -->
-        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[100px] mb-8 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32">
+        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[80px] mb-4 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32 flex items-center justify-center">
             <span id="voiceTranscript">"Đang kết nối với gia sư..."</span>
+        </div>
+
+        <!-- Text Input Fallback -->
+        <div id="voiceInputContainer" class="w-full mb-8 hidden">
+            <div class="relative flex items-center bg-gray-100 dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-1 focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+                <input type="text" id="voiceTextInput" placeholder="Gõ câu hỏi tại đây..." class="w-full bg-transparent border-none text-gray-800 dark:text-white px-4 py-2.5 focus:outline-none text-sm">
+                <button id="sendVoiceTextBtn" class="w-9 h-9 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors mr-1">
+                    <i class="fas fa-paper-plane text-xs"></i>
+                </button>
+            </div>
         </div>
 
         <!-- Controls -->

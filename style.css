@@ -536,13 +536,32 @@ body.dark .font-range-input {
     100% { transform: scale(2); opacity: 0; }
 }
 
+#voiceInputContainer {
+    animation: slideUp 0.3s ease-out;
+}
+
+#voiceTextInput::placeholder {
+    color: rgba(156, 163, 175, 0.7);
+}
+
+.dark #voiceTextInput::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 .voice-status-badge {
-    padding: 4px 12px;
-    border-radius: 20px;
+    padding: 6px 16px;
+    border-radius: 99px;
     font-size: 11px;
-    font-weight: bold;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .voice-status-listening { background: #dcfce7; color: #166534; }
