@@ -896,25 +896,310 @@ async function explainWithAI(idx, lengthMode = 'normal') {
 // ======================== APP CORE LOGIC ========================
 function evaluateAll() { let correct = 0, details = []; for (let i = 0; i < currentQuestions.length; i++) { const res = checkAnswer(i); details.push({ index: i, correct: res.correct, correctIndices: res.correctAnswers, userIndices: res.userAnswers }); if (res.correct) correct++; } return { correctCount: correct, total: currentQuestions.length, details }; }
 
-function parseExcelToQuestions(dataBuffer) {
-    const wb = XLSX.read(dataBuffer, { type: 'array' }); const qList = [];
-    for (const sheetName of wb.SheetNames) {
-        const sheet = wb.Sheets[sheetName]; const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }); if (!rows || rows.length < 2) continue;
-        let headerIdx = -1; let colMap = { question: -1, answer: -1, type: -1, options: [] };
-        for (let i = 0; i < Math.min(rows.length, 30); i++) { const row = rows[i]; if (!row) continue; const rowStr = row.map(c => String(c || "").trim().toLowerCase()); const rowFullText = rowStr.join(" "); if ((rowFullText.includes("câu hỏi") || rowFullText.includes("nội dung")) && rowFullText.includes("đáp án")) { headerIdx = i; for (let j = 0; j < rowStr.length; j++) { const cell = rowStr[j]; if (cell === "câu hỏi" || cell.includes("nội dung câu hỏi")) colMap.question = j; else if (cell === "đáp án" || cell.includes("trả lời")) colMap.answer = j; else if (cell.includes("loại câu hỏi") || cell === "loại" || cell === "type") colMap.type = j; else if (cell.includes("phương án") || cell.includes("lựa chọn") || cell.includes("option") || /^[a-f]$/.test(cell) || /^đáp án [a-f]$/.test(cell)) colMap.options.push(j); } break; } }
-        if (headerIdx === -1 || colMap.question === -1 || colMap.answer === -1 || colMap.options.length === 0) continue;
-        for (let i = headerIdx + 1; i < rows.length; i++) { const row = rows[i]; if (!row) continue; const qText = String(row[colMap.question] || "").trim(); if (!qText) continue; let qType = 'single'; let typeRaw = colMap.type !== -1 ? String(row[colMap.type] || "").toUpperCase() : ""; if (typeRaw.includes('MC') || typeRaw.includes('MA')) qType = 'multiple'; else if (typeRaw.includes('SC') || typeRaw.includes('SA')) qType = 'single'; const opts = []; colMap.options.forEach(colIdx => { const optVal = String(row[colIdx] || "").trim(); if (optVal !== "") opts.push(optVal); }); if (opts.length === 0) continue; let ansRaw = String(row[colMap.answer] || "").trim().toUpperCase(); let ansIdx = []; const ansParts = ansRaw.split(/[,;]+/).map(s => s.trim()).filter(s => s); ansParts.forEach(part => { if (/^\d+$/.test(part)) { const idx = parseInt(part) - 1; if (idx >= 0 && idx < opts.length) ansIdx.push(idx); } else if (/^[A-Z]$/.test(part)) { const idx = part.charCodeAt(0) - 65; if (idx >= 0 && idx < opts.length) ansIdx.push(idx); } }); if (qType === 'single' && ansIdx.length > 1) qType = 'multiple'; if (ansIdx.length === 0) continue; qList.push({ text: qText, options: opts, correctIndices: ansIdx, type: qType }); }
+function normalizeHeaderText(text) {
+    if (!text) return "";
+    return removeAccents(String(text))
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .trim();
+}
+
+const EXCEL_KEYWORDS = {
+    question: ['cauhoi', 'noidung', 'question', 'ques', 'q', 'content', 'noidungcauhoi'],
+    answer: ['dapan', 'traloi', 'answer', 'ans', 'a', 'key', 'result', 'dung', 'correct', 'dapandung', 'da'],
+    type: ['loai', 'type', 'dang', 'loaicauhoi'],
+    options: ['phuongan', 'luachon', 'option', 'choice', 'lua', 'phuong', 'traloi']
+};
+
+function detectExcelHeaders(rows) {
+    let headerIdx = -1;
+    let colMap = { question: -1, answer: -1, type: -1, options: [], allHeaders: [] };
+
+    // --- GIAI ĐOẠN 1: KHỚP TỪ KHÓA NGUYÊN BẢN (STRICT) ---
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        const row = rows[i];
+        if (!row || row.length < 2) continue;
+        const rowStr = row.map(c => String(c || "").trim().toLowerCase());
+        const rowFullText = rowStr.join(" ");
+        
+        // Ưu tiên logic nguyên bản: Phải có cả "câu hỏi" (hoặc nội dung) và "đáp án"
+        if ((rowFullText.includes("câu hỏi") || rowFullText.includes("nội dung")) && rowFullText.includes("đáp án")) {
+            headerIdx = i;
+            colMap.allHeaders = row.map(c => String(c || "").trim());
+            for (let j = 0; j < rowStr.length; j++) {
+                const cell = rowStr[j];
+                if (cell === "câu hỏi" || cell.includes("nội dung câu hỏi")) colMap.question = j;
+                else if (cell === "đáp án" || cell.includes("trả lời")) colMap.answer = j;
+                else if (cell.includes("loại câu hỏi") || cell === "loại" || cell === "type") colMap.type = j;
+                else if (cell.includes("phương án") || cell.includes("lựa chọn") || cell.includes("option") || /^[a-f]$/.test(cell) || /^đáp án [a-f]$/.test(cell)) {
+                    colMap.options.push(j);
+                }
+            }
+            if (colMap.question !== -1 && colMap.answer !== -1) return { headerIdx, colMap };
+        }
     }
-    if (qList.length === 0) throw new Error("Không nhận diện được câu hỏi hợp lệ nào."); return qList;
+
+    // --- GIAI ĐOẠN 2: KHỚP TỪ KHÓA CHUẨN HÓA (FUZZY) ---
+    // (Nếu GĐ1 thất bại hoặc thiếu cột chính)
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        const row = rows[i];
+        if (!row) continue;
+        const normalizedRow = row.map(c => normalizeHeaderText(c));
+        const rowFullText = normalizedRow.join("");
+        
+        if (EXCEL_KEYWORDS.question.some(k => rowFullText.includes(k)) && EXCEL_KEYWORDS.answer.some(k => rowFullText.includes(k))) {
+            headerIdx = i;
+            colMap.allHeaders = row.map(c => String(c || "").trim());
+            colMap.options = []; // Reset options để tìm theo kiểu fuzzy
+            
+            for (let j = 0; j < normalizedRow.length; j++) {
+                const cell = normalizedRow[j];
+                if (!cell) continue;
+                if (EXCEL_KEYWORDS.question.some(k => cell === k || (cell.includes(k) && cell.length < k.length + 3))) colMap.question = j;
+                else if (EXCEL_KEYWORDS.answer.some(k => cell === k || (cell.includes(k) && cell.length < k.length + 3))) colMap.answer = j;
+                else if (EXCEL_KEYWORDS.type.some(k => cell === k)) colMap.type = j;
+                else if (EXCEL_KEYWORDS.options.some(k => cell.includes(k)) || /^[a-f]$/.test(cell) || /^dapan[a-f]$/.test(cell)) {
+                    colMap.options.push(j);
+                }
+            }
+            if (colMap.question !== -1 && colMap.answer !== -1) return { headerIdx, colMap };
+        }
+    }
+
+    // --- GIAI ĐOẠN 3: PHÂN TÍCH CẤU TRÚC DỮ LIỆU (HEURISTICS) ---
+    // Áp dụng khi không tìm thấy dòng tiêu đề rõ ràng
+    const scanRows = rows.slice(0, 50).filter(r => r && r.length > 1);
+    if (scanRows.length > 2) { // Cần ít nhất 3 dòng dữ liệu để phân tích
+        const colCount = Math.max(...scanRows.map(r => r.length));
+        const colStats = Array.from({ length: colCount }, () => ({ avgLen: 0, ansScore: 0, optScore: 0, emptyCount: 0 }));
+
+        scanRows.forEach(row => {
+            for (let j = 0; j < colCount; j++) {
+                const val = String(row[j] || "").trim();
+                if (!val) { colStats[j].emptyCount++; continue; }
+                colStats[j].avgLen += val.length;
+                // Điểm đáp án: ngắn, thường là A-F hoặc 1-6, hoặc chuỗi số/chữ cách nhau bởi dấu phẩy (1,2 hoặc A,B)
+                if (/^[A-Fa-f1-6]([ ,;]+[A-Fa-f1-6])*$/.test(val)) colStats[j].ansScore++;
+                // Điểm phương án: độ dài vừa phải
+                if (val.length > 0 && val.length < 200) colStats[j].optScore++;
+            }
+        });
+
+        colStats.forEach(s => s.avgLen /= scanRows.length);
+
+        // Đoán cột Câu hỏi: Cột có độ dài trung bình lớn nhất (thường > 20 ký tự)
+        let bestQ = -1, maxLen = 15; 
+        colStats.forEach((s, idx) => { if (s.avgLen > maxLen) { maxLen = s.avgLen; bestQ = idx; } });
+
+        // Đoán cột Đáp án: Cột có nhiều ký tự đơn nhất, không phải cột câu hỏi
+        let bestA = -1, maxAns = scanRows.length * 0.4; // Ít nhất 40% dòng phải khớp định dạng đáp án
+        colStats.forEach((s, idx) => { if (idx !== bestQ && s.ansScore > maxAns) { maxAns = s.ansScore; bestA = idx; } });
+
+        if (bestQ !== -1 && bestA !== -1) {
+            colMap.question = bestQ;
+            colMap.answer = bestA;
+            headerIdx = -1; 
+            colMap.options = [];
+            colStats.forEach((s, idx) => {
+                if (idx !== bestQ && idx !== bestA && s.emptyCount < scanRows.length * 0.5) {
+                    colMap.options.push(idx);
+                }
+            });
+            // Nếu tìm thấy ít nhất 2 cột phương án thì tự tin tự động nạp
+            if (colMap.options.length >= 2) return { headerIdx, colMap };
+        }
+    }
+
+    return { headerIdx: -1, colMap: { question: -1, answer: -1, type: -1, options: [] } };
+}
+
+function extractQuestionsFromRows(rows, colMap, headerIdx) {
+    const qList = [];
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row[colMap.question]) continue;
+
+        const qText = String(row[colMap.question]).trim();
+        if (!qText) continue;
+
+        let qType = 'single';
+        if (colMap.type !== -1) {
+            const typeRaw = String(row[colMap.type] || "").toUpperCase();
+            if (typeRaw.includes('MC') || typeRaw.includes('MA')) qType = 'multiple';
+        }
+
+        const opts = [];
+        colMap.options.forEach(colIdx => {
+            const optVal = String(row[colIdx] || "").trim();
+            if (optVal !== "") opts.push(optVal);
+        });
+
+        if (opts.length === 0) continue;
+
+        let ansRaw = String(row[colMap.answer] || "").trim().toUpperCase();
+        let ansIdx = [];
+        const ansParts = ansRaw.split(/[,;|\s]+/).map(s => s.trim()).filter(s => s);
+        
+        ansParts.forEach(part => {
+            if (/^\d+$/.test(part)) {
+                const idx = parseInt(part) - 1;
+                if (idx >= 0 && idx < opts.length) ansIdx.push(idx);
+            } else if (/^[A-Z]$/.test(part)) {
+                const idx = part.charCodeAt(0) - 65;
+                if (idx >= 0 && idx < opts.length) ansIdx.push(idx);
+            }
+        });
+
+        if (qType === 'single' && ansIdx.length > 1) qType = 'multiple';
+        if (ansIdx.length === 0) continue;
+
+        qList.push({ text: qText, options: opts, correctIndices: ansIdx, type: qType });
+    }
+    return qList;
+}
+
+function showExcelMappingModal(rows, fileName, sheetName) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('excelMappingModal');
+        const previewArea = document.getElementById('excelPreviewTable');
+        const selQuestion = document.getElementById('mapColQuestion');
+        const selAnswer = document.getElementById('mapColAnswer');
+        const selType = document.getElementById('mapColType');
+        const optContainer = document.getElementById('mapColOptionsContainer');
+        const confirmBtn = document.getElementById('confirmExcelMappingBtn');
+        const cancelBtn = document.getElementById('cancelExcelMappingBtn');
+        const closeBtn = document.getElementById('closeExcelMappingBtn');
+        const modalDesc = modal?.querySelector('p.text-xs');
+
+        if (!modal || !rows.length) return resolve(null);
+
+        // Hiển thị thông tin file và sheet
+        if (modalDesc) modalDesc.innerHTML = `File: <b>${fileName}</b> | Sheet: <span class="text-indigo-600 font-bold">${sheetName}</span><br>Vui lòng gán cột thủ công cho sheet này.`;
+
+        // Xác định số cột thực tế (quét 5 dòng đầu)
+        const maxCols = Math.max(...rows.slice(0, 5).map(r => r.length));
+        const allColIndices = Array.from({ length: maxCols }, (_, i) => i);
+        
+        // Preview 3 dòng đầu
+        let tableHtml = `<table class="min-w-full text-[10px] border"><thead><tr class="bg-gray-100">`;
+        allColIndices.forEach(idx => tableHtml += `<th class="border p-1">Cột ${idx + 1}</th>`);
+        tableHtml += `</tr></thead><tbody>`;
+        rows.slice(0, 3).forEach(row => {
+            tableHtml += `<tr>`;
+            allColIndices.forEach(idx => tableHtml += `<td class="border p-1 truncate max-w-[100px]">${escapeHtml(row[idx] || "")}</td>`);
+            tableHtml += `</tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+        previewArea.innerHTML = tableHtml;
+
+        // Điền Dropdowns (Lấy text từ dòng đầu tiên làm gợi ý nếu có)
+        const firstRow = rows[0] || [];
+        const colOptions = allColIndices.map(idx => {
+            const val = String(firstRow[idx] || "").trim();
+            return `<option value="${idx}">Cột ${idx+1}${val ? `: ${val.substring(0,20)}` : ''}</option>`;
+        }).join('');
+
+        selQuestion.innerHTML = colOptions;
+        selAnswer.innerHTML = colOptions;
+        selType.innerHTML = `<option value="-1">-- Không có / Tự động --</option>` + colOptions;
+        
+        optContainer.innerHTML = allColIndices.map(idx => {
+            const val = String(firstRow[idx] || "").trim();
+            return `
+                <label class="flex items-center gap-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded cursor-pointer text-xs">
+                    <input type="checkbox" class="col-opt-check" value="${idx}">
+                    <span class="truncate">Cột ${idx+1}${val ? `: ${val.substring(0,15)}` : ''}</span>
+                </label>
+            `;
+        }).join('');
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        confirmBtn.onclick = () => {
+            const colMap = {
+                question: parseInt(selQuestion.value),
+                answer: parseInt(selAnswer.value),
+                type: parseInt(selType.value),
+                options: Array.from(modal.querySelectorAll('.col-opt-check:checked')).map(cb => parseInt(cb.value))
+            };
+            if (colMap.options.length === 0) { showToast("Vui lòng chọn ít nhất 1 cột phương án!"); return; }
+            cleanup();
+            resolve({ colMap, headerIdx: 0 }); 
+        };
+
+        cancelBtn.onclick = closeBtn.onclick = () => { cleanup(); resolve(null); };
+    });
 }
 
 async function uploadAndSaveFile(file) {
     showLoading(true, "Đang đọc file Excel...");
     try {
-        const data = await new Promise((res, rej) => { const reader = new FileReader(); reader.onload = e => res(new Uint8Array(e.target.result)); reader.onerror = rej; reader.readAsArrayBuffer(file); });
-        const parsed = parseExcelToQuestions(data); showLoading(false);
-        showPrompt("Nhập tên bộ câu hỏi:", file.name.replace(/\.(xlsx|xls)$/i, ''), async (name) => { if (!name) { showToast("Đã hủy lưu."); return; } showLoading(true, "Đang lưu..."); try { await saveBank(name, parsed); await refreshBankDropdown(); const banks = await getAllBanks(); await loadBankById(banks[banks.length - 1].id); if (document.getElementById('uploadStatus')) document.getElementById('uploadStatus').innerHTML = `✅ Đã lưu bộ "${name}" với ${parsed.length} câu.`; showToast(`Đã tải bộ "${name}"`); } catch (err) { if (document.getElementById('uploadStatus')) document.getElementById('uploadStatus').innerHTML = `❌ ${err.message}`; showToast(err.message); } finally { showLoading(false); } });
-    } catch (err) { showLoading(false); if (document.getElementById('uploadStatus')) document.getElementById('uploadStatus').innerHTML = `❌ ${err.message}`; showToast(err.message); }
+        const dataBuffer = await new Promise((res, rej) => {
+            const reader = new FileReader();
+            reader.onload = e => res(new Uint8Array(e.target.result));
+            reader.onerror = rej;
+            reader.readAsArrayBuffer(file);
+        });
+
+        const wb = XLSX.read(dataBuffer, { type: 'array' });
+        let finalQuestions = [];
+
+        for (const sheetName of wb.SheetNames) {
+            const sheet = wb.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            if (!rows || rows.length < 2) continue;
+
+            let { headerIdx, colMap } = detectExcelHeaders(rows);
+
+            // SỬA ĐỔI QUAN TRỌNG: Chỉ hiện bảng ánh xạ nếu THỰC SỰ không tìm thấy cột Câu hỏi hoặc Đáp án
+            // Bất kể có tìm thấy HeaderIdx hay không (hỗ trợ Heuristics)
+            if (colMap.question === -1 || colMap.answer === -1) {
+                showLoading(false);
+                const manual = await showExcelMappingModal(rows, file.name, sheetName);
+                if (manual) {
+                    headerIdx = manual.headerIdx;
+                    colMap = manual.colMap;
+                    showLoading(true, `Đang xử lý Sheet "${sheetName}"...`);
+                } else {
+                    continue; 
+                }
+            }
+
+            const parsed = extractQuestionsFromRows(rows, colMap, headerIdx);
+            finalQuestions = finalQuestions.concat(parsed);
+        }
+
+        showLoading(false);
+        if (finalQuestions.length === 0) {
+            showToast("❌ Không tìm thấy câu hỏi hợp lệ nào trong file.");
+            return;
+        }
+
+        showPrompt(`Nạp thành công ${finalQuestions.length} câu từ tất cả các sheet. Nhập tên bộ đề:`, file.name.replace(/\.(xlsx|xls|csv)$/i, ''), async (name) => {
+            if (!name) return;
+            showLoading(true, "Đang lưu bộ đề...");
+            try {
+                await saveBank(name, finalQuestions);
+                await refreshBankDropdown();
+                const banks = await getAllBanks();
+                await loadBankById(banks[banks.length - 1].id);
+                showToast(`✅ Đã lưu bộ đề: ${name}`);
+            } catch (err) {
+                showToast("Lỗi: " + err.message);
+            } finally {
+                showLoading(false);
+            }
+        });
+    } catch (err) {
+        showLoading(false);
+        showToast("❌ Lỗi: " + err.message);
+    }
 }
 
 async function refreshBankDropdown() { const bankSelect = document.getElementById('bankSelect'); const banks = await getAllBanks(); if (bankSelect) { bankSelect.innerHTML = '<option value="">-- Chọn bộ câu hỏi --</option>'; banks.forEach(b => { const opt = document.createElement('option'); opt.value = b.id; opt.textContent = `${b.name} (${b.questions.length} câu)`; bankSelect.appendChild(opt); }); if (currentBankId) bankSelect.value = currentBankId; } }
@@ -1014,9 +1299,15 @@ function renderQuestionGrid() {
     const questionGrid = document.getElementById('questionGrid'); if (!questionGrid) return;
     if (!currentQuestions.length) { questionGrid.innerHTML = '<div class="text-gray-400">Chưa có dữ liệu</div>'; return; }
     let html = ''; for (let i = 0; i < currentQuestions.length; i++) { 
-        let bg = 'bg-blue-200 text-blue-500'; 
-        if (userAnswers[i]?.length > 0) bg = 'bg-blue-500 text-white'; 
-        if (flagged[i]) bg = 'bg-yellow-400 text-white'; 
+        let bg = 'bg-blue-50 text-blue-300'; // Default
+        if (submitted) {
+            if (userAnswers[i]?.length === 0) bg = 'bg-gray-100 text-gray-400'; // Chưa làm
+            else if (scoreDetails[i]?.correct) bg = 'bg-green-500 text-white'; // Đúng
+            else bg = 'bg-red-500 text-white'; // Sai
+        } else {
+            if (userAnswers[i]?.length > 0) bg = 'bg-blue-600 text-white'; 
+            if (flagged[i]) bg = 'bg-yellow-400 text-white'; 
+        }
         html += `<div class="question-grid-item w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold ${bg} shadow-sm cursor-pointer hover:scale-105 transition-all" data-qidx="${i}">${i + 1}</div>`; 
     } questionGrid.innerHTML = html;
     document.querySelectorAll('.question-grid-item').forEach(el => { el.addEventListener('click', () => { 
@@ -1057,6 +1348,10 @@ function initExam(questionsArray, timeMinutes) {
         const pauseResumeBtn = document.getElementById('pauseResumeBtn'); if (pauseResumeBtn) pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng';
         const pauseResumeBtnHeader = document.getElementById('pauseResumeBtnHeader'); if (pauseResumeBtnHeader) pauseResumeBtnHeader.innerHTML = '<i class="fas fa-pause"></i>';
         updateProgress(); initLazyRender();
+        document.getElementById('questionsContainer')?.classList.remove('hidden');
+        document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+        document.getElementById('bottomActions')?.classList.remove('hidden');
+        document.getElementById('questionGridPanel')?.classList.add('hidden');
         const resultPanel = document.getElementById('resultPanel'); if (resultPanel) resultPanel.classList.add('hidden');
         const setupArea = document.getElementById('setupArea'); if (setupArea) setupArea.classList.add('hidden');
         const progressArea = document.getElementById('progressArea'); if (progressArea) progressArea.classList.remove('hidden');
@@ -1088,6 +1383,7 @@ function submitExam() {
             const wrongIndices = [], wrongTexts = []; for (let i = 0; i < currentQuestions.length; i++) { if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { wrongIndices.push(i); wrongTexts.push(currentQuestions[i].text); } }
             if (currentBankId) { await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); }
             const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.add('hidden');
+            renderQuestionGrid();
             showToast("Đã lưu kết quả."); clearProgress();
         } catch (err) { console.error(err); showToast("Lỗi nộp bài!"); }
     });
@@ -1192,8 +1488,46 @@ async function restoreProgress() {
         const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return false; }
         masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
         const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
-        if (saved.submitted) { currentQuestions = [...masterQuestions]; userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); flagged = saved.flagged || Array(currentQuestions.length).fill(false); submitted = true; examActive = false; isPaused = false; timeRemainingSeconds = 0; updateProgress(); initLazyRender(); showToast(`♻️ Đã khôi phục phiên làm bài: ${bank.name}`); }
-        else if (saved.examActive) { currentQuestions = [...masterQuestions]; userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); flagged = saved.flagged || Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = saved.isPaused || false; timeRemainingSeconds = saved.timeRemainingSeconds || 0; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; showToast(`♻️ Đã khôi phục bài thi đang làm dở: ${bank.name}`); }
+        if (saved.submitted) { 
+            currentQuestions = [...masterQuestions]; 
+            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+            submitted = true; examActive = false; isPaused = false; 
+            timeRemainingSeconds = 0; 
+            updateProgress(); 
+            initLazyRender(); 
+            document.getElementById('questionsContainer')?.classList.remove('hidden');
+            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+            const evalRes = evaluateAll();
+            scoreDetails = evalRes.details;
+            const resultPanel = document.getElementById('resultPanel');
+            if (resultPanel) {
+                const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
+                const resultContent = document.getElementById('resultContent');
+                if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p></div>`;
+                resultPanel.classList.remove('hidden');
+            }
+            renderQuestionGrid();
+            showToast(`♻️ Đã khôi phục phiên làm bài: ${bank.name}`); 
+        }
+        else if (saved.examActive) { 
+            currentQuestions = [...masterQuestions]; 
+            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+            submitted = false; examActive = true; isPaused = saved.isPaused || false; 
+            timeRemainingSeconds = saved.timeRemainingSeconds || 0; 
+            const btn = document.getElementById('pauseResumeBtn'); 
+            if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; 
+            updateProgress(); initLazyRender(); 
+            document.getElementById('questionsContainer')?.classList.remove('hidden');
+            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+            document.getElementById('progressArea')?.classList.remove('hidden');
+            document.getElementById('setupArea')?.classList.add('hidden');
+            renderQuestionGrid();
+            if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); 
+            if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; 
+            showToast(`♻️ Đã khôi phục bài thi đang làm dở: ${bank.name}`); 
+        }
         else { return false; }
         return true;
     } catch (e) { clearProgress(); return false; }
@@ -1273,7 +1607,13 @@ async function initGIA() {
         document.getElementById('reviewWrongMainBtn')?.addEventListener('click', async () => { const history = await getAllHistory(); if (history.length === 0) { showToast("Chưa có lịch sử để ôn tập."); return; } const currentBankWrongTexts = new Set(); for (const h of history) { if (h.bankId === currentBankId && h.wrongQuestionsText) { h.wrongQuestionsText.forEach(txt => currentBankWrongTexts.add(txt)); } } if (currentBankWrongTexts.size === 0) { showToast("Không có câu sai nào trong bộ hiện tại."); return; } const wrongQuestions = masterQuestions.filter(q => currentBankWrongTexts.has(q.text)); if (wrongQuestions.length === 0) { showToast("Không tìm thấy câu hỏi tương ứng."); return; } initExam(wrongQuestions, parseInt(document.getElementById('timeMinutes')?.value) || 30); showToast(`Đã tạo bài ôn tập với ${wrongQuestions.length} câu sai.`); });
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => { if (!submitted) { showToast("Hãy nộp bài trước."); return; } showLoading(true, "Đang chuẩn bị báo cáo..."); try { const correctCount = scoreDetails.filter(d => d.correct).length; const percent = (correctCount / currentQuestions.length * 100).toFixed(1); const canvasChart = document.createElement('canvas'); canvasChart.width = 400; canvasChart.height = 200; const ctx = canvasChart.getContext('2d'); if (!ctx) return; new Chart(ctx, { type: 'doughnut', data: { labels: ['Đúng', 'Sai'], datasets: [{ data: [correctCount, currentQuestions.length - correctCount], backgroundColor: ['#22c55e', '#ef4444'] }] }, options: { animation: false, responsive: false, plugins: { legend: { position: 'top' } } } }); const chartImg = canvasChart.toDataURL(); let printWindow = window.open('', '_blank'); if (!printWindow) return; let html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo kết quả thi<\/title><style>body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; line-height: 1.5; } h1 { color: #1e40af; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; } th, td { border: 1px solid #ccc; padding: 10px; text-align: left; } th { background-color: #f2f2f2; } .correct { color: #166534; font-weight: bold; } .wrong { color: #991b1b; font-weight: bold; } img { max-width: 300px; margin-bottom: 20px; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; } }<\/style><\/head><body><h1>Báo cáo kết quả thi<\/h1><p><strong>Bộ câu hỏi:<\/strong> ${currentBankName}<\/p><p><strong>Ngày thi:<\/strong> ${new Date().toLocaleString()}<\/p><p><strong>Điểm số:<\/strong> ${correctCount}\/${currentQuestions.length} (${percent}%)<\/p><img src="${chartImg}" alt="Biểu đồ kết quả" \/><hr\/><h3>Chi tiết từng câu hỏi<\/h3><table><thead><tr><th style="width:5%">STT<\/th><th style="width:40%">Nội dung<\/th><th style="width:25%">Đáp án đã chọn<\/th><th style="width:20%">Đáp án đúng<\/th><th style="width:10%">Kết quả<\/th><\/tr><\/thead><tbody>`; for (let i = 0; i < currentQuestions.length; i++) { const q = currentQuestions[i]; const userAns = userAnswers[i] || []; const userText = userAns.length ? userAns.map(a => q.options[a]).join('<br>') : '(Chưa trả lời)'; const correctText = q.correctIndices.map(i => q.options[i]).join('<br>'); const status = scoreDetails[i].correct ? 'Đúng' : (userAns.length ? 'Sai' : 'Chưa trả lời'); const statusClass = scoreDetails[i].correct ? 'correct' : 'wrong'; html += `<tr><td>${i + 1}<\/td><td>${escapeHtml(q.text)}<\/td><td>${userText}<\/td><td>${correctText}<\/td><td class="${statusClass}">${status}<\/td><\/tr>`; } html += `<\/tbody><\/table><\/body><\/html>`; printWindow.document.open(); printWindow.document.write(html); printWindow.document.close(); setTimeout(() => { showLoading(false); printWindow.print(); }, 500); } catch (e) { console.error(e); showToast("Lỗi xuất báo cáo: " + e.message); showLoading(false); } });
         document.getElementById('clearHistoryBtn')?.addEventListener('click', () => { showConfirm("Xóa toàn bộ lịch sử?", async (yes) => { if (!yes) return; await clearAllHistory(); showToast("Đã xóa lịch sử."); document.getElementById('statsModal')?.classList.add('hidden'); }); });
-        document.getElementById('aiSettingsBtn')?.addEventListener('click', () => { const input = document.getElementById('geminiApiKeyInput'); if (input) input.value = localStorage.getItem('gemini_api_key') || ''; const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); } });
+        document.getElementById('aiSettingsBtn')?.addEventListener('click', () => {
+            document.getElementById('settingsDropdown')?.classList.remove('show');
+            const input = document.getElementById('geminiApiKeyInput');
+            if (input) input.value = localStorage.getItem('gemini_api_key') || '';
+            const modal = document.getElementById('aiSettingsModal');
+            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+        });
         document.getElementById('closeAiSettingsBtn')?.addEventListener('click', () => { const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } });
         document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => { const input = document.getElementById('geminiApiKeyInput'); const key = input?.value.trim(); if (key) { localStorage.setItem('gemini_api_key', key); showToast('✅ Đã lưu API Key!'); } else { localStorage.removeItem('gemini_api_key'); showToast('Đã xoá API Key!'); } const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } updateApiKeyBadge(); });
         document.getElementById('checkModelsBtn')?.addEventListener('click', checkAvailableModels);
@@ -1715,6 +2055,7 @@ async function initGIA() {
 
         // Data Center Events
         document.getElementById('dataCenterBtn')?.addEventListener('click', () => {
+            document.getElementById('settingsDropdown')?.classList.remove('show');
             document.getElementById('dataCenterModal')?.classList.remove('hidden');
             document.getElementById('dataCenterModal')?.classList.add('flex');
         });
