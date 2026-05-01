@@ -21,6 +21,7 @@ const BATCH_SIZE = 20;
 let filteredIndices = [];
 let scrollObserver = null;
 let currentFileData = null, currentMimeType = null;
+let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false'; // Default true
 
 // ======================== VOICE ENGINE (NEW) ========================
 let vietnameseVoice = null;
@@ -96,6 +97,16 @@ const FontSizeManager = {
             localStorage.setItem('haianh_font_scale', this.scale);
         });
 
+        const hintToggle = document.getElementById('hintToggle');
+        if (hintToggle) {
+            hintToggle.checked = hintEnabled;
+            hintToggle.addEventListener('change', (e) => {
+                hintEnabled = e.target.checked;
+                localStorage.setItem('haianh_hint_enabled', hintEnabled);
+                this.applyHintVisibility();
+            });
+        }
+
         document.addEventListener('click', (e) => {
             if (dropdown && !dropdown.contains(e.target) && !toggleBtn?.contains(e.target)) {
                 dropdown.classList.remove('show');
@@ -114,6 +125,13 @@ const FontSizeManager = {
 
         if (valDisplay) valDisplay.innerText = `${this.scale}%`;
         if (slider) slider.value = this.scale;
+    },
+
+    applyHintVisibility() {
+        document.querySelectorAll('.hint-btn').forEach(btn => {
+            if (hintEnabled) btn.classList.remove('hidden');
+            else btn.classList.add('hidden');
+        });
     }
 };
 
@@ -490,7 +508,7 @@ function generateQuestionHTML(idx, rawSearch = "") {
         </div>
         <div class="flex items-center gap-3 mt-5 pt-4 border-t border-gray-50 dark:border-slate-800">
             ${aiExplainBtn}
-            <button class="hint-btn text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 transition font-medium" data-qidx="${idx}"><i class="fas fa-lightbulb"></i> Gợi ý</button>
+            <button class="hint-btn text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 transition font-medium ${hintEnabled ? '' : 'hidden'}" data-qidx="${idx}"><i class="fas fa-lightbulb"></i> Gợi ý</button>
         </div>
         ${feedback}${aiExplainBox}
     </div>`;
@@ -994,7 +1012,12 @@ function setupScrollObserver(rawSearch) { const loadMoreTrigger = document.getEl
 function renderQuestionGrid() {
     const questionGrid = document.getElementById('questionGrid'); if (!questionGrid) return;
     if (!currentQuestions.length) { questionGrid.innerHTML = '<div class="text-gray-400">Chưa có dữ liệu</div>'; return; }
-    let html = ''; for (let i = 0; i < currentQuestions.length; i++) { let bg = 'bg-blue-200'; if (userAnswers[i]?.length > 0) bg = 'bg-green-500'; if (flagged[i]) bg = 'bg-yellow-400'; html += `<div class="question-grid-item w-10 h-10 rounded-md flex items-center justify-center text-xs font-bold text-white ${bg} shadow-sm cursor-pointer hover:opacity-80" data-qidx="${i}">${i + 1}</div>`; } questionGrid.innerHTML = html;
+    let html = ''; for (let i = 0; i < currentQuestions.length; i++) { 
+        let bg = 'bg-blue-200 text-blue-500'; 
+        if (userAnswers[i]?.length > 0) bg = 'bg-blue-500 text-white'; 
+        if (flagged[i]) bg = 'bg-yellow-400 text-white'; 
+        html += `<div class="question-grid-item w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold ${bg} shadow-sm cursor-pointer hover:scale-105 transition-all" data-qidx="${i}">${i + 1}</div>`; 
+    } questionGrid.innerHTML = html;
     document.querySelectorAll('.question-grid-item').forEach(el => { el.addEventListener('click', () => { 
         const idx = parseInt(el.dataset.qidx); 
         const searchInput = document.getElementById('searchInput'); 
@@ -1020,6 +1043,8 @@ function renderQuestionGrid() {
         } else { 
             scrollToQuestion(`question-${idx}`); 
         } 
+        document.getElementById('questionsContainer')?.classList.remove('hidden');
+        document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
         document.getElementById('questionGridPanel')?.classList.add('hidden'); 
     }); });
 }
@@ -1172,8 +1197,39 @@ async function initGIA() {
         document.getElementById('pauseResumeBtnHeader')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
-        document.getElementById('showGridBtn')?.addEventListener('click', () => { if (currentQuestions.length) { const panel = document.getElementById('questionGridPanel'); panel?.classList.toggle('hidden'); if (panel && !panel.classList.contains('hidden')) renderQuestionGrid(); } else showToast("Chưa có bài thi."); });
-        document.getElementById('showGridBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length) { const panel = document.getElementById('questionGridPanel'); panel?.classList.toggle('hidden'); if (panel && !panel.classList.contains('hidden')) renderQuestionGrid(); } else showToast("Chưa có bài thi."); });
+        const toggleGridView = () => {
+            if (currentQuestions.length) {
+                const panel = document.getElementById('questionGridPanel');
+                const container = document.getElementById('questionsContainer');
+                const trigger = document.getElementById('loadMoreTrigger');
+                if (!panel) return;
+
+                const isCurrentlyHidden = panel.classList.contains('hidden');
+                if (isCurrentlyHidden) {
+                    // Chuyển sang chế độ Tổng quan
+                    window.scrollTo(0, 0); // Reset cuộn về 0 trước
+                    panel.classList.remove('hidden');
+                    container?.classList.add('hidden');
+                    trigger?.classList.add('hidden');
+                    renderQuestionGrid();
+                    setTimeout(() => {
+                        const progressArea = document.getElementById('progressArea');
+                        if (progressArea) {
+                            window.scrollTo(0, progressArea.offsetTop);
+                        }
+                    }, 50);
+                } else {
+                    // Quay lại chế độ Câu hỏi
+                    panel.classList.add('hidden');
+                    container?.classList.remove('hidden');
+                    trigger?.classList.remove('hidden');
+                }
+            } else {
+                showToast("Chưa có bài thi.");
+            }
+        };
+        document.getElementById('showGridBtn')?.addEventListener('click', toggleGridView);
+        document.getElementById('showGridBtnHeader')?.addEventListener('click', toggleGridView);
         document.getElementById('goTopBtn')?.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
         document.getElementById('goBottomBtn')?.addEventListener('click', () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
         document.getElementById('reviewWrongBtn')?.addEventListener('click', () => { if (!submitted) showToast("Hãy nộp bài trước."); else { const wrongs = scoreDetails.filter(d => !d.correct).map(d => d.index); if (wrongs.length) { if (!document.getElementById(`question-${wrongs[0]}`)) { initLazyRender(() => { while (displayedCount <= wrongs[0] && displayedCount < filteredIndices.length) renderNextBatch(''); setTimeout(() => document.getElementById(`question-${wrongs[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100); }); } else { document.getElementById(`question-${wrongs[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } } });

@@ -97,7 +97,12 @@ body.dark .answer-wrong { background-color: #7f1d1d !important; border-left-colo
 .progress-bar { transition: width 0.3s ease; }
 .toast-notify { position: fixed; bottom: 20px; right: 20px; z-index: 60; background: #1f2937; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 90vw; }
 .sticky-nav { position: sticky; top: 0; z-index: 40; background: white; }
-.grid-responsive { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 48px)); gap: 8px; justify-content: start; }
+.grid-responsive { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); 
+    gap: 12px; 
+    justify-items: center; 
+}
 @media (max-width: 640px) { .container { padding-left: 12px; padding-right: 12px; } .sticky-nav { flex-direction: column; align-items: stretch; } }
 .wrong-table th, .wrong-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 body.dark .wrong-table th, body.dark .wrong-table td { border-color: #475569; }
@@ -312,11 +317,12 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
     top: 100%;
     margin-top: 0.75rem;
     width: 18rem;
+    max-width: calc(100vw - 1.5rem);
     background-color: white;
     border-radius: 1rem;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     border: 1px solid #f3f4f6;
-    z-index: 100;
+    z-index: 2000;
     overflow: hidden;
     transform: scale(0.95);
     opacity: 0;
