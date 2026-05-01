@@ -599,6 +599,10 @@ const VoiceTutor = {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
+        // KÍCH HOẠT MICRO NGAY LẬP TỨC (User Gesture) để trình duyệt hiện bảng xin quyền
+        this.stt.start(); 
+        setTimeout(() => { if (this.isCalling && this.stt.isListening) this.stt.stop(); }, 100);
+
         this.updateUI('speaking', 'Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?');
         SpeechManager.speak('Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?', 'voice-tutor', () => {
             this.startListening();
@@ -1737,6 +1741,12 @@ async function initGIA() {
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('endCallBtn')?.addEventListener('click', () => VoiceTutor.endCall());
+        document.getElementById('toggleMicBtn')?.addEventListener('click', () => {
+            if (VoiceTutor.isCalling) {
+                SpeechManager.stop();
+                VoiceTutor.startListening();
+            }
+        });
         const toggleGridView = () => {
             if (currentQuestions.length) {
                 const panel = document.getElementById('questionGridPanel');
