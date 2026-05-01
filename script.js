@@ -662,6 +662,21 @@ const VoiceTutor = {
         }
     },
 
+    async unlockMicrophone() {
+        try {
+            showLoading(true, "Đang yêu cầu quyền Micro...");
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+            showLoading(false);
+            showToast("✅ Đã cấp quyền Micro thành công! Bây giờ bạn có thể dùng Voice Chat.");
+            return true;
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ Lỗi Micro: " + err.message);
+            return false;
+        }
+    },
+
     startListening() {
         if (!this.isCalling) return;
         
@@ -2303,6 +2318,24 @@ async function initGIA() {
             }
         });
 
+        // Voice Chat Modal Events
+        document.getElementById('endCallBtn')?.addEventListener('pointerdown', (e) => { e.preventDefault(); VoiceTutor.endCall(); });
+        document.getElementById('toggleMicBtn')?.addEventListener('pointerdown', (e) => { 
+            e.preventDefault();
+            if (VoiceTutor.isCalling) {
+                SpeechManager.stop();
+                VoiceTutor.startListening();
+                document.getElementById('voiceInputContainer')?.classList.remove('hidden');
+            }
+        });
+        document.getElementById('sendVoiceTextBtn')?.addEventListener('pointerdown', (e) => { e.preventDefault(); VoiceTutor.handleTextSubmit(); });
+        document.getElementById('voiceTextInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                VoiceTutor.handleTextSubmit();
+            }
+        });
+
         document.getElementById('shareBankBtn')?.addEventListener('click', () => {
             const bankId = document.getElementById('bankSelect')?.value;
             if (!bankId) {
@@ -2311,6 +2344,8 @@ async function initGIA() {
             }
             exportSingleBank(bankId);
         });
+
+        document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
 
         attachGlobalEvents();
     } catch (e) { console.error("Lỗi Khởi tạo Hệ thống:", e); }

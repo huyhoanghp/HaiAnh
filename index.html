@@ -249,12 +249,30 @@
 <div id="aiSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
     <div id="aiSettingsModalContent" class="bg-white dark:bg-slate-900 rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
         <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Để sử dụng AI ở môi trường thật (Internet), bạn cần cung cấp API Key của Google Gemini.</p>
-        <input type="password" id="geminiApiKeyInput" placeholder="Nhập Google Gemini API Key..." class="w-full border rounded-lg p-2 mb-4 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:border-purple-500">
-        <div class="flex flex-wrap justify-end gap-3">
-            <button id="checkModelsBtn" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition"><i class="fas fa-list"></i> Kiểm tra Models</button>
-            <button id="closeAiSettingsBtn" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Đóng</button>
-            <button id="saveAiSettingsBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition">Lưu Key</button>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Cung cấp Gemini API Key để sử dụng tính năng Gia sư AI và Sinh đề tự động.</p>
+        
+        <div class="space-y-4 mb-6">
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">API Key</label>
+                <input type="password" id="geminiApiKeyInput" placeholder="Dán API Key tại đây..." class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+
+            <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                <p class="text-[11px] text-indigo-700 dark:text-indigo-300 mb-2 font-medium"><i class="fas fa-info-circle mr-1"></i> Nếu Voice Chat không hoạt động, hãy nhấn để cấp quyền Micro chủ động:</p>
+                <button id="unlockMicBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md">
+                    <i class="fas fa-microphone mr-2"></i> KIỂM TRA & MỞ KHÓA MICRO
+                </button>
+            </div>
+
+            <div class="text-[10px] text-gray-500 dark:text-slate-400 italic leading-relaxed">
+                * Mẹo: Nếu mở từ Zalo/Facebook, hãy nhấn dấu 3 chấm chọn "Mở bằng trình duyệt Chrome" để mic hoạt động tốt nhất.
+            </div>
+        </div>
+
+        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-100 dark:border-slate-800 pt-4">
+            <button id="checkModelsBtn" class="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-100 transition">Models</button>
+            <button id="closeAiSettingsBtn" class="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg text-xs font-bold transition">Đóng</button>
+            <button id="saveAiSettingsBtn" class="px-5 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-md transition">Lưu Cấu Hình</button>
         </div>
     </div>
 </div>
