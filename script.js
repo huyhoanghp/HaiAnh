@@ -144,8 +144,21 @@ const SpeechManager = {
     currentUtterance: null,
     pauseTimer: null,
     heartbeatInterval: null,
-    sessionId: 0, // ID phiên để tránh chồng lấn
+    sessionId: 0, 
     watchdogTimer: null,
+    onEndCallback: null,
+
+    speak(text, qIdx, onEnd = null) {
+        if (!text) return;
+        const sid = String(qIdx);
+        if (this.activeQIdx === sid && sid !== 'voice-tutor') {
+            if (this.isPaused) this.resume();
+            else this.pause();
+        } else {
+            this.onEndCallback = onEnd;
+            this.start(normalizeText(text), sid);
+        }
+    },
 
     init() {
         const savedRate = localStorage.getItem('voice_rate');
@@ -224,7 +237,11 @@ const SpeechManager = {
 
     play(session) {
         if (session !== this.sessionId || this.currentIdx >= this.queue.length || this.isPaused) {
-            if (this.currentIdx >= this.queue.length && session === this.sessionId) this.stop();
+            if (this.currentIdx >= this.queue.length && session === this.sessionId) {
+                const cb = this.onEndCallback;
+                this.stop();
+                if (cb) cb();
+            }
             return;
         }
 
@@ -300,6 +317,7 @@ const SpeechManager = {
         this.currentIdx = 0;
         this.isPaused = false;
         this.activeQIdx = null;
+        this.onEndCallback = null;
         this.updateUI();
     },
 
@@ -362,14 +380,7 @@ if (window.speechSynthesis.onvoiceschanged !== undefined) {
 initVoice();
 
 function speak(text, qIdx) {
-    if (!text) return;
-    const sid = String(qIdx);
-    if (SpeechManager.activeQIdx === sid) {
-        if (SpeechManager.isPaused) SpeechManager.resume();
-        else SpeechManager.pause();
-    } else {
-        SpeechManager.start(normalizeText(text), sid);
-    }
+    SpeechManager.speak(text, qIdx);
 }
 
 const AI_TEXT_CACHE = {};
@@ -597,10 +608,14 @@ const VoiceTutor = {
 
     startListening() {
         if (!this.isCalling) return;
+        if (!this.stt.recognition) {
+            this.updateUI('speaking', 'Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Hãy dùng Chrome hoặc Edge nhé!');
+            return;
+        }
         this.updateUI('listening', 'Hãy nói đi, tôi đang nghe...');
         this.stt.onResult = (text, isFinal) => {
             document.getElementById('voiceTranscript').innerText = text;
-            if (isFinal && text.trim().length > 2) {
+            if (isFinal && text.trim().length > 1) {
                 this.stt.stop();
                 this.askGemini(text);
             }
