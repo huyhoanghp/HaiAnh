@@ -1,9 +1,15 @@
-body { background-color: #f3f4f6; color: #111827; transition: all 0.2s; }
+:root {
+    --font-scale: 1;
+}
+body { background-color: #f3f4f6; color: #111827; transition: all 0.2s; font-size: 16px; }
 body.dark { background-color: #0f172a; color: #e2e8f0; }
 body.dark .bg-white, body.dark .bg-gray-50, body.dark .sticky-nav, body.dark .card-question { background-color: #1e293b !important; color: #e2e8f0 !important; border-color: #334155 !important; }
 body.dark .border-gray-200, body.dark .border-gray-100 { border-color: #334155 !important; }
 body.dark .bg-gray-100, body.dark .bg-gray-200 { background-color: #0f172a !important; }
 body.dark .text-gray-700, body.dark .text-gray-600, body.dark .text-gray-500, body.dark .text-gray-800, body.dark .text-black { color: #cbd5e1 !important; }
+body.dark .btn-primary { background: #2563eb !important; color: #ffffff !important; border: 1px solid #3b82f6 !important; }
+body.dark .btn-secondary { background: #d97706 !important; color: #ffffff !important; border: 1px solid #f59e0b !important; }
+body.dark .btn-ghost { background: #1e293b !important; color: #cbd5e1 !important; border: 1px solid #334155 !important; }
 body.dark input, body.dark select, body.dark textarea, body.dark .border { background-color: #0f172a !important; color: #e2e8f0 !important; border-color: #475569 !important; }
 
 /* Tăng độ tương phản cho chế độ sáng */
@@ -11,6 +17,11 @@ body.dark input, body.dark select, body.dark textarea, body.dark .border { backg
 .bg-gray-50 { background-color: #f8fafc !important; }
 .speak-toggle-btn { color: #1e40af !important; border-color: #bfdbfe !important; }
 .dark .speak-toggle-btn { color: #60a5fa !important; border-color: #1e3a8a !important; }
+
+/* Tăng cường hiển thị Toggle trong Dark Mode - Độ tương phản tuyệt đối */
+body.dark .peer + div { background-color: #334155 !important; border: 1.5px solid #475569 !important; }
+body.dark .peer:checked + div { background-color: #2563eb !important; border-color: #60a5fa !important; }
+body.dark .peer + div:after { background-color: #ffffff !important; box-shadow: 0 0 6px rgba(255,255,255,0.9) !important; }
 
 body.dark #resultContent { color: #e2e8f0; }
 body.dark #resultContent .bg-gray-50 { background-color: #1e293b !important; border: 1px solid #475569; }
@@ -21,8 +32,7 @@ body.dark mark { background-color: #b45309 !important; color: #fff !important; }
 
 body.dark #customModalContent, body.dark #aiSettingsModalContent, body.dark #aiGenModalContent { background-color: #1e293b; border-color: #475569; }
 body.dark #customModalText { color: #cbd5e1; }
-body.dark .btn-secondary { background-color: #334155; color: #e2e8f0; }
-body.dark .btn-secondary:hover { background-color: #475569; }
+body.dark #customModalText { color: #cbd5e1; }
 
 .ai-explanation-box { 
     background-color: #f5f3ff !important; 
@@ -35,6 +45,58 @@ body.dark .ai-explanation-box { background-color: #2e106540 !important; border-c
 body.dark .ai-explanation-box .ai-text-content { color: #e2e8f0 !important; }
 
 .card-question { transition: all 0.2s ease; overflow: visible !important; }
+.card-question .q-text-focus, 
+.card-question h3.q-text-focus,
+.card-question .q-text-focus *,
+[id^="q-text-"] { 
+    font-size: calc(1.125rem * var(--font-scale)) !important; 
+    line-height: 1.6 !important;
+    font-weight: 600 !important; 
+    color: #1e293b; 
+    transition: none !important; 
+    display: block;
+}
+body.dark .q-text-focus, body.dark [id^="q-text-"] { color: #f1f5f9 !important; }
+
+.option-input + span, .option-input + span * { 
+    font-size: calc(0.9375rem * var(--font-scale)) !important; 
+    line-height: 1.6 !important;
+    transition: none; 
+}
+
+.ai-text-content, .ai-text-content * { 
+    font-size: calc(0.9375rem * var(--font-scale)) !important; 
+    line-height: 1.7 !important; 
+}
+
+/* Custom Scrollbar cho danh sách file */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Font Size Slider Panel */
+.font-size-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    min-width: 200px;
+}
+body.dark .font-size-panel {
+    background: #1e293b;
+    border-color: #334155;
+}
+.font-range-input {
+    width: 100%;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
 .answer-correct { background-color: #dcfce7; border-left: 4px solid #22c55e; }
 .answer-wrong { background-color: #fee2e2; border-left: 4px solid #ef4444; }
 body.dark .answer-correct { background-color: #064e3b !important; border-left-color: #4ade80; }
@@ -42,7 +104,12 @@ body.dark .answer-wrong { background-color: #7f1d1d !important; border-left-colo
 .progress-bar { transition: width 0.3s ease; }
 .toast-notify { position: fixed; bottom: 20px; right: 20px; z-index: 60; background: #1f2937; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 90vw; }
 .sticky-nav { position: sticky; top: 0; z-index: 40; background: white; }
-.grid-responsive { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 48px)); gap: 8px; justify-content: start; }
+.grid-responsive { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); 
+    gap: 12px; 
+    justify-items: center; 
+}
 @media (max-width: 640px) { .container { padding-left: 12px; padding-right: 12px; } .sticky-nav { flex-direction: column; align-items: stretch; } }
 .wrong-table th, .wrong-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 body.dark .wrong-table th, body.dark .wrong-table td { border-color: #475569; }
@@ -114,6 +181,12 @@ body.dark .wrong-table th { background-color: #334155; }
 .dark .action-icon-btn { background: #1e293b; border-color: #334155; }
 .dark .action-icon-btn.primary { background: #1e3a8a; color: #60a5fa; }
 .dark .action-icon-btn.secondary { background: #78350f; color: #fbbf24; }
+.action-icon-btn.cancel { color: #e11d48; background: #fff1f2; border-color: #ffe4e6; }
+.dark .action-icon-btn.cancel { background: #4c051940; color: #fb7185; border-color: #e11d4840; }
+
+.btn-cancel { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; }
+.btn-cancel:hover { background: #ffe4e6; }
+.dark .btn-cancel { background: #4c051940; color: #fb7185; border-color: #e11d4840; }
 
 .header-actions-desktop { display: none !important; }
 
@@ -146,8 +219,14 @@ body.dark .wrong-table th { background-color: #334155; }
 /* Tăng độ rõ nét cho từng loại nút trong Light Mode */
 #openAiGenBtn { background-color: #e0e7ff !important; color: #3730a3 !important; border: 1px solid #c7d2fe !important; }
 #aiSettingsBtn { background-color: #f5f3ff !important; color: #701a75 !important; border: 1px solid #ddd6fe !important; }
+body.dark #aiSettingsBtn { background-color: #2e106540 !important; color: #a78bfa !important; border-color: #7c3aed40 !important; }
 
-.dark .btn-grid button { color: #f1f5f9 !important; background-color: transparent !important; }
+/* Nút Thi trong Chế độ tối */
+body.dark #startFullTestBtn { background-color: #059669 !important; color: #ffffff !important; border: 1px solid #10b981 !important; }
+body.dark #startRandomTestBtn { background-color: #7c3aed !important; color: #ffffff !important; border: 1px solid #8b5cf6 !important; }
+body.dark #reviewWrongMainBtn { background-color: #ea580c !important; color: #ffffff !important; border: 1px solid #f97316 !important; }
+
+body.dark .btn-grid button:hover { filter: brightness(1.1); }
 
 @media (max-width: 640px) {
     .btn-grid {
@@ -215,3 +294,299 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
 .ai-action-btn { @apply flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all; }
 .ai-action-btn-copy { @apply bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300; }
 .ai-action-btn-listen { @apply bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300; }
+
+/* Review Editor Styles */
+.ai-review-card {
+    @apply bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm transition-all;
+}
+.ai-review-card:hover {
+    @apply border-indigo-300 dark:border-indigo-600 shadow-md;
+}
+.q-edit-input {
+    @apply w-full bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all;
+}
+.opt-edit-row {
+    @apply flex items-center gap-3 p-2 rounded-lg transition-colors;
+}
+.opt-edit-row:hover {
+    @apply bg-gray-50 dark:bg-slate-900/50;
+}
+.opt-edit-checkbox {
+    @apply w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer;
+}
+.ai-fix-btn {
+    @apply p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold uppercase;
+}
+.ai-review-card .delete-btn {
+    @apply p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors;
+}
+
+/* AI Fix Chips */
+.fix-chip {
+    @apply px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 transition-all cursor-pointer hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30;
+}
+.fix-chip.active {
+    @apply bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none;
+}
+
+/* Settings Dropdown & Menu Items (Vanilla CSS for CDN compatibility) */
+#settingsDropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 0.75rem;
+    width: 18rem;
+    max-width: calc(100vw - 1.5rem);
+    background-color: white;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f3f4f6;
+    z-index: 2000;
+    overflow: hidden;
+    transform: scale(0.95);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: top right;
+}
+
+@media (max-width: 768px) {
+    #settingsDropdown {
+        position: fixed !important;
+        top: 6.5rem !important;
+        left: 50% !important;
+        right: auto !important;
+        width: 92vw !important;
+        max-width: 360px !important;
+        transform: translateX(-50%) scale(0.95) !important;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s ease;
+        transform-origin: top center;
+    }
+    #settingsDropdown.show {
+        transform: translateX(-50%) scale(1) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+}
+
+body.dark #settingsDropdown {
+    background-color: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+#settingsDropdown.show {
+    transform: scale(1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.875rem 1rem;
+    transition: all 0.2s;
+    border: none;
+    border-bottom: 1px solid #f8fafc;
+    background: transparent;
+    text-align: left;
+}
+
+body.dark .menu-item {
+    border-bottom-color: #334155;
+}
+
+.menu-item:last-child {
+    border-bottom: none;
+}
+
+.menu-item:hover {
+    background-color: #f5f3ff;
+}
+
+body.dark .menu-item:hover {
+    background-color: #334155;
+}
+
+.menu-item i {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background-color: #f8fafc;
+    font-size: 1.125rem;
+    transition: all 0.2s;
+}
+
+body.dark .menu-item i {
+    background-color: #0f172a;
+}
+
+.menu-item:hover i {
+    background-color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: scale(1.1);
+}
+
+body.dark .menu-item:hover i {
+    background-color: #1e293b;
+}
+
+#settingsToggleBtn.active {
+    background-color: #4f46e5 !important;
+    color: white !important;
+    border-color: #4f46e5 !important;
+    transform: rotate(90deg);
+}
+
+.font-range-input {
+    width: 100%;
+    height: 0.375rem;
+    background-color: #e2e8f0;
+    border-radius: 0.5rem;
+    appearance: none;
+    cursor: pointer;
+}
+
+body.dark .font-range-input {
+    background-color: #334155;
+}
+
+.font-range-input::-webkit-slider-thumb {
+    appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    background-color: #4f46e5;
+    border-radius: 50%;
+    cursor: pointer;
+}
+/* ======================== VOICE CALL UI ======================== */
+.voice-modal {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(15px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.voice-card {
+    background: linear-gradient(145deg, #ffffff, #f1f5f9);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.dark .voice-card {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Hiệu ứng sóng âm khi AI đang nói */
+.wave-container {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wave-bar {
+    width: 6px;
+    height: 10px;
+    background: #4f46e5;
+    border-radius: 4px;
+    animation: wave-animation 1.2s infinite ease-in-out;
+}
+
+.dark .wave-bar { background: #818cf8; }
+
+.wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes wave-animation {
+    0%, 100% { height: 10px; }
+    50% { height: 50px; }
+}
+
+/* Nút Mic Pulse khi người dùng đang nói */
+.mic-pulse {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mic-pulse::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: rgba(79, 70, 229, 0.4);
+    border-radius: 50%;
+    animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.voice-status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.voice-status-listening { background: #dcfce7; color: #166534; }
+.voice-status-speaking { background: #dbeafe; color: #1e40af; }
+.voice-status-thinking { background: #fef3c7; color: #92400e; }
+
+.dark .voice-status-listening { background: #064e3b; color: #34d399; }
+.dark .voice-status-speaking { background: #1e3a8a; color: #93c5fd; }
+.dark .voice-status-thinking { background: #78350f; color: #fbbf24; }
+
+/* Avatar Animation */
+.ai-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    color: white;
+    box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5);
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+}
+
+.ai-avatar.speaking {
+    animation: avatar-glow 2s infinite alternate ease-in-out;
+}
+
+@keyframes avatar-glow {
+    from { box-shadow: 0 0 10px #6366f1; }
+    to { box-shadow: 0 0 30px #a855f7; }
+}
+
+.ai-call-btn {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white !important;
+    border: none !important;
+    transition: all 0.3s;
+}
+
+.ai-call-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+}
