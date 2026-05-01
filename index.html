@@ -520,8 +520,13 @@
         <p class="text-gray-500 dark:text-slate-400 text-sm mb-6 text-center">Tôi đang lắng nghe, hãy hỏi tôi bất cứ điều gì!</p>
         
         <!-- Realtime Transcript -->
-        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[80px] mb-4 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32 flex items-center justify-center">
+        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[80px] mb-4 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32 flex flex-col items-center justify-center">
             <span id="voiceTranscript">"Đang kết nối với gia sư..."</span>
+            <div id="listeningDots" class="hidden flex gap-1 mt-2">
+                <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
+                <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+            </div>
         </div>
 
         <!-- Text Input Fallback -->
@@ -546,6 +551,6 @@
     </div>
 </div>
 
-<script src="script.js"></script>
+<script src="script.js?v=voice-fix-final-v2"></script>
 </body>
 </html>

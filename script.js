@@ -530,14 +530,13 @@ class SpeechToTextManager {
     }
 
     initRecognition() {
-        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return null;
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        if (!SpeechRecognition) return null;
         
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'vi-VN';
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognition.interimResults = true;
-
         recognition.onresult = (e) => {
             const transcript = Array.from(e.results).map(res => res[0].transcript).join('');
             if (this.onResult) this.onResult(transcript, e.results[0].isFinal);
@@ -627,18 +626,21 @@ const VoiceTutor = {
         const avatar = document.getElementById('aiAvatar');
         const wave = document.getElementById('aiWaveform');
         const pulse = document.getElementById('userMicPulse');
+        const dots = document.getElementById('listeningDots');
 
         if (text) transcript.innerText = text;
 
         badge.className = 'voice-status-badge';
         wave.classList.add('hidden');
         pulse.classList.add('hidden');
+        if (dots) dots.classList.add('hidden');
         avatar.classList.remove('speaking');
 
         if (state === 'listening') {
             badge.innerText = 'Đang lắng nghe...';
             badge.classList.add('voice-status-listening');
             pulse.classList.remove('hidden');
+            if (dots) dots.classList.remove('hidden');
         } else if (state === 'speaking') {
             badge.innerText = 'Gia sư đang nói...';
             badge.classList.add('voice-status-speaking');
@@ -693,8 +695,11 @@ const VoiceTutor = {
         }
         this.updateUI('listening', 'Hãy nói đi, tôi đang nghe...');
         this.stt.onResult = (text, isFinal) => {
+            if (!text) return;
             document.getElementById('voiceTranscript').innerText = text;
-            if (isFinal && text.trim().length > 1) {
+            
+            // Nếu là kết quả cuối cùng hoặc câu đủ dài
+            if (isFinal && text.trim().length > 2) {
                 this.stt.stop();
                 this.askGemini(text);
             }
