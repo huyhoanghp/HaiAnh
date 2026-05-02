@@ -251,21 +251,45 @@
         <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
         <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Cung cấp Gemini API Key để sử dụng tính năng Gia sư AI và Sinh đề tự động.</p>
         
-        <div class="space-y-4 mb-6">
+        <div class="space-y-3 mb-6">
             <div>
-                <label class="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">API Key</label>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">Gemini API Key</label>
                 <input type="password" id="geminiApiKeyInput" placeholder="Dán API Key tại đây..." class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
 
-            <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                <p class="text-[11px] text-indigo-700 dark:text-indigo-300 mb-2 font-medium"><i class="fas fa-info-circle mr-1"></i> Nếu Voice Chat không hoạt động, hãy nhấn để cấp quyền Micro chủ động:</p>
-                <button id="unlockMicBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md">
-                    <i class="fas fa-microphone mr-2"></i> KIỂM TRA & MỞ KHÓA MICRO
-                </button>
+            <div class="grid grid-cols-1 gap-2">
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
+                    <span class="text-xs font-bold text-gray-600 dark:text-gray-400">Hiện nút Giải thích AI</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="showAiExplainToggle" class="sr-only peer" checked>
+                        <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
+                    <span class="text-xs font-bold text-gray-600 dark:text-gray-400">Hiện nút Gọi Gia sư AI</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="showAiCallToggle" class="sr-only peer" checked>
+                        <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
             </div>
 
-            <div class="text-[10px] text-gray-500 dark:text-slate-400 italic leading-relaxed">
-                * Mẹo: Nếu mở từ Zalo/Facebook, hãy nhấn dấu 3 chấm chọn "Mở bằng trình duyệt Chrome" để mic hoạt động tốt nhất.
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Tốc độ đọc mặc định</label>
+                <select id="defaultReadSpeed" class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none text-sm">
+                    <option value="0.8">0.8x (Chậm)</option>
+                    <option value="1.0" selected>1.0x (Bình thường)</option>
+                    <option value="1.2">1.2x (Nhanh)</option>
+                    <option value="1.5">1.5x (Rất nhanh)</option>
+                    <option value="2.0">2.0x (Siêu nhanh)</option>
+                </select>
+            </div>
+
+            <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                <p class="text-[10px] text-indigo-700 dark:text-indigo-300 mb-2 font-medium"><i class="fas fa-info-circle mr-1"></i> Nhấn để mở khóa Micro (nếu gặp lỗi):</p>
+                <button id="unlockMicBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md">
+                    <i class="fas fa-microphone mr-2"></i> MỞ KHÓA MICRO
+                </button>
             </div>
         </div>
 
@@ -520,8 +544,11 @@
         <p class="text-gray-500 dark:text-slate-400 text-sm mb-6 text-center">Tôi đang lắng nghe, hãy hỏi tôi bất cứ điều gì!</p>
         
         <!-- Realtime Transcript -->
-        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[80px] mb-4 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32 flex flex-col items-center justify-center">
-            <span id="voiceTranscript">"Đang kết nối với gia sư..."</span>
+        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-3xl p-6 min-h-[150px] mb-4 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 overflow-y-auto max-h-80 flex flex-col items-center justify-start relative group pt-12">
+            <button id="copyVoiceTranscriptBtn" class="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-700 rounded-full shadow-md text-gray-400 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100 z-10" title="Sao chép nội dung">
+                <i class="far fa-copy"></i>
+            </button>
+            <span id="voiceTranscript" class="text-center w-full">"Đang kết nối với gia sư..."</span>
             <div id="listeningDots" class="hidden flex gap-1 mt-2">
                 <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
                 <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:0.2s]"></span>
@@ -559,6 +586,6 @@
     </div>
 </div>
 
-<script src="script.js?v=voice-expert-v8"></script>
+<script src="script.js?v=voice-config-v9"></script>
 </body>
 </html>

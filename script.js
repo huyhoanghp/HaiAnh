@@ -21,7 +21,14 @@ const BATCH_SIZE = 20;
 let filteredIndices = [];
 let scrollObserver = null;
 let currentFileData = null, currentMimeType = null;
-let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false'; // Default true
+let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false';
+
+// Cấu hình ứng dụng
+let appSettings = {
+    showAiExplain: localStorage.getItem('haianh_show_ai_explain') !== 'false',
+    showAiCall: localStorage.getItem('haianh_show_ai_call') !== 'false',
+    defaultReadSpeed: parseFloat(localStorage.getItem('haianh_default_read_speed') || '1.0')
+};
 
 // ======================== VOICE ENGINE (NEW) ========================
 let vietnameseVoice = null;
@@ -139,7 +146,7 @@ const SpeechManager = {
     queue: [],
     currentIdx: 0,
     isPaused: false,
-    rate: 1.0,
+    rate: appSettings.defaultReadSpeed,
     activeQIdx: null,
     currentUtterance: null,
     pauseTimer: null,
@@ -481,8 +488,11 @@ function generateQuestionHTML(idx, rawSearch = "") {
     </div>`;
 
     const feedback = isSubmitted ? (isCorrect ? `<div class="mt-3 text-sm text-green-700 bg-green-50 p-2 rounded-lg"><i class="fas fa-check-circle"></i> Chính xác!</div>` : `<div class="mt-3 text-sm bg-amber-50 p-2 rounded-lg text-amber-800"><i class="fas fa-info-circle"></i> Đáp án đúng: ${correctIndices.map(i => q.options[i]).join('; ')}</div>`) : "";
-    const aiExplainBtn = `<button class="ai-explain-btn text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 transition" data-qidx="${idx}"><i class="fas fa-magic"></i> Giải thích AI</button>`;
-    const aiCallBtn = `<button class="ai-call-btn text-xs px-3 py-1.5 rounded-lg border transition font-bold" data-qidx="${idx}"><i class="fas fa-phone"></i> Gọi Gia sư AI</button>`;
+    
+    // Hiển thị nút dựa trên cài đặt
+    const aiExplainBtn = appSettings.showAiExplain ? `<button class="ai-explain-btn text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 transition" data-qidx="${idx}"><i class="fas fa-magic"></i> Giải thích AI</button>` : "";
+    const aiCallBtn = appSettings.showAiCall ? `<button class="ai-call-btn text-xs px-3 py-1.5 rounded-lg border transition font-bold" data-qidx="${idx}"><i class="fas fa-phone"></i> Gọi Gia sư AI</button>` : "";
+    
     const aiExplainBox = `<div id="ai-explanation-${idx}" class="ai-explanation-box mt-3 rounded-lg hidden shadow-sm" data-loaded="false"></div>`;
     
     return `<div id="question-${idx}" class="card-question bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 overflow-visible transition-all">
@@ -1951,11 +1961,43 @@ async function initGIA() {
             document.getElementById('settingsDropdown')?.classList.remove('show');
             const input = document.getElementById('geminiApiKeyInput');
             if (input) input.value = localStorage.getItem('gemini_api_key') || '';
+            
+            // Cập nhật UI từ settings hiện tại
+            document.getElementById('showAiExplainToggle').checked = appSettings.showAiExplain;
+            document.getElementById('showAiCallToggle').checked = appSettings.showAiCall;
+            document.getElementById('defaultReadSpeed').value = appSettings.defaultReadSpeed;
+
             const modal = document.getElementById('aiSettingsModal');
             if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
         });
         document.getElementById('closeAiSettingsBtn')?.addEventListener('click', () => { const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } });
-        document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => { const input = document.getElementById('geminiApiKeyInput'); const key = input?.value.trim(); if (key) { localStorage.setItem('gemini_api_key', key); showToast('✅ Đã lưu API Key!'); } else { localStorage.removeItem('gemini_api_key'); showToast('Đã xoá API Key!'); } const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } updateApiKeyBadge(); });
+        document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => { 
+            const input = document.getElementById('geminiApiKeyInput'); 
+            const key = input?.value.trim(); 
+            if (key) { 
+                localStorage.setItem('gemini_api_key', key); 
+            } else { 
+                localStorage.removeItem('gemini_api_key'); 
+            } 
+            
+            // Lưu cài đặt bổ sung
+            appSettings.showAiExplain = document.getElementById('showAiExplainToggle').checked;
+            appSettings.showAiCall = document.getElementById('showAiCallToggle').checked;
+            appSettings.defaultReadSpeed = parseFloat(document.getElementById('defaultReadSpeed').value);
+            
+            localStorage.setItem('haianh_show_ai_explain', appSettings.showAiExplain);
+            localStorage.setItem('haianh_show_ai_call', appSettings.showAiCall);
+            localStorage.setItem('haianh_default_read_speed', appSettings.defaultReadSpeed);
+            
+            // Áp dụng ngay
+            SpeechManager.rate = appSettings.defaultReadSpeed;
+            if (currentQuestions.length > 0) renderAllQuestions(); // Vẽ lại để cập nhật hiện nút
+
+            showToast('✅ Đã lưu cấu hình AI!');
+            const modal = document.getElementById('aiSettingsModal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } 
+            updateApiKeyBadge(); 
+        });
         document.getElementById('checkModelsBtn')?.addEventListener('click', checkAvailableModels);
 
         // AI Generator modal logic
@@ -2461,6 +2503,14 @@ async function initGIA() {
         });
 
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
+
+        document.getElementById('copyVoiceTranscriptBtn')?.addEventListener('click', () => {
+            const text = document.getElementById('voiceTranscript').innerText;
+            if (!text || text.includes("Đang kết nối")) return;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("✅ Đã sao chép nội dung!");
+            });
+        });
 
         attachGlobalEvents();
     } catch (e) { console.error("Lỗi Khởi tạo Hệ thống:", e); }
