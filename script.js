@@ -2152,6 +2152,76 @@ async function initGIA() {
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => { if (!submitted) { showToast("Hãy nộp bài trước."); return; } showLoading(true, "Đang chuẩn bị báo cáo..."); try { const correctCount = scoreDetails.filter(d => d.correct).length; const percent = (correctCount / currentQuestions.length * 100).toFixed(1); const canvasChart = document.createElement('canvas'); canvasChart.width = 400; canvasChart.height = 200; const ctx = canvasChart.getContext('2d'); if (!ctx) return; new Chart(ctx, { type: 'doughnut', data: { labels: ['Đúng', 'Sai'], datasets: [{ data: [correctCount, currentQuestions.length - correctCount], backgroundColor: ['#22c55e', '#ef4444'] }] }, options: { animation: false, responsive: false, plugins: { legend: { position: 'top' } } } }); const chartImg = canvasChart.toDataURL(); let printWindow = window.open('', '_blank'); if (!printWindow) return; let html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo kết quả thi<\/title><style>body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; line-height: 1.5; } h1 { color: #1e40af; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; } th, td { border: 1px solid #ccc; padding: 10px; text-align: left; } th { background-color: #f2f2f2; } .correct { color: #166534; font-weight: bold; } .wrong { color: #991b1b; font-weight: bold; } img { max-width: 300px; margin-bottom: 20px; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; } }<\/style><\/head><body><h1>Báo cáo kết quả thi<\/h1><p><strong>Bộ câu hỏi:<\/strong> ${currentBankName}<\/p><p><strong>Ngày thi:<\/strong> ${new Date().toLocaleString()}<\/p><p><strong>Điểm số:<\/strong> ${correctCount}\/${currentQuestions.length} (${percent}%)<\/p><img src="${chartImg}" alt="Biểu đồ kết quả" \/><hr\/><h3>Chi tiết từng câu hỏi<\/h3><table><thead><tr><th style="width:5%">STT<\/th><th style="width:40%">Nội dung<\/th><th style="width:25%">Đáp án đã chọn<\/th><th style="width:20%">Đáp án đúng<\/th><th style="width:10%">Kết quả<\/th><\/tr><\/thead><tbody>`; for (let i = 0; i < currentQuestions.length; i++) { const q = currentQuestions[i]; const userAns = userAnswers[i] || []; const userText = userAns.length ? userAns.map(a => q.options[a]).join('<br>') : '(Chưa trả lời)'; const correctText = q.correctIndices.map(i => q.options[i]).join('<br>'); const status = scoreDetails[i].correct ? 'Đúng' : (userAns.length ? 'Sai' : 'Chưa trả lời'); const statusClass = scoreDetails[i].correct ? 'correct' : 'wrong'; html += `<tr><td>${i + 1}<\/td><td>${escapeHtml(q.text)}<\/td><td>${userText}<\/td><td>${correctText}<\/td><td class="${statusClass}">${status}<\/td><\/tr>`; } html += `<\/tbody><\/table><\/body><\/html>`; printWindow.document.open(); printWindow.document.write(html); printWindow.document.close(); setTimeout(() => { showLoading(false); printWindow.print(); }, 500); } catch (e) { console.error(e); showToast("Lỗi xuất báo cáo: " + e.message); showLoading(false); } });
         document.getElementById('clearHistoryBtn')?.addEventListener('click', () => { showConfirm("Xóa toàn bộ lịch sử?", async (yes) => { if (!yes) return; await clearAllHistory(); showToast("Đã xóa lịch sử."); document.getElementById('statsModal')?.classList.add('hidden'); }); });
         
+        // Sidebar Toggle Logic
+        const settingsSidePanel = document.getElementById('settingsSidePanel');
+        const reviewSidePanel = document.getElementById('reviewDashboardCard');
+        const overlay = document.getElementById('sidePanelOverlay');
+
+        const toggleSettings = (show) => {
+            if (show) {
+                settingsSidePanel?.classList.remove('-translate-x-full');
+                overlay?.classList.remove('hidden');
+                // Nạp dữ liệu cũ vào input
+                if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('GEMINI_API_KEY') || '';
+                if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('AI_MODEL') || 'gemini-1.5-flash';
+            } else {
+                settingsSidePanel?.classList.add('-translate-x-full');
+                if (reviewSidePanel?.classList.contains('translate-x-full')) overlay?.classList.add('hidden');
+            }
+        };
+
+        const toggleReview = (show) => {
+            if (show) {
+                reviewSidePanel?.classList.remove('translate-x-full');
+                overlay?.classList.remove('hidden');
+                renderReviewDashboard();
+            } else {
+                reviewSidePanel?.classList.add('translate-x-full');
+                if (settingsSidePanel?.classList.contains('-translate-x-full')) overlay?.classList.add('hidden');
+            }
+        };
+
+        document.getElementById('settingsBtn')?.addEventListener('click', () => toggleSettings(true));
+        document.getElementById('closeSettingsPanel')?.addEventListener('click', () => toggleSettings(false));
+        document.getElementById('openBrainBtn')?.addEventListener('click', () => toggleReview(true));
+        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReview(false));
+        overlay?.addEventListener('click', () => { toggleSettings(false); toggleReview(false); });
+
+        // AI Settings Save
+        document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            const model = document.getElementById('aiModelSelect').value;
+            localStorage.setItem('GEMINI_API_KEY', key);
+            localStorage.setItem('AI_MODEL', model);
+            showToast("✅ Đã lưu cấu hình AI!");
+            toggleSettings(false);
+        });
+
+        // Font size sync cho sidebar
+        const sideSlider = document.getElementById('sideFontSizeSlider');
+        const sideVal = document.getElementById('sideFontSizeVal');
+        sideSlider?.addEventListener('input', (e) => {
+            const v = e.target.value;
+            if (sideVal) sideVal.innerText = `${v}%`;
+            document.documentElement.style.setProperty('--system-font-scale', v / 100);
+            localStorage.setItem('FONT_SCALE', v);
+        });
+
+        // Data Management in Sidebar
+        document.getElementById('sideDataCenterBtn')?.addEventListener('click', () => {
+            toggleSettings(false);
+            document.getElementById('dataCenterModal')?.classList.remove('hidden');
+            document.getElementById('dataCenterModal')?.classList.add('flex');
+        });
+        document.getElementById('sideClearAllBtn')?.addEventListener('click', () => {
+            showConfirm("Xóa toàn bộ dữ liệu hệ thống?", async (yes) => {
+                if (!yes) return;
+                await clearAllBanks();
+                localStorage.clear();
+                location.reload();
+            });
+        });
+
         // AI Generator modal logic
         const openAiGenBtn = document.getElementById('openAiGenBtn');
         const aiGenModal = document.getElementById('aiGenModal');
