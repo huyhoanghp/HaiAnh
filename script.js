@@ -142,6 +142,20 @@ const FontSizeManager = {
     }
 };
 
+function toggleReviewPanel(show) {
+    const card = document.getElementById('reviewDashboardCard');
+    const overlay = document.getElementById('sidePanelOverlay');
+    if (card && overlay) {
+        if (show) {
+            card.classList.remove('translate-x-full');
+            overlay.classList.remove('hidden');
+        } else {
+            card.classList.add('translate-x-full');
+            overlay.classList.add('hidden');
+        }
+    }
+}
+
 const ReviewManager = {
     stats: JSON.parse(localStorage.getItem('haianh_review_stats') || '{}'),
 
@@ -2668,19 +2682,6 @@ async function initGIA() {
 
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
 
-        const toggleReviewPanel = (show) => {
-            const card = document.getElementById('reviewDashboardCard');
-            const overlay = document.getElementById('sidePanelOverlay');
-            if (card && overlay) {
-                if (show) {
-                    card.classList.remove('translate-x-full');
-                    overlay.classList.remove('hidden');
-                } else {
-                    card.classList.add('translate-x-full');
-                    overlay.classList.add('hidden');
-                }
-            }
-        };
 
         document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
         document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
