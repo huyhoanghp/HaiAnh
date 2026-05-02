@@ -40,6 +40,12 @@
                 <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa-magic"></i> AI Gen</button>
                 
                 <div class="relative">
+                    <!-- Nút Lộ trình học tập (Brain Icon) -->
+                    <button id="toggleReviewCardBtn" class="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Lộ trình học tập">
+                        <i class="fas fa-brain text-lg"></i>
+                        <span id="reviewBadge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-slate-800 hidden">0</span>
+                    </button>
+
                     <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
                         <i class="fas fa-cog text-lg"></i>
                     </button>
@@ -117,37 +123,28 @@
         </div>
     </div>
 
-    <!-- Lộ trình học tập thông minh (Spaced Repetition) -->
-    <div id="reviewDashboardCard" class="mb-8 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-indigo-100 dark:border-indigo-900 shadow-xl shadow-indigo-100/50 dark:shadow-none animate-fade-in">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div class="flex-1">
-                <div class="flex items-center gap-2 mb-2">
-                    <span class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold rounded-md uppercase tracking-wider">Giai đoạn 2</span>
-                    <h2 class="text-xl font-extrabold text-gray-800 dark:text-white">Lộ trình học tập</h2>
+    <!-- Lộ trình học tập thông minh (Smart Banner) -->
+    <div id="reviewDashboardCard" class="hidden mb-8 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-indigo-100 dark:border-indigo-900 shadow-xl animate-fade-in overflow-hidden">
+        <div class="flex flex-col sm:flex-row items-center gap-4">
+            <div class="flex-1 w-full">
+                <div class="flex justify-between items-end mb-2">
+                    <span class="text-[10px] font-black text-indigo-500 uppercase tracking-tighter">Tiến độ ghi nhớ</span>
+                    <div class="flex gap-3 text-[10px] font-bold">
+                        <span class="text-indigo-600"><span id="reviewDueCount">0</span> Đến hạn</span>
+                        <span class="text-amber-500"><span id="reviewLearningCount">0</span> Đang học</span>
+                        <span class="text-emerald-500"><span id="reviewMasteredCount">0</span> Đã nhớ</span>
+                    </div>
                 </div>
-                <p class="text-sm text-gray-500 dark:text-slate-400">Dựa trên trí tuệ nhân tạo và thuật toán <span class="font-bold text-indigo-500">Spaced Repetition</span>.</p>
-                
-                <div class="flex gap-4 mt-6">
-                    <div class="flex flex-col">
-                        <span id="reviewDueCount" class="text-3xl font-black text-indigo-600 dark:text-indigo-400">0</span>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">Cần ôn tập</span>
-                    </div>
-                    <div class="w-px h-10 bg-gray-100 dark:bg-slate-800 self-center"></div>
-                    <div class="flex flex-col">
-                        <span id="reviewLearningCount" class="text-3xl font-black text-amber-500">0</span>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">Đang học</span>
-                    </div>
-                    <div class="w-px h-10 bg-gray-100 dark:bg-slate-800 self-center"></div>
-                    <div class="flex flex-col">
-                        <span id="reviewMasteredCount" class="text-3xl font-black text-emerald-500">0</span>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">Đã nhớ</span>
-                    </div>
+                <!-- Progress Bar đa màu -->
+                <div class="w-full h-2 bg-gray-100 dark:bg-slate-800 rounded-full flex overflow-hidden">
+                    <div id="barDue" class="h-full bg-indigo-500 transition-all duration-500" style="width: 0%"></div>
+                    <div id="barLearning" class="h-full bg-amber-400 transition-all duration-500" style="width: 0%"></div>
+                    <div id="barMastered" class="h-full bg-emerald-500 transition-all duration-500" style="width: 0%"></div>
                 </div>
             </div>
             
-            <button id="startReviewBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center justify-center gap-3 active:scale-95">
-                <i class="fas fa-brain text-lg"></i>
-                ÔN TẬP NGAY
+            <button id="startReviewBtn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shrink-0">
+                <i class="fas fa-bolt"></i> ÔN TẬP NGAY
             </button>
         </div>
     </div>
@@ -621,6 +618,6 @@
     </div>
 </div>
 
-<script src="script.js?v=voice-review-v10"></script>
+<script src="script.js?v=voice-review-v11"></script>
 </body>
 </html>

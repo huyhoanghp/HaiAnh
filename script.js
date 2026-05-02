@@ -203,26 +203,37 @@ const ReviewManager = {
 
     updateDashboardUI() {
         const dueCount = this.getDueCount();
-        const dueBadge = document.getElementById('reviewDueCount');
         const learningCount = this.getLearningCount();
         const masteredCount = this.getMasteredCount();
+        const total = dueCount + learningCount + masteredCount;
 
-        if (dueBadge) dueBadge.innerText = dueCount;
+        // Cập nhật con số
+        const elDue = document.getElementById('reviewDueCount');
+        const elLearn = document.getElementById('reviewLearningCount');
+        const elMaster = document.getElementById('reviewMasteredCount');
+        if (elDue) elDue.innerText = dueCount;
+        if (elLearn) elLearn.innerText = learningCount;
+        if (elMaster) elMaster.innerText = masteredCount;
+
+        // Cập nhật Thanh Progress Bar
+        const barDue = document.getElementById('barDue');
+        const barLearning = document.getElementById('barLearning');
+        const barMastered = document.getElementById('barMastered');
         
-        const learningEl = document.getElementById('reviewLearningCount');
-        const masteredEl = document.getElementById('reviewMasteredCount');
-        if (learningEl) learningEl.innerText = learningCount;
-        if (masteredEl) masteredEl.innerText = masteredCount;
+        if (total > 0 && barDue) {
+            barDue.style.width = (dueCount / total * 100) + '%';
+            barLearning.style.width = (learningCount / total * 100) + '%';
+            barMastered.style.width = (masteredCount / total * 100) + '%';
+        }
 
-        const reviewCard = document.getElementById('reviewDashboardCard');
-        if (reviewCard) {
-            // Hiện card nếu có bất kỳ dữ liệu nào (đang học, đã nhớ hoặc cần ôn)
-            if (dueCount > 0 || learningCount > 0 || masteredCount > 0) {
-                reviewCard.classList.remove('hidden');
-                reviewCard.classList.add('flex');
+        // Cập nhật Badge trên Header
+        const badge = document.getElementById('reviewBadge');
+        if (badge) {
+            if (dueCount > 0) {
+                badge.innerText = dueCount;
+                badge.classList.remove('hidden');
             } else {
-                // Nếu hoàn toàn mới, ta vẫn hiện nhưng để 0 để giới thiệu tính năng
-                reviewCard.classList.remove('hidden');
+                badge.classList.add('hidden');
             }
         }
     }
@@ -2627,6 +2638,14 @@ async function initGIA() {
         });
 
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
+
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => {
+            const card = document.getElementById('reviewDashboardCard');
+            if (card) {
+                card.classList.toggle('hidden');
+                card.classList.toggle('flex');
+            }
+        });
 
         document.getElementById('startReviewBtn')?.addEventListener('click', startReviewSession);
 
