@@ -2161,9 +2161,38 @@ async function initGIA() {
             if (show) {
                 settingsSidePanel?.classList.remove('-translate-x-full');
                 overlay?.classList.remove('hidden');
-                // Nạp dữ liệu cũ vào input
-                if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('GEMINI_API_KEY') || '';
-                if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('AI_MODEL') || 'gemini-1.5-flash';
+                
+                // 1. Nạp Cấu hình AI
+                if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
+                if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('last_working_model') || 'gemini-1.5-flash';
+
+                // 2. Nạp Tính năng học tập
+                const hintTog = document.getElementById('hintToggleSide');
+                if (hintTog) hintTog.checked = (localStorage.getItem('haianh_hint_enabled') !== 'false');
+
+                const explainTog = document.getElementById('aiExplainToggleSide');
+                if (explainTog) explainTog.checked = (localStorage.getItem('haianh_show_ai_explain') !== 'false');
+
+                const callTog = document.getElementById('aiCallToggleSide');
+                if (callTog) callTog.checked = (localStorage.getItem('haianh_show_ai_call') !== 'false');
+
+                // 3. Nạp Âm thanh
+                const speedSlider = document.getElementById('aiSpeedSliderSide');
+                const speedVal = document.getElementById('aiSpeedValSide');
+                const savedRate = localStorage.getItem('voice_rate') || '1.0';
+                if (speedSlider) speedSlider.value = savedRate;
+                if (speedVal) speedVal.innerText = savedRate + 'x';
+
+                // 4. Nạp Hiển thị
+                const darkTog = document.getElementById('darkModeToggleSide');
+                if (darkTog) darkTog.checked = document.body.classList.contains('dark');
+
+                const sizeSlider = document.getElementById('sideFontSizeSlider');
+                const sizeVal = document.getElementById('sideFontSizeVal');
+                const savedScale = localStorage.getItem('haianh_font_scale') || '100';
+                if (sizeSlider) sizeSlider.value = savedScale;
+                if (sizeVal) sizeVal.innerText = savedScale + '%';
+
             } else {
                 settingsSidePanel?.classList.add('-translate-x-full');
                 if (reviewSidePanel?.classList.contains('translate-x-full')) overlay?.classList.add('hidden');
@@ -2174,7 +2203,7 @@ async function initGIA() {
             if (show) {
                 reviewSidePanel?.classList.remove('translate-x-full');
                 overlay?.classList.remove('hidden');
-                renderReviewDashboard();
+                ReviewManager.updateDashboardUI();
             } else {
                 reviewSidePanel?.classList.add('translate-x-full');
                 if (settingsSidePanel?.classList.contains('-translate-x-full')) overlay?.classList.add('hidden');
@@ -2187,24 +2216,69 @@ async function initGIA() {
         document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReview(false));
         overlay?.addEventListener('click', () => { toggleSettings(false); toggleReview(false); });
 
-        // AI Settings Save
+        // Logic Lưu toàn bộ cài đặt
         document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => {
+            // 1. Lưu AI
             const key = document.getElementById('apiKeyInput').value.trim();
             const model = document.getElementById('aiModelSelect').value;
-            localStorage.setItem('GEMINI_API_KEY', key);
-            localStorage.setItem('AI_MODEL', model);
-            showToast("✅ Đã lưu cấu hình AI!");
+            localStorage.setItem('gemini_api_key', key);
+            localStorage.setItem('last_working_model', model);
+            updateApiKeyBadge();
+
+            // 2. Lưu Tính năng
+            const hintEnabledSide = document.getElementById('hintToggleSide').checked;
+            localStorage.setItem('haianh_hint_enabled', hintEnabledSide);
+            hintEnabled = hintEnabledSide;
+            FontSizeManager.applyHintVisibility();
+
+            const explainEnabled = document.getElementById('aiExplainToggleSide').checked;
+            localStorage.setItem('haianh_show_ai_explain', explainEnabled);
+            appSettings.showAiExplain = explainEnabled;
+
+            const callEnabled = document.getElementById('aiCallToggleSide').checked;
+            localStorage.setItem('haianh_show_ai_call', callEnabled);
+            appSettings.showAiCall = callEnabled;
+            // Cập nhật hiển thị nút gọi AI nổi nếu có
+            const floatingAi = document.getElementById('floatingAiBtn');
+            if (floatingAi) {
+                if (callEnabled) floatingAi.classList.remove('hidden');
+                else floatingAi.classList.add('hidden');
+            }
+
+            // 3. Lưu Âm thanh
+            const rate = document.getElementById('aiSpeedSliderSide').value;
+            localStorage.setItem('voice_rate', rate);
+            SpeechManager.rate = parseFloat(rate);
+
+            // 4. Lưu Dark Mode
+            const isDark = document.getElementById('darkModeToggleSide').checked;
+            if (isDark) document.body.classList.add('dark');
+            else document.body.classList.remove('dark');
+            localStorage.setItem('darkMode', isDark);
+
+            // 5. Lưu Cỡ chữ
+            const scale = document.getElementById('sideFontSizeSlider').value;
+            localStorage.setItem('haianh_font_scale', scale);
+            FontSizeManager.scale = parseInt(scale);
+            FontSizeManager.apply();
+
+            showToast("✅ Đã cập nhật toàn bộ cài đặt hệ thống!");
             toggleSettings(false);
         });
 
-        // Font size sync cho sidebar
-        const sideSlider = document.getElementById('sideFontSizeSlider');
-        const sideVal = document.getElementById('sideFontSizeVal');
-        sideSlider?.addEventListener('input', (e) => {
-            const v = e.target.value;
-            if (sideVal) sideVal.innerText = `${v}%`;
-            document.documentElement.style.setProperty('--system-font-scale', v / 100);
-            localStorage.setItem('FONT_SCALE', v);
+        // Event listeners cho các thanh trượt (Cập nhật số hiển thị tức thì)
+        document.getElementById('aiSpeedSliderSide')?.addEventListener('input', (e) => {
+            const val = document.getElementById('aiSpeedValSide');
+            if (val) val.innerText = e.target.value + 'x';
+        });
+
+        document.getElementById('sideFontSizeSlider')?.addEventListener('input', (e) => {
+            const val = document.getElementById('sideFontSizeVal');
+            if (val) val.innerText = e.target.value + '%';
+            // Áp dụng thử cỡ chữ ngay để người dùng thấy
+            const decimal = e.target.value / 100;
+            document.documentElement.style.setProperty('--font-scale', decimal);
+            document.body.style.setProperty('--font-scale', decimal);
         });
 
         // Data Management in Sidebar
