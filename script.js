@@ -2007,50 +2007,59 @@ function attachGlobalEvents() { const container = document.getElementById('quest
 async function restoreProgress() {
     try {
         const saved = loadProgress(); if (!saved || !saved.bankId) return false;
-        const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return false; }
-        masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
-        const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
-        if (saved.submitted) { 
-            currentQuestions = [...masterQuestions]; 
-            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
-            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
-            submitted = true; examActive = false; isPaused = false; 
-            timeRemainingSeconds = 0; 
-            updateProgress(); 
-            initLazyRender(); 
-            document.getElementById('questionsContainer')?.classList.remove('hidden');
-            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
-            const evalRes = evaluateAll();
-            scoreDetails = evalRes.details;
-            const resultPanel = document.getElementById('resultPanel');
-            if (resultPanel) {
-                const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
-                const resultContent = document.getElementById('resultContent');
-                if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p></div>`;
-                resultPanel.classList.remove('hidden');
+        
+        // Hiển thị thông báo hỏi người dùng
+        showConfirm(`♻️ Phát hiện bài tập đang làm dở từ phiên trước. Bạn có muốn tiếp tục làm bài "${saved.bankName}" không?`, async (yes) => {
+            if (!yes) {
+                clearProgress();
+                return;
             }
-            renderQuestionGrid();
-            showToast(`♻️ Đã khôi phục phiên làm bài: ${bank.name}`); 
-        }
-        else if (saved.examActive) { 
-            currentQuestions = [...masterQuestions]; 
-            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
-            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
-            submitted = false; examActive = true; isPaused = saved.isPaused || false; 
-            timeRemainingSeconds = saved.timeRemainingSeconds || 0; 
-            const btn = document.getElementById('pauseResumeBtn'); 
-            if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; 
-            updateProgress(); initLazyRender(); 
-            document.getElementById('questionsContainer')?.classList.remove('hidden');
-            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
-            document.getElementById('progressArea')?.classList.remove('hidden');
-            document.getElementById('setupArea')?.classList.add('hidden');
-            renderQuestionGrid();
-            if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); 
-            if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; 
-            showToast(`♻️ Đã khôi phục bài thi đang làm dở: ${bank.name}`); 
-        }
-        else { return false; }
+
+            const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return; }
+            masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
+            const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
+            
+            if (saved.submitted) { 
+                currentQuestions = [...masterQuestions]; 
+                userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+                flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+                submitted = true; examActive = false; isPaused = false; 
+                timeRemainingSeconds = 0; 
+                updateProgress(); 
+                initLazyRender(); 
+                document.getElementById('questionsContainer')?.classList.remove('hidden');
+                document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+                const evalRes = evaluateAll();
+                scoreDetails = evalRes.details;
+                const resultPanel = document.getElementById('resultPanel');
+                if (resultPanel) {
+                    const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
+                    const resultContent = document.getElementById('resultContent');
+                    if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p></div>`;
+                    resultPanel.classList.remove('hidden');
+                }
+                renderQuestionGrid();
+                showToast(`✅ Đã khôi phục kết quả: ${bank.name}`); 
+            }
+            else if (saved.examActive) { 
+                currentQuestions = [...masterQuestions]; 
+                userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+                flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+                submitted = false; examActive = true; isPaused = saved.isPaused || false; 
+                timeRemainingSeconds = saved.timeRemainingSeconds || 0; 
+                const btn = document.getElementById('pauseResumeBtn'); 
+                if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; 
+                updateProgress(); initLazyRender(); 
+                document.getElementById('questionsContainer')?.classList.remove('hidden');
+                document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+                document.getElementById('progressArea')?.classList.remove('hidden');
+                document.getElementById('setupArea')?.classList.add('hidden');
+                renderQuestionGrid();
+                if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); 
+                if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; 
+                showToast(`🚀 Tiếp tục làm bài: ${bank.name}`); 
+            }
+        });
         return true;
     } catch (e) { clearProgress(); return false; }
 }
@@ -2282,54 +2291,15 @@ async function initGIA() {
             if (fileInput) fileInput.value = '';
 
             if (isBatchMode) {
-                setTimeout(() => {
-                            mammoth.extractRawText({ arrayBuffer: ev.target.result })
-                                .then(res => resolve(res.value))
-                                .catch(() => resolve(""));
-                        };
-                        reader.readAsArrayBuffer(file);
-                    });
-                    if (text) {
-                        const area = document.getElementById('aiGenTextArea');
-                        if (area) area.value += `\n--- NỘI DUNG TỪ ${file.name} ---\n${text}\n`;
+                showConfirm(`✅ Đã nạp trang ${currentAiFiles.length}. Bạn có muốn chụp tiếp trang tiếp theo không?`, (yes) => {
+                    if (yes) {
+                        fileInput?.click();
+                    } else {
+                        isBatchMode = false;
+                        fileInput?.removeAttribute('capture');
                     }
-                } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
-                    const text = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => {
-                            try {
-                                const wb = XLSX.read(ev.target.result, { type: 'array' });
-                                let res = "";
-                                wb.SheetNames.forEach(name => {
-                                    const sheet = wb.Sheets[name];
-                                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                                    res += json.map(row => row.join(" ")).join("\n") + "\n";
-                                });
-                                resolve(res);
-                            } catch(e) { resolve(""); }
-                        };
-                        reader.readAsArrayBuffer(file);
-                    });
-                    if (text) {
-                        const area = document.getElementById('aiGenTextArea');
-                        if (area) area.value += `\n--- DỮ LIỆU TỪ ${file.name} ---\n${text}\n`;
-                    }
-                } else if (file.type.startsWith('text/')) {
-                    const text = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => resolve(ev.target.result);
-                        reader.readAsText(file);
-                    });
-                    if (text) {
-                        const area = document.getElementById('aiGenTextArea');
-                        if (area) area.value += `\n--- VĂN BẢN TỪ ${file.name} ---\n${text}\n`;
-                    }
-                }
+                });
             }
-            
-            updateAiFileListUI();
-            showLoading(false);
-            if (fileInput) fileInput.value = '';
         });
 
         let tempAiQuestions = [];
