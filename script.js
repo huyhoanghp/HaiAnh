@@ -598,6 +598,9 @@ const VoiceTutor = {
     stt: new SpeechToTextManager(),
     activeQIdx: null,
     isCalling: false,
+    isLiveMode: false,
+    silenceTimer: null,
+    lastTranscript: '',
 
     async startCall(qIdx) {
         if (!localStorage.getItem('gemini_api_key')) { showToast("Vui lòng cài đặt API Key để dùng tính năng này."); return; }
@@ -693,29 +696,68 @@ const VoiceTutor = {
     startListening() {
         if (!this.isCalling) return;
         
-        // Kiểm tra giao thức file://
         if (location.protocol === 'file:') {
-            this.updateUI('speaking', 'Lưu ý quan trọng: Tính năng đàm thoại (STT) yêu cầu chạy app qua máy chủ (http/https) mới có thể yêu cầu quyền Micro. Hãy sử dụng Live Server hoặc tải lên hosting nhé!');
-            SpeechManager.speak('Lưu ý: Tính năng đàm thoại yêu cầu chạy app qua máy chủ để truy cập micro.', 'voice-tutor');
+            this.updateUI('speaking', 'Yêu cầu chạy qua máy chủ (http/https) để dùng Micro.');
             return;
         }
 
         if (!SpeechToTextManager.isSupported()) {
-            this.updateUI('speaking', 'Trình duyệt của bạn không hỗ trợ nhận diện giọng nói. Hãy dùng Chrome hoặc Edge nhé!');
+            this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
             return;
         }
-        this.updateUI('listening', 'Hãy nói đi, tôi đang nghe...');
+
+        this.updateUI('listening', this.isLiveMode ? 'Đang lắng nghe rảnh tay...' : 'Hãy nói đi, tôi đang nghe...');
+        
         this.stt.onResult = (text, isFinal) => {
             if (!text) return;
             document.getElementById('voiceTranscript').innerText = text;
-            
-            // Nếu là kết quả cuối cùng hoặc câu đủ dài
-            if (isFinal && text.trim().length > 2) {
-                this.stt.stop();
-                this.askGemini(text);
+            this.lastTranscript = text;
+
+            if (this.isLiveMode) {
+                if (this.silenceTimer) clearTimeout(this.silenceTimer);
+                this.silenceTimer = setTimeout(() => {
+                    if (this.lastTranscript.trim().length > 2) {
+                        this.stt.stop();
+                        this.askGemini(this.lastTranscript);
+                    }
+                }, 1500);
             }
         };
+        
         this.stt.start();
+    },
+
+    stopListeningAndSubmit() {
+        if (!this.isCalling || this.isLiveMode) return;
+        
+        if (this.silenceTimer) clearTimeout(this.silenceTimer);
+        const finalContent = this.lastTranscript;
+        
+        this.stt.stop();
+        if (finalContent.trim().length > 1) {
+            this.askGemini(finalContent);
+        } else {
+            this.updateUI('listening', 'Bạn chưa nói gì cả...');
+        }
+        this.lastTranscript = '';
+    },
+
+    toggleLiveMode() {
+        this.isLiveMode = !this.isLiveMode;
+        const btn = document.getElementById('liveModeToggle');
+        if (!btn) return;
+
+        if (this.isLiveMode) {
+            btn.classList.add('active');
+            btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-indigo-500 status-dot"></div> LIVE MODE: ON';
+            showToast("🚀 Đã bật Chế độ Live (Tự động đàm thoại)");
+            this.startListening();
+        } else {
+            btn.classList.remove('active');
+            btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF';
+            showToast("✋ Đã tắt Chế độ Live. Hãy nhấn giữ Mic để nói.");
+            this.stt.stop();
+        }
     },
 
     async askGemini(userText) {
@@ -737,7 +779,7 @@ const VoiceTutor = {
             
             this.updateUI('speaking', response);
             SpeechManager.speak(response, 'voice-tutor', () => {
-                if (this.isCalling) this.startListening();
+                if (this.isCalling && this.isLiveMode) this.startListening();
             });
         } catch (err) {
             console.error("Voice Gemini Error:", err);
@@ -2336,14 +2378,34 @@ async function initGIA() {
 
         // Voice Chat Modal Events
         document.getElementById('endCallBtn')?.addEventListener('pointerdown', (e) => { e.preventDefault(); VoiceTutor.endCall(); });
-        document.getElementById('toggleMicBtn')?.addEventListener('pointerdown', (e) => { 
-            e.preventDefault();
-            if (VoiceTutor.isCalling) {
-                SpeechManager.stop();
-                VoiceTutor.startListening();
-                document.getElementById('voiceInputContainer')?.classList.remove('hidden');
-            }
-        });
+        
+        const micBtn = document.getElementById('toggleMicBtn');
+        if (micBtn) {
+            // Nhấn xuống: Bắt đầu nghe
+            micBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                if (VoiceTutor.isCalling) {
+                    micBtn.classList.add('mic-active-pulse');
+                    SpeechManager.stop();
+                    VoiceTutor.startListening();
+                }
+            });
+
+            // Nhả ra: Dừng và Gửi (PTT)
+            const stopMic = (e) => {
+                e.preventDefault();
+                if (VoiceTutor.isCalling) {
+                    micBtn.classList.remove('mic-active-pulse');
+                    VoiceTutor.stopListeningAndSubmit();
+                }
+            };
+            micBtn.addEventListener('pointerup', stopMic);
+            micBtn.addEventListener('pointerleave', stopMic);
+            micBtn.addEventListener('pointercancel', stopMic);
+        }
+
+        document.getElementById('liveModeToggle')?.addEventListener('click', () => VoiceTutor.toggleLiveMode());
+        
         document.getElementById('sendVoiceTextBtn')?.addEventListener('pointerdown', (e) => { e.preventDefault(); VoiceTutor.handleTextSubmit(); });
         document.getElementById('voiceTextInput')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {

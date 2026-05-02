@@ -598,6 +598,34 @@ body.dark .font-range-input {
     to { box-shadow: 0 0 30px #a855f7; }
 }
 
+/* Voice Mode Styles */
+#liveModeToggle.active {
+    border-color: #10b981;
+    color: #10b981 !important;
+    background: rgba(16, 185, 129, 0.1);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+#liveModeToggle.active .status-dot {
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    animation: pulse-green 1.5s infinite;
+}
+
+@keyframes pulse-green {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.mic-active-pulse {
+    animation: mic-glow 1.5s infinite alternate;
+}
+
+@keyframes mic-glow {
+    from { box-shadow: 0 0 10px rgba(79, 70, 229, 0.3); }
+    to { box-shadow: 0 0 25px rgba(79, 70, 229, 0.6); }
+}
+
 .ai-call-btn {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: white !important;
