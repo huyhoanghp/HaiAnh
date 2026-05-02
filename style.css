@@ -669,13 +669,31 @@ body.dark .font-range-input {
     100% { transform: scale(1); opacity: 1; }
 }
 
-.mic-active-pulse {
-    animation: mic-glow 1.5s infinite alternate;
+@keyframes mic-glow {
+    from { box-shadow: 0 0 10px rgba(79, 70, 229, 0.3); transform: scale(1); }
+    to { box-shadow: 0 0 30px rgba(79, 70, 229, 0.6); transform: scale(1.05); }
 }
 
-@keyframes mic-glow {
-    from { box-shadow: 0 0 10px rgba(79, 70, 229, 0.3); }
-    to { box-shadow: 0 0 25px rgba(79, 70, 229, 0.6); }
+.mic-active-pulse {
+    animation: mic-glow 1s infinite alternate;
+}
+
+/* Fix nút Mic bị xê dịch */
+#toggleMicBtn {
+    flex-shrink: 0;
+    transform-origin: center center !important;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    width: 64px; /* Cố định kích thước */
+    height: 64px;
+}
+
+#toggleMicBtn:active {
+    transform: scale(0.92);
+}
+
+.voice-status-badge {
+    transition: all 0.3s ease;
 }
 
 /* Voice Call Modal & Card */
