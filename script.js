@@ -543,12 +543,6 @@ class SpeechToTextManager {
         recognition.interimResults = true;
         
         recognition.onresult = (e) => {
-            // Ngắt lời AI nếu người dùng bắt đầu nói (Barge-in)
-            if (window.speechSynthesis.speaking) {
-                SpeechManager.stop();
-                console.log("STT: Interrupted AI speech");
-            }
-
             let finalTranscript = '';
             let interimTranscript = '';
             for (let i = e.resultIndex; i < e.results.length; ++i) {
@@ -556,13 +550,31 @@ class SpeechToTextManager {
                 else interimTranscript += e.results[i][0].transcript;
             }
             const transcript = finalTranscript || interimTranscript;
+
+            // Ngắt lời AI nếu người dùng bắt đầu nói (Barge-in)
+            // Chỉ cho phép ngắt sau khi AI đã nói được ít nhất 1.5 giây để tránh echo ban đầu
+            if (window.speechSynthesis.speaking && transcript.trim().length > 5) {
+                const timeSpeaking = Date.now() - (window.VoiceTutor?.aiSpeakStartTime || 0);
+                if (timeSpeaking > 1500) {
+                    SpeechManager.stop();
+                    console.log("STT: Barge-in triggered");
+                } else {
+                    return; // Bỏ qua nếu là echo ban đầu
+                }
+            }
             if (this.onResult) this.onResult(transcript, !!finalTranscript);
         };
 
         recognition.onstart = () => { this.isListening = true; };
         recognition.onend = () => { 
             this.isListening = false; 
-            if (this.onEnd) this.onEnd(); 
+            if (this.onEnd) this.onEnd();
+            
+            // Tự động khởi động lại trong chế độ LIVE nếu không có lỗi nghiêm trọng
+            // và AI không đang nói (để tránh feedback)
+            if (window.VoiceTutor && VoiceTutor.isLiveMode && VoiceTutor.isCalling && !window.speechSynthesis.speaking) {
+                setTimeout(() => this.start(), 300);
+            }
         };
 
         recognition.onerror = (e) => {
@@ -607,6 +619,7 @@ const VoiceTutor = {
     isLiveMode: false,
     silenceTimer: null,
     lastTranscript: '',
+    aiSpeakStartTime: 0,
 
     async startCall(qIdx) {
         if (!localStorage.getItem('gemini_api_key')) { showToast("Vui lòng cài đặt API Key để dùng tính năng này."); return; }
@@ -784,17 +797,21 @@ const VoiceTutor = {
             const response = data.candidates[0].content.parts[0].text;
             
             this.updateUI('speaking', response);
+            this.aiSpeakStartTime = Date.now();
+            
             SpeechManager.speak(response, 'voice-tutor', () => {
                 if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking) {
                     this.startListening();
                 }
             });
 
-            // Trong chế độ LIVE, cho phép lắng nghe ngay để có thể ngắt lời (Barge-in)
+            // Chế độ LIVE: Lắng nghe ngay để cho phép ngắt lời, nhưng có grace period xử lý trong STT
             if (this.isLiveMode) {
                 setTimeout(() => {
-                    if (this.isCalling && this.isLiveMode) this.startListening();
-                }, 500); // Chờ 0.5s để AI bắt đầu phát âm thanh
+                    if (this.isCalling && this.isLiveMode && !this.stt.isListening) {
+                        this.startListening();
+                    }
+                }, 800);
             }
         } catch (err) {
             console.error("Voice Gemini Error:", err);
