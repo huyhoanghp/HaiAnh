@@ -102,7 +102,37 @@ body.dark .font-size-panel {
 body.dark .answer-correct { background-color: #064e3b !important; border-left-color: #4ade80; }
 body.dark .answer-wrong { background-color: #7f1d1d !important; border-left-color: #f87171; }
 .progress-bar { transition: width 0.3s ease; }
-.toast-notify { position: fixed; bottom: 20px; right: 20px; z-index: 60; background: #1f2937; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 90vw; }
+.toast-notify { 
+    position: fixed; 
+    bottom: 30px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    z-index: 10000; 
+    background: #ffffff; 
+    color: #1e293b; 
+    padding: 16px 24px; 
+    border-radius: 1.25rem; 
+    box-shadow: 0 20px 50px -12px rgba(0,0,0,0.15); 
+    border: 1px solid #e2e8f0; 
+    font-size: 14px; 
+    font-weight: 500; 
+    text-align: left; 
+    min-width: 300px; 
+    max-width: 90vw; 
+    line-height: 1.6;
+    animation: slideUpToast 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); 
+    backdrop-filter: blur(12px);
+}
+@keyframes slideUpToast { 
+    from { bottom: -20px; opacity: 0; transform: translateX(-50%) scale(0.95); } 
+    to { bottom: 30px; opacity: 1; transform: translateX(-50%) scale(1); } 
+}
+body.dark .toast-notify {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+    box-shadow: 0 20px 50px -12px rgba(0,0,0,0.5);
+}
 .sticky-nav { position: sticky; top: 0; z-index: 40; background: white; }
 .grid-responsive { 
     display: grid; 
@@ -330,20 +360,6 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
 }
 
 /* Settings Dropdown & Menu Items (Vanilla CSS for CDN compatibility) */
-#toastMsg {
-    position: fixed;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 99999;
-    padding: 1rem 2rem;
-    max-width: calc(100vw - 1.5rem);
-    background-color: white;
-    border-radius: 1rem;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    border: 1px solid #f3f4f6;
-}
-
 #settingsDropdown {
     position: absolute;
     right: 0;
@@ -352,9 +368,9 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
     width: 18rem;
     max-width: calc(100vw - 1.5rem);
     background-color: white;
-    border-radius: 1rem;
+    border-radius: 1.25rem;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    border: 1px solid #f3f4f6;
+    border: 1px solid #f1f5f9;
     z-index: 2000;
     overflow: hidden;
     transform: scale(0.95);
