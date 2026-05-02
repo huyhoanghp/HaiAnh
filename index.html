@@ -123,6 +123,86 @@
         </div>
     </div>
 
+    <!-- Cài đặt hệ thống (Side-Panel / Cánh gà bên trái) -->
+    <div id="settingsSidePanel" class="fixed top-0 left-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-r border-indigo-100 dark:border-slate-800">
+        <!-- Header -->
+        <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h2 class="text-xl font-black text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-cog text-indigo-500"></i> Cài đặt
+                </h2>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Hệ thống & AI</p>
+            </div>
+            <button id="closeSettingsPanel" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400 transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <!-- Mục AI Configuration -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-robot"></i> Cấu hình trí tuệ nhân tạo
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-500 mb-1 ml-1 uppercase">API Key (Google Gemini)</label>
+                        <input type="password" id="apiKeyInput" placeholder="Nhập Gemini API Key..." class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 focus:ring-2 focus:ring-indigo-400 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-500 mb-1 ml-1 uppercase">Mô hình AI</label>
+                        <select id="aiModelSelect" class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-indigo-400">
+                            <option value="gemini-1.5-flash">Gemini 1.5 Flash (Nhanh - Miễn phí)</option>
+                            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Thông minh - Ổn định)</option>
+                        </select>
+                    </div>
+                    <button id="saveAiSettingsBtn" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition active:scale-95">
+                        LƯU CẤU HÌNH AI
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mục Hiển thị -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-gray-400 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-eye"></i> Tùy chỉnh hiển thị
+                </div>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">Giao diện tối</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="darkModeToggleSide" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">Cỡ chữ hệ thống</span>
+                            <span id="sideFontSizeVal" class="text-xs font-bold text-indigo-600">100%</span>
+                        </div>
+                        <input type="range" id="sideFontSizeSlider" min="80" max="200" value="100" class="w-full h-1.5 bg-gray-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mục Dữ liệu -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-database"></i> Quản lý dữ liệu
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="sideDataCenterBtn" class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-100 dark:border-blue-800/30">
+                        TRUNG TÂM DATA
+                    </button>
+                    <button id="sideClearAllBtn" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold border border-red-100 dark:border-red-800/30">
+                        XÓA TẤT CẢ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Lớp phủ mờ (Overlay) cho Side Panel -->
     <div id="sidePanelOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] hidden transition-opacity duration-300"></div>
 
