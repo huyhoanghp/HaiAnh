@@ -684,8 +684,6 @@ class SpeechToTextManager {
                 else interimTranscript += e.results[i][0].transcript;
             }
             const transcript = finalTranscript || interimTranscript;
-
-            const transcript = finalTranscript || interimTranscript;
             if (this.onResult) this.onResult(transcript, !!finalTranscript);
         };
 
