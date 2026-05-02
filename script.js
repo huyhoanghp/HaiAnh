@@ -2281,6 +2281,15 @@ async function initGIA() {
             document.body.style.setProperty('--font-scale', decimal);
         });
 
+        // Bổ sung: Kiểm tra Mic và Quét Model
+        document.getElementById('sideUnlockMicBtn')?.addEventListener('click', () => {
+            VoiceTutor.unlockMicrophone();
+        });
+
+        document.getElementById('sideCheckModelsBtn')?.addEventListener('click', () => {
+            checkAvailableModels();
+        });
+
         // Data Management in Sidebar
         document.getElementById('sideDataCenterBtn')?.addEventListener('click', () => {
             toggleSettings(false);
