@@ -117,6 +117,41 @@
         </div>
     </div>
 
+    <!-- Lộ trình học tập thông minh (Spaced Repetition) -->
+    <div id="reviewDashboardCard" class="hidden mb-8 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-indigo-100 dark:border-indigo-900 shadow-xl shadow-indigo-100/50 dark:shadow-none animate-fade-in">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold rounded-md uppercase tracking-wider">Giai đoạn 2</span>
+                    <h2 class="text-xl font-extrabold text-gray-800 dark:text-white">Lộ trình học tập</h2>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-slate-400">Dựa trên trí tuệ nhân tạo và thuật toán <span class="font-bold text-indigo-500">Spaced Repetition</span>.</p>
+                
+                <div class="flex gap-4 mt-6">
+                    <div class="flex flex-col">
+                        <span id="reviewDueCount" class="text-3xl font-black text-indigo-600 dark:text-indigo-400">0</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Cần ôn tập</span>
+                    </div>
+                    <div class="w-px h-10 bg-gray-100 dark:bg-slate-800 self-center"></div>
+                    <div class="flex flex-col">
+                        <span id="reviewLearningCount" class="text-3xl font-black text-amber-500">0</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Đang học</span>
+                    </div>
+                    <div class="w-px h-10 bg-gray-100 dark:bg-slate-800 self-center"></div>
+                    <div class="flex flex-col">
+                        <span id="reviewMasteredCount" class="text-3xl font-black text-emerald-500">0</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Đã nhớ</span>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="startReviewBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center justify-center gap-3 active:scale-95">
+                <i class="fas fa-brain text-lg"></i>
+                ÔN TẬP NGAY
+            </button>
+        </div>
+    </div>
+
     <!-- Khung Cài đặt đề thi (Chỉ hiện khi chưa thi) -->
     <div id="setupArea" class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-gray-200">
         <div class="bg-gray-50 p-4 rounded-xl mb-4">

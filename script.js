@@ -142,6 +142,86 @@ const FontSizeManager = {
     }
 };
 
+const ReviewManager = {
+    stats: JSON.parse(localStorage.getItem('haianh_review_stats') || '{}'),
+
+    save() {
+        localStorage.setItem('haianh_review_stats', JSON.stringify(this.stats));
+    },
+
+    getQId(text) {
+        let hash = 0;
+        for (let i = 0; i < text.length; i++) {
+            hash = ((hash << 5) - hash) + text.charCodeAt(i);
+            hash |= 0;
+        }
+        return "q_" + Math.abs(hash).toString(16);
+    },
+
+    // quality: 0 (sai) hoặc 5 (đúng) - Đơn giản hóa cho trắc nghiệm
+    update(qText, isCorrect) {
+        const id = this.getQId(qText);
+        const quality = isCorrect ? 5 : 0;
+        
+        let item = this.stats[id] || {
+            reps: 0,
+            interval: 0,
+            ease: 2.5,
+            nextDate: Date.now()
+        };
+
+        if (quality >= 3) {
+            if (item.reps === 0) item.interval = 1;
+            else if (item.reps === 1) item.interval = 6;
+            else item.interval = Math.round(item.interval * item.ease);
+            item.reps++;
+        } else {
+            item.reps = 0;
+            item.interval = 1;
+        }
+
+        item.ease = Math.max(1.3, item.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+        item.nextDate = Date.now() + item.interval * 24 * 60 * 60 * 1000;
+        
+        this.stats[id] = item;
+        this.save();
+        this.updateDashboardUI();
+    },
+
+    getDueCount() {
+        const now = Date.now();
+        return Object.values(this.stats).filter(item => item.nextDate <= now).length;
+    },
+
+    getLearningCount() {
+        return Object.values(this.stats).filter(item => item.reps > 0 && item.reps < 5).length;
+    },
+
+    getMasteredCount() {
+        return Object.values(this.stats).filter(item => item.reps >= 5).length;
+    },
+
+    updateDashboardUI() {
+        const dueCount = this.getDueCount();
+        const dueBadge = document.getElementById('reviewDueCount');
+        const learningCount = this.getLearningCount();
+        const masteredCount = this.getMasteredCount();
+
+        if (dueBadge) dueBadge.innerText = dueCount;
+        
+        const learningEl = document.getElementById('reviewLearningCount');
+        const masteredEl = document.getElementById('reviewMasteredCount');
+        if (learningEl) learningEl.innerText = learningCount;
+        if (masteredEl) masteredEl.innerText = masteredCount;
+
+        const reviewCard = document.getElementById('reviewDashboardCard');
+        if (reviewCard) {
+            if (dueCount > 0) reviewCard.classList.remove('hidden');
+            else reviewCard.classList.add('hidden'); // Ẩn nếu không có gì cần ôn (tùy chọn)
+        }
+    }
+};
+
 const SpeechManager = {
     queue: [],
     currentIdx: 0,
@@ -1702,6 +1782,37 @@ function initExam(questionsArray, timeMinutes) {
 
 function startFullTest() { if (!masterQuestions.length) showToast("Chưa có bộ câu hỏi."); else { showToast("Đang tải đề thi..."); initExam(masterQuestions, parseInt(document.getElementById('timeMinutes')?.value) || 30); } }
 function startRandomTest() { if (!masterQuestions.length) showToast("Chưa có bộ câu hỏi."); else { let num = parseInt(document.getElementById('questionCount')?.value); if (isNaN(num) || num <= 0) num = masterQuestions.length; if (num > masterQuestions.length) num = masterQuestions.length; const shuffled = [...masterQuestions]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } showToast("Đang tạo đề ngẫu nhiên..."); initExam(shuffled.slice(0, num), parseInt(document.getElementById('timeMinutes')?.value) || 30); } }
+
+async function startReviewSession() {
+    showLoading(true, "Đang quét các câu hỏi cần ôn tập...");
+    const banks = await getAllBanks();
+    let allDueQuestions = [];
+    const now = Date.now();
+    
+    for (const bank of banks) {
+        const questions = await getBankQuestions(bank.id);
+        const due = questions.filter(q => {
+            const id = ReviewManager.getQId(q.text);
+            const item = ReviewManager.stats[id];
+            return item && item.nextDate <= now;
+        });
+        allDueQuestions = allDueQuestions.concat(due);
+    }
+    
+    showLoading(false);
+    if (allDueQuestions.length === 0) {
+        showToast("Tuyệt vời! Bạn không còn câu nào cần ôn tập hôm nay.");
+        return;
+    }
+    
+    showConfirm(`Bạn có ${allDueQuestions.length} câu hỏi đã đến hạn ôn tập. Bắt đầu ngay?`, (yes) => {
+        if (yes) {
+            initExam(allDueQuestions, 15);
+            const modeInfo = document.getElementById('modeInfo');
+            if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Thông minh (Spaced Repetition)";
+        }
+    });
+}
 function resetCurrentExam() { if (!currentQuestions.length) showToast("Chưa có bài."); else if (!examActive) showToast("Bài đã nộp."); else { showToast("Đang làm mới bài thi..."); stopTimer(); userAnswers = Array(currentQuestions.length).fill().map(() => []); flagged = Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = false; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (document.getElementById('resultPanel')) document.getElementById('resultPanel').classList.add('hidden'); startTimer((parseInt(document.getElementById('timeMinutes')?.value) || 30) * 60); saveProgressToLocal(); } }
 
 function submitExam() {
@@ -1718,6 +1829,13 @@ function submitExam() {
             initLazyRender(() => { while (displayedCount < Math.min(50, filteredIndices.length)) renderNextBatch(''); setTimeout(() => resultPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); });
             const wrongIndices = [], wrongTexts = []; for (let i = 0; i < currentQuestions.length; i++) { if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { wrongIndices.push(i); wrongTexts.push(currentQuestions[i].text); } }
             if (currentBankId) { await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); }
+
+            // GIAI ĐOẠN 2: Cập nhật Lộ trình ôn tập (SM-2)
+            scoreDetails.forEach((detail, i) => {
+                if (userAnswers[i]?.length > 0) { // Chỉ cập nhật nếu người dùng có làm câu đó
+                    ReviewManager.update(currentQuestions[i].text, detail.correct);
+                }
+            });
             const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.add('hidden');
             renderQuestionGrid();
             showToast("Đã lưu kết quả."); clearProgress();
@@ -2504,6 +2622,8 @@ async function initGIA() {
 
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
 
+        document.getElementById('startReviewBtn')?.addEventListener('click', startReviewSession);
+
         document.getElementById('copyVoiceTranscriptBtn')?.addEventListener('click', () => {
             const text = document.getElementById('voiceTranscript').innerText;
             if (!text || text.includes("Đang kết nối")) return;
@@ -2513,6 +2633,7 @@ async function initGIA() {
         });
 
         attachGlobalEvents();
+        ReviewManager.updateDashboardUI();
     } catch (e) { console.error("Lỗi Khởi tạo Hệ thống:", e); }
 }
 

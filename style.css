@@ -661,3 +661,30 @@ body.dark .font-range-input {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
 }
+
+/* Review Dashboard Styles */
+#reviewDashboardCard {
+    background: linear-gradient(to bottom right, #ffffff, #f8faff);
+}
+
+.dark #reviewDashboardCard {
+    background: linear-gradient(to bottom right, #1e293b, #0f172a);
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: slideUpFade 0.6s ease-out forwards;
+}
+
+#reviewDueCount { text-shadow: 0 0 20px rgba(79, 70, 229, 0.2); }
+#reviewLearningCount { text-shadow: 0 0 20px rgba(245, 158, 11, 0.2); }
+#reviewMasteredCount { text-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
+
+#startReviewBtn:hover {
+    box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4);
+    transform: translateY(-2px);
+}
