@@ -670,22 +670,23 @@ body.dark .font-range-input {
 }
 
 @keyframes mic-glow {
-    from { box-shadow: 0 0 10px rgba(79, 70, 229, 0.3); transform: scale(1); }
-    to { box-shadow: 0 0 30px rgba(79, 70, 229, 0.6); transform: scale(1.05); }
+    from { box-shadow: 0 0 10px rgba(79, 70, 229, 0.4); transform: scale(1); }
+    to { box-shadow: 0 0 35px rgba(79, 70, 229, 0.7); transform: scale(1); }
 }
 
 .mic-active-pulse {
     animation: mic-glow 1s infinite alternate;
 }
 
-/* Fix nút Mic bị xê dịch */
 #toggleMicBtn {
-    flex-shrink: 0;
     transform-origin: center center !important;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-    width: 64px; /* Cố định kích thước */
-    height: 64px;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+#toggleMicBtn:active {
+    transform: scale(0.9) !important;
 }
 
 #toggleMicBtn:active {

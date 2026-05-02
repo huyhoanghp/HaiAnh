@@ -685,17 +685,7 @@ class SpeechToTextManager {
             }
             const transcript = finalTranscript || interimTranscript;
 
-            // Ngắt lời AI nếu người dùng bắt đầu nói (Barge-in)
-            // Chỉ cho phép ngắt sau khi AI đã nói được ít nhất 1.5 giây để tránh echo ban đầu
-            if (window.speechSynthesis.speaking && transcript.trim().length > 5) {
-                const timeSpeaking = Date.now() - (window.VoiceTutor?.aiSpeakStartTime || 0);
-                if (timeSpeaking > 1500) {
-                    SpeechManager.stop();
-                    console.log("STT: Barge-in triggered");
-                } else {
-                    return; // Bỏ qua nếu là echo ban đầu
-                }
-            }
+            const transcript = finalTranscript || interimTranscript;
             if (this.onResult) this.onResult(transcript, !!finalTranscript);
         };
 
@@ -877,21 +867,21 @@ const VoiceTutor = {
             this.lastTranscript = text;
 
             if (this.isLiveMode) {
-                // Nếu AI đang nói, chúng ta không tự động gửi yêu cầu (để tránh Echo Loop)
-                // TRỪ KHI người dùng nói một câu dài hơn hẳn (dấu hiệu của ngắt lời)
+                // BARGE-IN: Nếu AI đang nói và người dùng phát ra âm thanh (không phải chỉ là 1-2 từ vọng)
                 if (window.speechSynthesis.speaking) {
                     const timeSpeaking = Date.now() - this.aiSpeakStartTime;
-                    // Nếu đã nói được 1.5s và transcript dài (không phải chỉ là vài từ Echo)
-                    if (timeSpeaking > 1500 && text.trim().split(' ').length > 6) {
-                        console.log("Barge-in detected via voice!");
+                    // Nhạy bén hơn: 1s grace period, > 3 từ là ngắt
+                    if (timeSpeaking > 1000 && text.trim().split(' ').length >= 3) {
+                        console.log("Barge-in via voice!");
                         SpeechManager.stop();
-                        this.aiSpeakStartTime = 0; // Reset để cho phép bộ đếm im lặng chạy
+                        this.aiSpeakStartTime = 0; 
                     }
-                    return; // Không chạy bộ đếm im lặng khi AI đang nói
+                    return; 
                 }
 
                 if (this.silenceTimer) clearTimeout(this.silenceTimer);
                 this.silenceTimer = setTimeout(() => {
+                    // Chỉ gửi yêu cầu nếu AI không đang nói và có nội dung thực sự
                     if (this.lastTranscript.trim().length > 2 && !window.speechSynthesis.speaking) {
                         this.stt.stop();
                         this.askGemini(this.lastTranscript);
