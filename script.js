@@ -586,8 +586,15 @@ function generateQuestionHTML(idx, rawSearch = "") {
     q.options.forEach((opt, optIdx) => {
         const isChecked = userChoice.includes(optIdx), inputType = q.type === 'multiple' ? 'checkbox' : 'radio'; let extraClass = "", badge = false;
         if (isSubmitted && correctIndices.includes(optIdx)) { extraClass = "bg-green-50 border-green-200"; badge = true; } else if (isSubmitted && isChecked && !correctIndices.includes(optIdx)) extraClass = "bg-red-50 border-red-200";
-        const voiceOptBtn = `<i class="fas fa-volume-up speak-toggle-btn ml-auto text-gray-400 hover:text-blue-600 cursor-pointer" data-qidx="${idx}-opt-${optIdx}" title="Nghe đáp án"></i>`;
-        optionsHtml += `<label class="flex items-start gap-3 p-3 rounded-xl border ${extraClass} hover:bg-gray-50 transition cursor-pointer mb-2"><input type="${inputType}" name="q${idx}" value="${optIdx}" ${isChecked ? "checked" : ""} ${isSubmitted ? "disabled" : ""} class="mt-1 option-input" data-qidx="${idx}" data-optidx="${optIdx}"><span class="text-gray-700 text-sm flex-1">${escapeHtml(opt)}</span>${badge ? '<span class="text-green-600 text-xs font-medium bg-white px-2 py-0.5 rounded-full mr-2">✓ Đúng</span>' : ''}${voiceOptBtn}</label>`;
+        const voiceOptBtn = `<button class="speak-toggle-btn flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors ml-auto" data-qidx="${idx}-opt-${optIdx}" title="Nghe đáp án">
+            <i class="fas fa-volume-up text-xs"></i>
+        </button>`;
+        optionsHtml += `<label class="flex items-center gap-3 p-3 rounded-xl border ${extraClass} hover:bg-gray-50 transition cursor-pointer mb-2">
+            <input type="${inputType}" name="q${idx}" value="${optIdx}" ${isChecked ? "checked" : ""} ${isSubmitted ? "disabled" : ""} class="option-input flex-shrink-0" data-qidx="${idx}" data-optidx="${optIdx}">
+            <span class="text-gray-700 text-sm flex-1 leading-snug">${escapeHtml(opt)}</span>
+            ${badge ? '<span class="flex-shrink-0 text-green-600 text-[10px] font-bold bg-white px-2 py-0.5 rounded-full border border-green-100 mr-1">✓ Đúng</span>' : ''}
+            ${voiceOptBtn}
+        </label>`;
     });
 
     const speakerIcon = `<div class="flex items-center gap-2 mb-2">
