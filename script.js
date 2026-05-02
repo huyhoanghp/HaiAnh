@@ -543,6 +543,12 @@ class SpeechToTextManager {
         recognition.interimResults = true;
         
         recognition.onresult = (e) => {
+            // Ngắt lời AI nếu người dùng bắt đầu nói (Barge-in)
+            if (window.speechSynthesis.speaking) {
+                SpeechManager.stop();
+                console.log("STT: Interrupted AI speech");
+            }
+
             let finalTranscript = '';
             let interimTranscript = '';
             for (let i = e.resultIndex; i < e.results.length; ++i) {
@@ -779,8 +785,17 @@ const VoiceTutor = {
             
             this.updateUI('speaking', response);
             SpeechManager.speak(response, 'voice-tutor', () => {
-                if (this.isCalling && this.isLiveMode) this.startListening();
+                if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking) {
+                    this.startListening();
+                }
             });
+
+            // Trong chế độ LIVE, cho phép lắng nghe ngay để có thể ngắt lời (Barge-in)
+            if (this.isLiveMode) {
+                setTimeout(() => {
+                    if (this.isCalling && this.isLiveMode) this.startListening();
+                }, 500); // Chờ 0.5s để AI bắt đầu phát âm thanh
+            }
         } catch (err) {
             console.error("Voice Gemini Error:", err);
             this.updateUI('speaking', "Có lỗi xảy ra khi kết nối với não bộ của tôi. Thử lại sau nhé!");
