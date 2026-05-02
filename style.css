@@ -626,6 +626,30 @@ body.dark .font-range-input {
     to { box-shadow: 0 0 25px rgba(79, 70, 229, 0.6); }
 }
 
+/* Voice Call Modal & Card */
+.voice-modal {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.voice-card {
+    background: white;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    max-height: 95vh;
+    width: 95%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    position: relative;
+}
+
+.dark .voice-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+}
+
 .ai-call-btn {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: white !important;

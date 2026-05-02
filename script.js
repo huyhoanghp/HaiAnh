@@ -647,8 +647,9 @@ const VoiceTutor = {
         this.stt.start(); 
         setTimeout(() => { if (this.isCalling && this.stt.isListening) this.stt.stop(); }, 100);
 
-        this.updateUI('speaking', 'Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?');
-        SpeechManager.speak('Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?', 'voice-tutor', () => {
+        const greeting = 'Tôi đang nghe đây. Bạn cần tôi hỗ trợ gì về câu hỏi số ' + (qIdx + 1) + '?';
+        this.updateUI('speaking', greeting);
+        SpeechManager.speak(greeting, 'voice-tutor', () => {
             this.startListening();
         });
     },
@@ -784,13 +785,17 @@ const VoiceTutor = {
         this.updateUI('thinking', 'Đang phân tích...');
         try {
             const q = currentQuestions[this.activeQIdx];
-            const systemPrompt = `Bạn là một gia sư AI thân thiện và am hiểu. Người dùng đang hỏi bạn về một câu hỏi trắc nghiệm sau đây:
-            Câu hỏi: ${q.text}
-            Các phương án: ${q.options.map((o, i) => String.fromCharCode(65 + i) + ". " + o).join(", ")}
-            Đáp án đúng là: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
+            const systemPrompt = `Bạn là một gia sư AI chuyên gia. Hãy thực hiện các yêu cầu sau:
+            1. PHẢN HỒI THEO YÊU CẦU: Nếu người dùng yêu cầu giải thích chi tiết, chuyên sâu hoặc dài (ví dụ 500 từ), hãy đáp ứng chính xác. Nếu không yêu cầu gì đặc biệt, hãy giải thích đầy đủ nhưng súc tích.
+            2. CHỐNG ẢO GIÁC: Chỉ trả lời dựa trên thông tin chính xác. Tuyệt đối không bịa đặt thông tin về câu hỏi hoặc đáp án. Nếu không chắc chắn, hãy dựa trên dữ liệu gốc được cung cấp.
+            3. ĐI THẲNG VÀO VẤN ĐỀ: Không chào hỏi lặp lại trừ khi mới bắt đầu cuộc gọi.
             
-            Hãy trả lời câu hỏi của người dùng một cách ngắn gọn, súc tích (dưới 100 từ), sử dụng ngôn ngữ tự nhiên như đang nói chuyện trực tiếp. Đừng quá cứng nhắc. Nếu người dùng hỏi lạc đề, hãy khéo léo dẫn dắt họ quay lại nội dung bài học.
-            Người dùng nói: "${userText}"`;
+            Dữ liệu câu hỏi:
+            Nội dung: ${q.text}
+            Các phương án: ${q.options.map((o, i) => String.fromCharCode(65 + i) + ". " + o).join(", ")}
+            Đáp án đúng: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
+            
+            Người dùng đang nói: "${userText}"`;
 
             const payload = { contents: [{ role: "user", parts: [{ text: systemPrompt }] }], generationConfig: { temperature: 0.7 } };
             const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
