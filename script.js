@@ -219,11 +219,17 @@ const ReviewManager = {
         const barDue = document.getElementById('barDue');
         const barLearning = document.getElementById('barLearning');
         const barMastered = document.getElementById('barMastered');
+        const masteryPercentEl = document.getElementById('masteryPercent');
         
         if (total > 0 && barDue) {
             barDue.style.width = (dueCount / total * 100) + '%';
             barLearning.style.width = (learningCount / total * 100) + '%';
             barMastered.style.width = (masteredCount / total * 100) + '%';
+            
+            if (masteryPercentEl) {
+                const percent = Math.round((masteredCount / total) * 100);
+                masteryPercentEl.innerText = percent + '%';
+            }
         }
 
         // Cập nhật Badge trên Header
@@ -1802,33 +1808,39 @@ function startRandomTest() { if (!masterQuestions.length) showToast("Chưa có b
 
 async function startReviewSession() {
     showLoading(true, "Đang quét các câu hỏi cần ôn tập...");
-    const banks = await getAllBanks();
-    let allDueQuestions = [];
-    const now = Date.now();
-    
-    for (const bank of banks) {
-        const questions = await getBankQuestions(bank.id);
-        const due = questions.filter(q => {
-            const id = ReviewManager.getQId(q.text);
-            const item = ReviewManager.stats[id];
-            return item && item.nextDate <= now;
-        });
-        allDueQuestions = allDueQuestions.concat(due);
-    }
-    
-    showLoading(false);
-    if (allDueQuestions.length === 0) {
-        showToast("Tuyệt vời! Bạn không còn câu nào cần ôn tập hôm nay.");
-        return;
-    }
-    
-    showConfirm(`Bạn có ${allDueQuestions.length} câu hỏi đã đến hạn ôn tập. Bắt đầu ngay?`, (yes) => {
-        if (yes) {
-            initExam(allDueQuestions, 15);
-            const modeInfo = document.getElementById('modeInfo');
-            if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Thông minh (Spaced Repetition)";
+    try {
+        const banks = await getAllBanks();
+        let allDueQuestions = [];
+        const now = Date.now();
+        
+        for (const bank of banks) {
+            if (!bank.questions) continue;
+            const due = bank.questions.filter(q => {
+                const id = ReviewManager.getQId(q.text);
+                const item = ReviewManager.stats[id];
+                return item && item.nextDate <= now;
+            });
+            allDueQuestions = allDueQuestions.concat(due);
         }
-    });
+        
+        showLoading(false);
+        if (allDueQuestions.length === 0) {
+            showToast("Tuyệt vời! Bạn không còn câu nào cần ôn tập hôm nay.");
+            return;
+        }
+        
+        showConfirm(`Bạn có ${allDueQuestions.length} câu hỏi đã đến hạn ôn tập. Bắt đầu ngay?`, (yes) => {
+            if (yes) {
+                initExam(allDueQuestions, 15);
+                const modeInfo = document.getElementById('modeInfo');
+                if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Thông minh (Spaced Repetition)";
+            }
+        });
+    } catch (err) {
+        console.error("Review Session Error:", err);
+        showLoading(false);
+        showToast("❌ Lỗi khởi tạo ôn tập: " + err.message);
+    }
 }
 function resetCurrentExam() { if (!currentQuestions.length) showToast("Chưa có bài."); else if (!examActive) showToast("Bài đã nộp."); else { showToast("Đang làm mới bài thi..."); stopTimer(); userAnswers = Array(currentQuestions.length).fill().map(() => []); flagged = Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = false; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (document.getElementById('resultPanel')) document.getElementById('resultPanel').classList.add('hidden'); startTimer((parseInt(document.getElementById('timeMinutes')?.value) || 30) * 60); saveProgressToLocal(); } }
 
@@ -2639,13 +2651,23 @@ async function initGIA() {
 
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
 
-        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => {
+        const toggleReviewPanel = (show) => {
             const card = document.getElementById('reviewDashboardCard');
-            if (card) {
-                card.classList.toggle('hidden');
-                card.classList.toggle('flex');
+            const overlay = document.getElementById('sidePanelOverlay');
+            if (card && overlay) {
+                if (show) {
+                    card.classList.remove('translate-x-full');
+                    overlay.classList.remove('hidden');
+                } else {
+                    card.classList.add('translate-x-full');
+                    overlay.classList.add('hidden');
+                }
             }
-        });
+        };
+
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
+        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
+        document.getElementById('sidePanelOverlay')?.addEventListener('click', () => toggleReviewPanel(false));
 
         document.getElementById('startReviewBtn')?.addEventListener('click', startReviewSession);
 
