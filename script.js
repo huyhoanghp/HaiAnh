@@ -2208,7 +2208,9 @@ async function initGIA() {
                 listWrapper.innerHTML = currentAiFiles.map((f, i) => `
                     <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100 dark:border-slate-700 shadow-sm">
                         <div class="flex items-center gap-2 overflow-hidden">
-                            <i class="${f.type.startsWith('image/') ? 'fas fa-image text-blue-500' : 'fas fa-file-pdf text-red-500'} text-lg"></i>
+                            <i class="${f.type.startsWith('image/') ? 'fas fa-image text-blue-500' : 
+                                       f.type.startsWith('audio/') ? 'fas fa-volume-high text-purple-500' : 
+                                       'fas fa-file-pdf text-red-500'} text-lg"></i>
                             <div class="flex flex-col overflow-hidden">
                                 <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
                                 <span class="text-[9px] text-gray-500">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
@@ -2278,6 +2280,19 @@ async function initGIA() {
                         name: file.name,
                         type: file.type,
                         data: finalData,
+                        size: file.size
+                    });
+                } else if (file.type.startsWith('audio/')) {
+                    const data = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                        reader.readAsDataURL(file);
+                    });
+                    
+                    currentAiFiles.push({
+                        name: file.name,
+                        type: file.type,
+                        data: data,
                         size: file.size
                     });
                 } else if (fileName.endsWith('.docx')) {
@@ -2563,7 +2578,23 @@ async function initGIA() {
             aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex');
             showLoading(true, "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
 
-            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc TẤT CẢ các tài liệu đính kèm và văn bản dưới đây. Tổng hợp kiến thức và tạo ra đúng ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array. Cấu trúc mẫu:\n[\n  {\n    "text": "Câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nTiếng Việt.`;
+            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm (OCR Pro & Voice Mode). 
+Hãy phân tích TẤT CẢ các tài liệu đính kèm (Hình ảnh sách giáo khoa, file âm thanh bài giảng, tài liệu văn bản). 
+1. Với Hình ảnh: Hãy nhận diện cấu trúc trang sách, các công thức, hình vẽ và chuyển thành câu hỏi phù hợp.
+2. Với Âm thanh: Hãy nghe nội dung bài giảng và trích xuất các ý chính để đặt câu hỏi.
+3. Với Văn bản: Tổng hợp kiến thức chuyên sâu.
+
+Tạo ra đúng ${count} câu hỏi trắc nghiệm chất lượng cao. ${difficultyText}
+BẮT BUỘC trả về JSON array. Cấu trúc mẫu:
+[
+  {
+    "text": "Câu hỏi?",
+    "options": ["A", "B", "C", "D"],
+    "correctIndices": [0],
+    "type": "single"
+  }
+]
+Tiếng Việt.`;
             
             let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN TỔNG HỢP:\n" + rawText;
             
