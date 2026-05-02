@@ -1205,9 +1205,28 @@ async function compressImage(base64Str) {
 async function callAiProxy({ provider, model, payload }) {
     const apiKey = getApiKey();
     if (!apiKey || provider !== 'google') return await callLegacyProxy({ provider, model, payload });
-    const baseModels = ['gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-flash-lite-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-preview', 'gemini-3-flash', 'gemini-3-flash-preview', 'gemini-3-flash-live', 'gemini-3-flash-live-preview'];
-    if (cachedWorkingModel && !baseModels.includes(cachedWorkingModel)) { cachedWorkingModel = null; localStorage.removeItem('last_working_model'); }
-    const modelsToTry = cachedWorkingModel ? [cachedWorkingModel, ...baseModels.filter(m => m !== cachedWorkingModel)] : baseModels;
+    const baseModels = [
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-8b',
+        'gemini-2.0-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-exp-1206',
+        'gemini-1.5-pro-002',
+        'learnlm-1.5-pro-experimental'
+    ];
+    
+    const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+    // Gộp và loại bỏ trùng lặp
+    const allAvailable = Array.from(new Set([...discovered, ...baseModels]));
+
+    // Ưu tiên: 1. Model người dùng chọn -> 2. Toàn bộ model khả dụng
+    const userSelectedModel = localStorage.getItem('last_working_model');
+    const modelsToTry = userSelectedModel && allAvailable.includes(userSelectedModel) 
+        ? [userSelectedModel, ...allAvailable.filter(m => m !== userSelectedModel)]
+        : allAvailable;
     let lastError = "Không có phản hồi từ AI";
     for (const currentModel of modelsToTry) {
         const versions = ['v1beta', 'v1'];
@@ -1239,14 +1258,81 @@ async function callAiProxy({ provider, model, payload }) {
     showApiError(null, lastError); throw new Error(lastError);
 }
 
-async function checkAvailableModels() {
-    const apiKey = getApiKey(); if (!apiKey) { showToast("❌ Hãy nhập và lưu API Key trước!"); return; }
-    showLoading(true, "Đang kiểm tra danh sách mô hình...");
+async function discoverModels() {
+    const apiKey = getApiKey();
+    if (!apiKey) return;
     try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
-        const data = await res.json(); showLoading(false);
-        if (data.models) { const list = data.models.map(m => m.name.replace('models/', '')).join('\n'); alert("✅ Các mô hình khả dụng:\n\n" + list); }
-        else { alert("❌ Lỗi: " + JSON.stringify(data)); }
+        const data = await res.json();
+        if (data.models) {
+            // Lọc các model hỗ trợ generateContent
+            const activeModels = data.models
+                .filter(m => m.supportedGenerationMethods.includes('generateContent'))
+                .map(m => m.name.replace('models/', ''));
+            
+            if (activeModels.length > 0) {
+                const oldDiscovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+                localStorage.setItem('haianh_discovered_models', JSON.stringify(activeModels));
+                updateModelDropdownUI(activeModels);
+                
+                // Nếu có model mới hoàn toàn so với trước đây
+                if (activeModels.some(m => !oldDiscovered.includes(m))) {
+                    showSettingsBadge(true);
+                }
+            }
+        }
+    } catch (e) { console.warn("Dynamic Discovery: Không thể kết nối API danh sách model."); }
+}
+
+function showSettingsBadge(show) {
+    const btn = document.getElementById('settingsToggleBtn');
+    if (!btn) return;
+    let badge = btn.querySelector('.new-model-badge');
+    if (show) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'new-model-badge absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white dark:border-slate-900 rounded-full animate-pulse';
+            btn.appendChild(badge);
+        }
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
+function updateModelDropdownUI(models) {
+    const select = document.getElementById('aiModelSelect');
+    if (!select) return;
+    
+    const currentVal = select.value;
+    select.innerHTML = '';
+    
+    // Tạo nhóm "Khám phá từ API"
+    const groupApi = document.createElement('optgroup');
+    groupApi.label = "Đã cập nhật từ API (Mới nhất)";
+    
+    models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.text = m.replace('gemini-', '').toUpperCase();
+        groupApi.appendChild(opt);
+    });
+    
+    select.appendChild(groupApi);
+    if (models.includes(currentVal)) select.value = currentVal;
+}
+
+async function checkAvailableModels() {
+    const apiKey = getApiKey(); if (!apiKey) { showToast("❌ Hãy nhập và lưu API Key trước!"); return; }
+    showLoading(true, "Đang quét các mô hình khả dụng...");
+    try {
+        await discoverModels();
+        const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+        showLoading(false);
+        if (discovered.length) {
+            alert(`✅ Đã tìm thấy ${discovered.length} mô hình đang hoạt động!\n\nDanh sách đã được cập nhật vào mục Cài đặt.`);
+        } else {
+            alert("❌ Không tìm thấy mô hình nào hoặc API Key không hợp lệ.");
+        }
     } catch (e) { showLoading(false); alert("❌ Lỗi: " + e.message); }
 }
 
@@ -2068,6 +2154,7 @@ async function initGIA() {
     try {
         await openDB(); await refreshBankDropdown(); initDarkMode(); updateApiKeyBadge();
         FontSizeManager.init();
+        discoverModels(); // Khởi chạy ngầm khám phá model mới
         const restored = await restoreProgress(); if (!restored) { const banks = await getAllBanks(); if (banks.length) await loadBankById(banks[0].id); }
         const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn');
         searchInput?.addEventListener('input', () => { if (searchInput.value.length > 0) clearSearchBtn?.classList.remove('hidden'); else clearSearchBtn?.classList.add('hidden'); if (searchDebounceTimer) clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => { initLazyRender(); }, 300); });
@@ -2161,6 +2248,7 @@ async function initGIA() {
             if (show) {
                 settingsSidePanel?.classList.remove('-translate-x-full');
                 overlay?.classList.remove('hidden');
+                showSettingsBadge(false);
                 
                 // 1. Nạp Cấu hình AI
                 if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
