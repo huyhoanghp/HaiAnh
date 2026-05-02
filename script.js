@@ -1810,32 +1810,49 @@ async function startReviewSession() {
     showLoading(true, "Đang quét các câu hỏi cần ôn tập...");
     try {
         const banks = await getAllBanks();
-        let allDueQuestions = [];
+        const stats = ReviewManager.stats;
         const now = Date.now();
         
+        let dueQuestions = [];
+        let allLearningQuestions = [];
+        
+        const allQuestions = [];
         for (const bank of banks) {
-            if (!bank.questions) continue;
-            const due = bank.questions.filter(q => {
-                const id = ReviewManager.getQId(q.text);
-                const item = ReviewManager.stats[id];
-                return item && item.nextDate <= now;
-            });
-            allDueQuestions = allDueQuestions.concat(due);
+            if (bank.questions) allQuestions.push(...bank.questions);
         }
-        
-        showLoading(false);
-        if (allDueQuestions.length === 0) {
-            showToast("Tuyệt vời! Bạn không còn câu nào cần ôn tập hôm nay.");
-            return;
-        }
-        
-        showConfirm(`Bạn có ${allDueQuestions.length} câu hỏi đã đến hạn ôn tập. Bắt đầu ngay?`, (yes) => {
-            if (yes) {
-                initExam(allDueQuestions, 15);
-                const modeInfo = document.getElementById('modeInfo');
-                if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Thông minh (Spaced Repetition)";
+
+        allQuestions.forEach(q => {
+            const id = ReviewManager.getQId(q.text);
+            const item = stats[id];
+            if (item) {
+                if (item.nextDate <= now) dueQuestions.push(q);
+                allLearningQuestions.push(q);
             }
         });
+        
+        showLoading(false);
+
+        if (dueQuestions.length > 0) {
+            showConfirm(`Bạn có ${dueQuestions.length} câu hỏi đã đến hạn ôn tập. Bắt đầu ngay?`, (yes) => {
+                if (yes) {
+                    toggleReviewPanel(false);
+                    initExam(dueQuestions, 15);
+                    const modeInfo = document.getElementById('modeInfo');
+                    if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Định kỳ (Đến hạn)";
+                }
+            });
+        } else if (allLearningQuestions.length > 0) {
+            showConfirm(`Tuyệt vời! Bạn đã hoàn thành hết các câu của hôm nay. Bạn có muốn ôn lại ${allLearningQuestions.length} câu đang học để nhớ sâu hơn không?`, (yes) => {
+                if (yes) {
+                    toggleReviewPanel(false);
+                    initExam(allLearningQuestions, 20);
+                    const modeInfo = document.getElementById('modeInfo');
+                    if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Chủ động (Cram Mode)";
+                }
+            });
+        } else {
+            showToast("Bạn chưa có dữ liệu học tập. Hãy làm thử một bộ đề bất kỳ trước nhé!");
+        }
     } catch (err) {
         console.error("Review Session Error:", err);
         showLoading(false);

@@ -330,6 +330,20 @@ body.dark .q-text-focus { color: #f1f5f9 !important; }
 }
 
 /* Settings Dropdown & Menu Items (Vanilla CSS for CDN compatibility) */
+#toastMsg {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99999;
+    padding: 1rem 2rem;
+    max-width: calc(100vw - 1.5rem);
+    background-color: white;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f3f4f6;
+}
+
 #settingsDropdown {
     position: absolute;
     right: 0;
