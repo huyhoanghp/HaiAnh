@@ -2142,59 +2142,16 @@ async function initGIA() {
         document.getElementById('reviewWrongMainBtn')?.addEventListener('click', async () => { const history = await getAllHistory(); if (history.length === 0) { showToast("Chưa có lịch sử để ôn tập."); return; } const currentBankWrongTexts = new Set(); for (const h of history) { if (h.bankId === currentBankId && h.wrongQuestionsText) { h.wrongQuestionsText.forEach(txt => currentBankWrongTexts.add(txt)); } } if (currentBankWrongTexts.size === 0) { showToast("Không có câu sai nào trong bộ hiện tại."); return; } const wrongQuestions = masterQuestions.filter(q => currentBankWrongTexts.has(q.text)); if (wrongQuestions.length === 0) { showToast("Không tìm thấy câu hỏi tương ứng."); return; } initExam(wrongQuestions, parseInt(document.getElementById('timeMinutes')?.value) || 30); showToast(`Đã tạo bài ôn tập với ${wrongQuestions.length} câu sai.`); });
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => { if (!submitted) { showToast("Hãy nộp bài trước."); return; } showLoading(true, "Đang chuẩn bị báo cáo..."); try { const correctCount = scoreDetails.filter(d => d.correct).length; const percent = (correctCount / currentQuestions.length * 100).toFixed(1); const canvasChart = document.createElement('canvas'); canvasChart.width = 400; canvasChart.height = 200; const ctx = canvasChart.getContext('2d'); if (!ctx) return; new Chart(ctx, { type: 'doughnut', data: { labels: ['Đúng', 'Sai'], datasets: [{ data: [correctCount, currentQuestions.length - correctCount], backgroundColor: ['#22c55e', '#ef4444'] }] }, options: { animation: false, responsive: false, plugins: { legend: { position: 'top' } } } }); const chartImg = canvasChart.toDataURL(); let printWindow = window.open('', '_blank'); if (!printWindow) return; let html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo kết quả thi<\/title><style>body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; line-height: 1.5; } h1 { color: #1e40af; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; } th, td { border: 1px solid #ccc; padding: 10px; text-align: left; } th { background-color: #f2f2f2; } .correct { color: #166534; font-weight: bold; } .wrong { color: #991b1b; font-weight: bold; } img { max-width: 300px; margin-bottom: 20px; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; } }<\/style><\/head><body><h1>Báo cáo kết quả thi<\/h1><p><strong>Bộ câu hỏi:<\/strong> ${currentBankName}<\/p><p><strong>Ngày thi:<\/strong> ${new Date().toLocaleString()}<\/p><p><strong>Điểm số:<\/strong> ${correctCount}\/${currentQuestions.length} (${percent}%)<\/p><img src="${chartImg}" alt="Biểu đồ kết quả" \/><hr\/><h3>Chi tiết từng câu hỏi<\/h3><table><thead><tr><th style="width:5%">STT<\/th><th style="width:40%">Nội dung<\/th><th style="width:25%">Đáp án đã chọn<\/th><th style="width:20%">Đáp án đúng<\/th><th style="width:10%">Kết quả<\/th><\/tr><\/thead><tbody>`; for (let i = 0; i < currentQuestions.length; i++) { const q = currentQuestions[i]; const userAns = userAnswers[i] || []; const userText = userAns.length ? userAns.map(a => q.options[a]).join('<br>') : '(Chưa trả lời)'; const correctText = q.correctIndices.map(i => q.options[i]).join('<br>'); const status = scoreDetails[i].correct ? 'Đúng' : (userAns.length ? 'Sai' : 'Chưa trả lời'); const statusClass = scoreDetails[i].correct ? 'correct' : 'wrong'; html += `<tr><td>${i + 1}<\/td><td>${escapeHtml(q.text)}<\/td><td>${userText}<\/td><td>${correctText}<\/td><td class="${statusClass}">${status}<\/td><\/tr>`; } html += `<\/tbody><\/table><\/body><\/html>`; printWindow.document.open(); printWindow.document.write(html); printWindow.document.close(); setTimeout(() => { showLoading(false); printWindow.print(); }, 500); } catch (e) { console.error(e); showToast("Lỗi xuất báo cáo: " + e.message); showLoading(false); } });
         document.getElementById('clearHistoryBtn')?.addEventListener('click', () => { showConfirm("Xóa toàn bộ lịch sử?", async (yes) => { if (!yes) return; await clearAllHistory(); showToast("Đã xóa lịch sử."); document.getElementById('statsModal')?.classList.add('hidden'); }); });
-        document.getElementById('aiSettingsBtn')?.addEventListener('click', () => {
-            document.getElementById('settingsDropdown')?.classList.remove('show');
-            const input = document.getElementById('geminiApiKeyInput');
-            if (input) input.value = localStorage.getItem('gemini_api_key') || '';
-            
-            // Cập nhật UI từ settings hiện tại
-            document.getElementById('showAiExplainToggle').checked = appSettings.showAiExplain;
-            document.getElementById('showAiCallToggle').checked = appSettings.showAiCall;
-            document.getElementById('defaultReadSpeed').value = appSettings.defaultReadSpeed;
-
-            const modal = document.getElementById('aiSettingsModal');
-            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
-        });
-        document.getElementById('closeAiSettingsBtn')?.addEventListener('click', () => { const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } });
-        document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => { 
-            const input = document.getElementById('geminiApiKeyInput'); 
-            const key = input?.value.trim(); 
-            if (key) { 
-                localStorage.setItem('gemini_api_key', key); 
-            } else { 
-                localStorage.removeItem('gemini_api_key'); 
-            } 
-            
-            // Lưu cài đặt bổ sung
-            appSettings.showAiExplain = document.getElementById('showAiExplainToggle').checked;
-            appSettings.showAiCall = document.getElementById('showAiCallToggle').checked;
-            appSettings.defaultReadSpeed = parseFloat(document.getElementById('defaultReadSpeed').value);
-            
-            localStorage.setItem('haianh_show_ai_explain', appSettings.showAiExplain);
-            localStorage.setItem('haianh_show_ai_call', appSettings.showAiCall);
-            localStorage.setItem('haianh_default_read_speed', appSettings.defaultReadSpeed);
-            
-            // Áp dụng ngay
-            SpeechManager.rate = appSettings.defaultReadSpeed;
-            if (currentQuestions.length > 0) renderAllQuestions(); // Vẽ lại để cập nhật hiện nút
-
-            showToast('✅ Đã lưu cấu hình AI!');
-            const modal = document.getElementById('aiSettingsModal');
-            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } 
-            updateApiKeyBadge(); 
-        });
-        document.getElementById('checkModelsBtn')?.addEventListener('click', checkAvailableModels);
-
+        
         // AI Generator modal logic
         const openAiGenBtn = document.getElementById('openAiGenBtn');
         const aiGenModal = document.getElementById('aiGenModal');
         const closeAiGenBtn = document.getElementById('closeAiGenBtn');
-        const submitAiGenBtn = document.getElementById('submitAiGenBtn');
-        const removeFileBtn = document.getElementById('removeFileBtn');
         const uploadFileArea = document.getElementById('uploadFileArea');
         const fileInput = document.getElementById('fileInput');
 
-        let currentAiFiles = []; // Mảng chứa các file {name, type, data, size}
+        let currentAiFiles = [];
+        let isBatchMode = false;
 
         const updateAiFileListUI = () => {
             const container = document.getElementById('multiFileContainer');
@@ -2209,8 +2166,7 @@ async function initGIA() {
             }
 
             container?.classList.remove('hidden');
-            // uploadArea?.classList.add('hidden'); // Giữ lại để người dùng có thể bấm thêm file
-
+            uploadArea?.classList.add('hidden');
             if (listWrapper) {
                 listWrapper.innerHTML = currentAiFiles.map((f, i) => `
                     <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100 dark:border-slate-700 shadow-sm">
@@ -2256,27 +2212,32 @@ async function initGIA() {
         });
         
         closeAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex'); });
-        uploadFileArea?.addEventListener('click', () => { fileInput?.click(); });
+        uploadFileArea?.addEventListener('click', () => { isBatchMode = false; fileInput?.removeAttribute('capture'); fileInput?.click(); });
+        
+        document.getElementById('batchScanBtn')?.addEventListener('click', () => {
+            isBatchMode = true;
+            fileInput?.setAttribute('capture', 'environment');
+            fileInput?.click();
+        });
 
         fileInput?.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files || []);
-            if (!files.length) return;
+            if (!files.length) { isBatchMode = false; return; }
 
-            showLoading(true, `Đang xử lý ${files.length} tệp tin...`);
+            showLoading(true, isBatchMode ? "Đang nạp trang sách..." : `Đang xử lý ${files.length} tệp tin...`);
             
             for (const file of files) {
                 const fileName = file.name.toLowerCase();
-                // Kiểm tra dung lượng tổng
                 const currentTotal = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
                 if (currentTotal + file.size > 100 * 1024 * 1024) {
-                    showToast(`⚠️ File "${file.name}" vượt quá hạn mức 100MB còn lại.`);
+                    showToast(`⚠️ File "${file.name}" vượt quá hạn mức 100MB.`);
                     continue;
                 }
 
                 if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-                    const data = await new Promise((resolve) => {
+                    const data = await new Promise((res) => {
                         const reader = new FileReader();
-                        reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                        reader.onload = (ev) => res(ev.target.result.split(',')[1]);
                         reader.readAsDataURL(file);
                     });
                     
@@ -2284,28 +2245,44 @@ async function initGIA() {
                     if (file.type.startsWith('image/')) finalData = await compressImage(data);
                     
                     currentAiFiles.push({
-                        name: file.name,
+                        name: isBatchMode ? `Trang ${currentAiFiles.length + 1}` : file.name,
                         type: file.type,
                         data: finalData,
                         size: file.size
                     });
                 } else if (file.type.startsWith('audio/')) {
-                    const data = await new Promise((resolve) => {
+                    const data = await new Promise((res) => {
                         const reader = new FileReader();
-                        reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                        reader.onload = (ev) => res(ev.target.result.split(',')[1]);
                         reader.readAsDataURL(file);
                     });
-                    
-                    currentAiFiles.push({
-                        name: file.name,
-                        type: file.type,
-                        data: data,
-                        size: file.size
-                    });
+                    currentAiFiles.push({ name: file.name, type: file.type, data: data, size: file.size });
                 } else if (fileName.endsWith('.docx')) {
-                    const text = await new Promise((resolve) => {
+                    const text = await new Promise((res) => {
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
+                        reader.onload = (ev) => mammoth.extractRawText({ arrayBuffer: ev.target.result }).then(r => res(r.value)).catch(() => res(""));
+                        reader.readAsArrayBuffer(file);
+                    });
+                    if (text) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += `\n--- NỘI DUNG TỪ ${file.name} ---\n${text}\n`; }
+                } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+                    const text = await new Promise((res) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => { try { const wb = XLSX.read(ev.target.result, { type: 'array' }); let rs = ""; wb.SheetNames.forEach(n => { const sh = wb.Sheets[n]; const js = XLSX.utils.sheet_to_json(sh, { header: 1 }); rs += js.map(r => r.join(" ")).join("\n") + "\n"; }); res(rs); } catch(e) { res(""); } };
+                        reader.readAsArrayBuffer(file);
+                    });
+                    if (text) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += `\n--- DỮ LIỆU TỪ ${file.name} ---\n${text}\n`; }
+                } else if (file.type.startsWith('text/')) {
+                    const text = await new Promise((res) => { const reader = new FileReader(); reader.onload = (ev) => res(ev.target.result); reader.readAsText(file); });
+                    if (text) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += `\n--- VĂN BẢN TỪ ${file.name} ---\n${text}\n`; }
+                }
+            }
+            
+            updateAiFileListUI();
+            showLoading(false);
+            if (fileInput) fileInput.value = '';
+
+            if (isBatchMode) {
+                setTimeout(() => {
                             mammoth.extractRawText({ arrayBuffer: ev.target.result })
                                 .then(res => resolve(res.value))
                                 .catch(() => resolve(""));
