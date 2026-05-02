@@ -216,8 +216,14 @@ const ReviewManager = {
 
         const reviewCard = document.getElementById('reviewDashboardCard');
         if (reviewCard) {
-            if (dueCount > 0) reviewCard.classList.remove('hidden');
-            else reviewCard.classList.add('hidden'); // Ẩn nếu không có gì cần ôn (tùy chọn)
+            // Hiện card nếu có bất kỳ dữ liệu nào (đang học, đã nhớ hoặc cần ôn)
+            if (dueCount > 0 || learningCount > 0 || masteredCount > 0) {
+                reviewCard.classList.remove('hidden');
+                reviewCard.classList.add('flex');
+            } else {
+                // Nếu hoàn toàn mới, ta vẫn hiện nhưng để 0 để giới thiệu tính năng
+                reviewCard.classList.remove('hidden');
+            }
         }
     }
 };
