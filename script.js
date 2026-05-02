@@ -1219,10 +1219,14 @@ async function callAiProxy({ provider, model, payload }) {
     ];
     
     const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
-    // Gộp và loại bỏ trùng lặp
-    const allAvailable = Array.from(new Set([...discovered, ...baseModels]));
+    
+    // Thuật toán sắp xếp thông minh:
+    // 1. Lấy danh sách cứng làm nòng cốt
+    // 2. Thêm các model khám phá được mà không nằm trong danh sách cứng vào cuối
+    const otherDiscovered = discovered.filter(m => !baseModels.includes(m));
+    const allAvailable = [...baseModels, ...otherDiscovered];
 
-    // Ưu tiên: 1. Model người dùng chọn -> 2. Toàn bộ model khả dụng
+    // Ưu tiên cao nhất: 1. Model người dùng chọn -> 2. Danh sách đã sắp xếp
     const userSelectedModel = localStorage.getItem('last_working_model');
     const modelsToTry = userSelectedModel && allAvailable.includes(userSelectedModel) 
         ? [userSelectedModel, ...allAvailable.filter(m => m !== userSelectedModel)]
