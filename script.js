@@ -2177,25 +2177,35 @@ async function initGIA() {
             container?.classList.remove('hidden');
             uploadArea?.classList.add('hidden');
             if (listWrapper) {
-                listWrapper.innerHTML = currentAiFiles.map((f, i) => `
-                    <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100 dark:border-slate-700 shadow-sm">
-                        <div class="flex items-center gap-2 overflow-hidden">
-                            <i class="${f.type.startsWith('image/') ? 'fas fa-image text-blue-500' : 
-                                       f.type.startsWith('audio/') ? 'fas fa-volume-high text-purple-500' : 
-                                       'fas fa-file-pdf text-red-500'} text-lg"></i>
+                listWrapper.innerHTML = currentAiFiles.map((f, i) => {
+                    const isImg = f.type.startsWith('image/');
+                    const previewSrc = isImg ? `data:${f.type};base64,${f.data}` : '';
+                    
+                    return `
+                    <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-slate-700 shadow-sm group">
+                        <div class="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer" onclick="viewFullAiFile(${i})">
+                            ${isImg ? 
+                                `<div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-800 flex-shrink-0 bg-gray-50">
+                                    <img src="${previewSrc}" class="w-full h-full object-cover">
+                                 </div>` :
+                                `<div class="w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-500 flex-shrink-0">
+                                    <i class="${f.type.startsWith('audio/') ? 'fas fa-volume-high' : 'fas fa-file-pdf'} text-xl"></i>
+                                 </div>`
+                            }
                             <div class="flex flex-col overflow-hidden">
-                                <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
-                                <span class="text-[9px] text-gray-500">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
+                                <span class="text-[9px] text-gray-500 font-medium">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
                             </div>
                         </div>
-                        <button class="remove-ai-file text-red-400 hover:text-red-600 p-1" data-index="${i}">
-                            <i class="fas fa-times-circle"></i>
+                        <button class="remove-ai-file w-8 h-8 rounded-full text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center justify-center" data-index="${i}">
+                            <i class="fas fa-trash-alt text-sm"></i>
                         </button>
                     </div>
-                `).join('');
+                `}).join('');
 
                 listWrapper.querySelectorAll('.remove-ai-file').forEach(btn => {
                     btn.onclick = (e) => {
+                        e.stopPropagation();
                         const idx = parseInt(e.currentTarget.dataset.index);
                         currentAiFiles.splice(idx, 1);
                         updateAiFileListUI();
@@ -2270,40 +2280,73 @@ async function initGIA() {
         document.getElementById('captureBtn')?.addEventListener('click', async () => {
             if (!cameraVideo || !cameraCanvas) return;
             const ctx = cameraCanvas.getContext('2d');
-            cameraCanvas.width = cameraVideo.videoWidth;
-            cameraCanvas.height = cameraVideo.videoHeight;
-            ctx.drawImage(cameraVideo, 0, 0);
+            
+            // Tính toán khung crop (40px border từ HTML)
+            const videoW = cameraVideo.videoWidth;
+            const videoH = cameraVideo.videoHeight;
+            
+            // Giả định khung viền là 40px trên giao diện hiển thị
+            // Ta sẽ crop lấy phần trung tâm 80% của video để đảm bảo chất lượng
+            const cropScale = 0.8;
+            const sw = videoW * cropScale;
+            const sh = videoH * cropScale;
+            const sx = (videoW - sw) / 2;
+            const sy = (videoH - sh) / 2;
+
+            cameraCanvas.width = sw;
+            cameraCanvas.height = sh;
+            ctx.drawImage(cameraVideo, sx, sy, sw, sh, 0, 0, sw, sh);
 
             // Hiệu ứng flash
             const flash = document.getElementById('cameraFlash');
             if (flash) {
                 flash.classList.remove('active');
-                void flash.offsetWidth; // trigger reflow
+                void flash.offsetWidth;
                 flash.classList.add('active');
                 flash.classList.remove('hidden');
                 setTimeout(() => flash.classList.add('hidden'), 400);
             }
 
-            // Chuyển sang base64
-            const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.8);
+            const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.85);
             const base64Data = dataUrl.split(',')[1];
             
             currentAiFiles.push({
                 name: `Trang ${currentAiFiles.length + 1}`,
                 type: 'image/jpeg',
                 data: base64Data,
-                size: Math.round(base64Data.length * 0.75) // Ước tính dung lượng
+                size: Math.round(base64Data.length * 0.75)
             });
 
             cameraCountBadge.innerText = currentAiFiles.length;
 
-            // Hiện toast nhỏ xác nhận
             const toast = document.createElement('div');
             toast.className = 'camera-success-toast';
-            toast.innerText = `📸 Đã nạp trang ${currentAiFiles.length}`;
+            toast.innerText = `📸 Đã quét trang ${currentAiFiles.length}`;
             cameraModal.appendChild(toast);
             setTimeout(() => toast.remove(), 1200);
         });
+
+        // Hàm xem full ảnh AI
+        window.viewFullAiFile = (idx) => {
+            const file = currentAiFiles[idx];
+            if (!file || !file.type.startsWith('image/')) return;
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/90 z-[500] flex flex-col items-center justify-center p-4 backdrop-blur-md';
+            modal.innerHTML = `
+                <div class="absolute top-6 right-6 flex gap-4">
+                    <button class="w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20" onclick="this.closest('.fixed').remove()">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <img src="data:${file.type};base64,${file.data}" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10">
+                <div class="mt-6 text-white text-center">
+                    <p class="font-bold">${file.name}</p>
+                    <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">${(file.size/1024/1024).toFixed(2)} MB</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
 
         fileInput?.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files || []);
