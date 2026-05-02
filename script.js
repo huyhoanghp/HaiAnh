@@ -2582,10 +2582,13 @@ async function initGIA() {
             const diff = document.getElementById('aiGenDifficulty')?.value;
             const difficultyText = diff !== 'Mặc định' ? `Mức độ câu hỏi: ${diff}.` : '';
             
+            const isOcrPro = document.getElementById('ocrProToggle')?.checked;
+            const ocrProText = isOcrPro ? "\n[CHẾ ĐỘ OCR PRO KÍCH HOẠT]: Hãy phân tích cực kỳ chi tiết các hình ảnh. Chú ý đến các sơ đồ, bảng biểu, công thức toán học và các đoạn văn bản nhỏ trong hình vẽ. Đảm bảo bóc tách đúng cấu trúc kiến thức của trang sách giáo khoa." : "";
+            
             aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex');
-            showLoading(true, "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
+            showLoading(true, isOcrPro ? "🚀 OCR Pro: Đang quét sâu dữ liệu hình ảnh..." : "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
 
-            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm (OCR Pro & Voice Mode). 
+            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm (OCR Pro & Voice Mode). ${ocrProText}
 Hãy phân tích TẤT CẢ các tài liệu đính kèm (Hình ảnh sách giáo khoa, file âm thanh bài giảng, tài liệu văn bản). 
 1. Với Hình ảnh: Hãy nhận diện cấu trúc trang sách, các công thức, hình vẽ và chuyển thành câu hỏi phù hợp.
 2. Với Âm thanh: Hãy nghe nội dung bài giảng và trích xuất các ý chính để đặt câu hỏi.
