@@ -2223,10 +2223,86 @@ async function initGIA() {
         closeAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex'); });
         uploadFileArea?.addEventListener('click', () => { isBatchMode = false; fileInput?.removeAttribute('capture'); fileInput?.click(); });
         
+        let cameraStream = null;
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraVideo = document.getElementById('cameraVideo');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const cameraCountBadge = document.getElementById('cameraCountBadge');
+
+        const stopCamera = () => {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraModal?.classList.add('hidden');
+            cameraModal?.classList.remove('flex');
+        };
+
+        const startCamera = async () => {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
+                });
+                if (cameraVideo) {
+                    cameraVideo.srcObject = cameraStream;
+                    cameraModal?.classList.remove('hidden');
+                    cameraModal?.classList.add('flex');
+                    cameraCountBadge.innerText = currentAiFiles.length;
+                }
+            } catch (err) {
+                showToast("❌ Không thể truy cập Camera: " + err.message);
+                isBatchMode = false;
+            }
+        };
+
         document.getElementById('batchScanBtn')?.addEventListener('click', () => {
             isBatchMode = true;
-            fileInput?.setAttribute('capture', 'environment');
-            fileInput?.click();
+            startCamera();
+        });
+
+        document.getElementById('cancelCameraBtn')?.addEventListener('click', stopCamera);
+        document.getElementById('finishCameraBtn')?.addEventListener('click', () => {
+            stopCamera();
+            isBatchMode = false;
+            updateAiFileListUI();
+        });
+
+        document.getElementById('captureBtn')?.addEventListener('click', async () => {
+            if (!cameraVideo || !cameraCanvas) return;
+            const ctx = cameraCanvas.getContext('2d');
+            cameraCanvas.width = cameraVideo.videoWidth;
+            cameraCanvas.height = cameraVideo.videoHeight;
+            ctx.drawImage(cameraVideo, 0, 0);
+
+            // Hiệu ứng flash
+            const flash = document.getElementById('cameraFlash');
+            if (flash) {
+                flash.classList.remove('active');
+                void flash.offsetWidth; // trigger reflow
+                flash.classList.add('active');
+                flash.classList.remove('hidden');
+                setTimeout(() => flash.classList.add('hidden'), 400);
+            }
+
+            // Chuyển sang base64
+            const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.8);
+            const base64Data = dataUrl.split(',')[1];
+            
+            currentAiFiles.push({
+                name: `Trang ${currentAiFiles.length + 1}`,
+                type: 'image/jpeg',
+                data: base64Data,
+                size: Math.round(base64Data.length * 0.75) // Ước tính dung lượng
+            });
+
+            cameraCountBadge.innerText = currentAiFiles.length;
+
+            // Hiện toast nhỏ xác nhận
+            const toast = document.createElement('div');
+            toast.className = 'camera-success-toast';
+            toast.innerText = `📸 Đã nạp trang ${currentAiFiles.length}`;
+            cameraModal.appendChild(toast);
+            setTimeout(() => toast.remove(), 1200);
         });
 
         fileInput?.addEventListener('change', async (e) => {
@@ -2290,16 +2366,6 @@ async function initGIA() {
             showLoading(false);
             if (fileInput) fileInput.value = '';
 
-            if (isBatchMode) {
-                showConfirm(`✅ Đã nạp trang ${currentAiFiles.length}. Bạn có muốn chụp tiếp trang tiếp theo không?`, (yes) => {
-                    if (yes) {
-                        fileInput?.click();
-                    } else {
-                        isBatchMode = false;
-                        fileInput?.removeAttribute('capture');
-                    }
-                });
-            }
         });
 
         let tempAiQuestions = [];

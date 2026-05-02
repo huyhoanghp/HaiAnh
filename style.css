@@ -214,6 +214,28 @@ body.dark .wrong-table th { background-color: #334155; }
 .action-icon-btn.cancel { color: #e11d48; background: #fff1f2; border-color: #ffe4e6; }
 .dark .action-icon-btn.cancel { background: #4c051940; color: #fb7185; border-color: #e11d4840; }
 
+/* Camera Modal Styles */
+#cameraModal video { transform: scaleX(1); }
+#cameraFlash { position: fixed; inset: 0; background: white; z-index: 10000; pointer-events: none; opacity: 0; }
+#cameraFlash.active { animation: flashEffect 0.4s ease-out; }
+@keyframes flashEffect { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+.camera-success-toast {
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 305;
+    animation: fadeUp 1.2s ease-out forwards;
+}
+@keyframes fadeUp { 0% { opacity: 0; transform: translate(-50%, 20px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -60px); } }
+
 .btn-cancel { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; }
 .btn-cancel:hover { background: #ffe4e6; }
 .dark .btn-cancel { background: #4c051940; color: #fb7185; border-color: #e11d4840; }
