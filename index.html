@@ -45,72 +45,9 @@
                     <span id="reviewBadge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-slate-800 hidden">0</span>
                 </button>
 
-                <div class="relative">
-                    <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
-                        <i class="fas fa-cog text-lg"></i>
-                    </button>
-
-                    <div id="settingsDropdown">
-                        <!-- Cấu hình AI -->
-                        <button id="aiSettingsBtn" class="menu-item">
-                            <i class="fas fa-robot text-purple-600"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Cấu hình AI</div>
-                                <div class="text-[10px] text-gray-400">Thiết lập API Key & Model</div>
-                            </div>
-                            <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
-                        </button>
-
-                        <!-- Dữ liệu -->
-                        <button id="dataCenterBtn" class="menu-item">
-                            <i class="fas fa-database text-emerald-600"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Trung tâm Dữ liệu</div>
-                                <div class="text-[10px] text-gray-400">Sao lưu & Khôi phục file</div>
-                            </div>
-                        </button>
-
-                        <!-- Dark Mode -->
-                        <button id="darkModeToggle" class="menu-item">
-                            <i class="fas fa-circle-half-stroke text-blue-600"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Chế độ hiển thị</div>
-                                <div id="darkModeText" class="text-[10px] text-gray-400">Chuyển Sáng / Tối</div>
-                            </div>
-                        </button>
-
-                        <!-- Gợi ý đáp án -->
-                        <div class="menu-item py-3">
-                            <i class="fas fa-lightbulb text-amber-500"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Gợi ý đáp án</div>
-                                <div class="text-[10px] text-gray-400">Hiển thị nút xem nhanh đáp án</div>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="hintToggle" class="sr-only peer" checked>
-                                <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-blue-500"></div>
-                            </label>
-                        </div>
-
-                        <!-- Xoá bộ câu hỏi (Mới) -->
-                        <button id="deleteAllBanksBtn" class="menu-item text-red-600 border-t border-gray-100 dark:border-slate-800">
-                            <i class="fas fa-trash-can text-red-500"></i>
-                            <div class="flex-1 text-left">
-                                <div class="font-bold text-sm">Xoá TẤT CẢ bộ đề</div>
-                                <div class="text-[10px] text-red-400">Xoá vĩnh viễn toàn bộ dữ liệu đã lưu</div>
-                            </div>
-                        </button>
-
-                        <!-- Font Size -->
-                        <div class="p-4 bg-gray-50/50 dark:bg-slate-950/20">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cỡ chữ hệ thống</span>
-                                <span id="fontSizeVal" class="text-xs font-bold text-indigo-600">100%</span>
-                            </div>
-                            <input type="range" id="fontSizeSlider" min="80" max="250" value="100" class="font-range-input">
-                        </div>
-                    </div>
-                </div>
+                <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
+                    <i class="fas fa-cog text-lg"></i>
+                </button>
                 
                 <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">

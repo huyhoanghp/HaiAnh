@@ -2181,9 +2181,9 @@ async function initGIA() {
             }
         };
 
-        document.getElementById('settingsBtn')?.addEventListener('click', () => toggleSettings(true));
+        document.getElementById('settingsToggleBtn')?.addEventListener('click', () => toggleSettings(true));
         document.getElementById('closeSettingsPanel')?.addEventListener('click', () => toggleSettings(false));
-        document.getElementById('openBrainBtn')?.addEventListener('click', () => toggleReview(true));
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReview(true));
         document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReview(false));
         overlay?.addEventListener('click', () => { toggleSettings(false); toggleReview(false); });
 
