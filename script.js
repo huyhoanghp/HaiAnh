@@ -765,6 +765,7 @@ const VoiceTutor = {
     silenceTimer: null,
     aiSpeakStartTime: 0,
     isProcessing: false,
+    chatHistory: [], // Lưu trữ lịch sử hội thoại của phiên gọi hiện tại
 
     init() {
         this.stt.onEnd = () => {
@@ -781,6 +782,7 @@ const VoiceTutor = {
         this.isCalling = true;
         this.activeQIdx = qIdx;
         this.lastTranscript = '';
+        this.chatHistory = []; // Reset lịch sử khi bắt đầu cuộc gọi mới
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         
         SpeechManager.stop(); // Ngắt các âm thanh đang phát khác
@@ -789,6 +791,10 @@ const VoiceTutor = {
         const modal = document.getElementById('voiceCallModal');
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        
+        // Cưỡng bức hiện khung chat ngay lập tức
+        const chatInput = document.getElementById('voiceInputContainer');
+        if (chatInput) chatInput.classList.remove('hidden');
         
         // 2. Gán sự kiện nút Copy & Chat Text
         const copyBtn = document.getElementById('copyVoiceTranscriptBtn');
@@ -812,11 +818,8 @@ const VoiceTutor = {
         
         // Hiện ô nhập liệu nếu không có STT hoặc người dùng muốn
         const inputContainer = document.getElementById('voiceInputContainer');
-        if (!SpeechToTextManager.isSupported() || location.protocol === 'file:') {
-            inputContainer?.classList.remove('hidden');
-        } else {
-            inputContainer?.classList.add('hidden');
-        }
+        // Luôn hiển thị ô chat văn bản ngay khi bắt đầu cuộc gọi theo yêu cầu người dùng
+        inputContainer?.classList.remove('hidden');
 
         const greeting = 'Tôi đang nghe đây. Bạn cần tôi hỗ trợ gì về câu hỏi số ' + (qIdx + 1) + '?';
         this.updateUI('speaking', greeting);
@@ -870,11 +873,13 @@ const VoiceTutor = {
     handleTextSubmit() {
         const input = document.getElementById('voiceTextInput');
         const text = input.value.trim();
-        if (text && this.isCalling) {
+        if (text && this.isCalling && !this.isProcessing) {
             SpeechManager.stop();
             this.stt.stop();
+            if (this.silenceTimer) clearTimeout(this.silenceTimer);
+            
             input.value = '';
-            document.getElementById('voiceTranscript').innerText = text;
+            this.updateUI('listening', text); 
             this.askGemini(text);
         }
     },
@@ -901,6 +906,10 @@ const VoiceTutor = {
             this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
             return;
         }
+
+        // Hiện khung chat khi người dùng tương tác với mic
+        const chatInput = document.getElementById('voiceInputContainer');
+        if (chatInput) chatInput.classList.remove('hidden');
 
         this.updateUI('listening', this.isLiveMode ? 'Đang lắng nghe rảnh tay...' : 'Hãy nói đi, tôi đang nghe...');
         
@@ -972,6 +981,15 @@ const VoiceTutor = {
         
         console.log("VoiceTutor: Processing request...");
         this.isProcessing = true;
+        
+        // Safety: Tự động giải phóng sau 15s nếu kẹt (phòng lỗi TTS/API)
+        this.safetyTimer = setTimeout(() => {
+            if (this.isProcessing) {
+                console.warn("VoiceTutor: Safety timer triggered. Resetting isProcessing.");
+                this.isProcessing = false;
+            }
+        }, 15000);
+
         this.updateUI('thinking', 'Đang phân tích...');
         
         // Dừng STT tạm thời khi đang xử lý để tránh nhiễu
@@ -980,14 +998,42 @@ const VoiceTutor = {
 
         try {
             const q = currentQuestions[this.activeQIdx];
-            const systemPrompt = `Bạn là một gia sư AI chuyên gia. Hãy giải thích ngắn gọn câu hỏi này cho học sinh qua giọng nói:
-            Nội dung: ${q.text}
-            Đáp án đúng: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
-            Người dùng vừa nói: "${userText}"`;
+            
+            // 1. Cập nhật lịch sử với tin nhắn mới của người dùng
+            this.chatHistory.push({ role: "user", parts: [{ text: userText }] });
+            
+            // 2. Giới hạn lịch sử (chỉ giữ 10 lượt gần nhất để tối ưu)
+            if (this.chatHistory.length > 10) this.chatHistory = this.chatHistory.slice(-10);
 
-            const payload = { contents: [{ role: "user", parts: [{ text: systemPrompt }] }], generationConfig: { temperature: 0.7 } };
+            // 3. Xây dựng System Instruction kèm ngữ cảnh câu hỏi
+            const contextPrompt = `Bạn là gia sư AI Hai Anh. Hãy hỗ trợ học sinh học tập.
+            Bối cảnh câu hỏi hiện tại:
+            - Nội dung: ${q.text}
+            - Đáp án đúng: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
+            
+            Yêu cầu quan trọng: 
+            1. PHẢN HỒI THEO YÊU CẦU: Nếu người dùng yêu cầu giải thích chi tiết, chuyên sâu hoặc dài, hãy đáp ứng chính xác. Nếu không yêu cầu gì đặc biệt, hãy giải thích đầy đủ nhưng súc tích.
+            2. Xưng hô là "tôi" và "bạn". 
+            3. ĐI THẲNG VÀO VẤN ĐỀ: Không chào hỏi lặp lại, không rườm rà.
+            4. CHỐNG ẢO GIÁC: Tuyệt đối không bịa đặt thông tin.`;
+
+            const payload = { 
+                contents: [
+                    { role: "user", parts: [{ text: contextPrompt }] },
+                    { role: "model", parts: [{ text: "Tôi đã hiểu. Tôi sẽ giải thích dựa trên độ dài mà bạn yêu cầu." }] },
+                    ...this.chatHistory 
+                ], 
+                generationConfig: { 
+                    temperature: 0.7,
+                    maxOutputTokens: 4096 // Tăng giới hạn để hỗ trợ bài viết dài
+                } 
+            };
+            
             const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
             const response = data.candidates[0].content.parts[0].text;
+            
+            // 4. Lưu câu trả lời của AI vào lịch sử
+            this.chatHistory.push({ role: "model", parts: [{ text: response }] });
             
             if (!this.isCalling) {
                 this.isProcessing = false;
@@ -998,7 +1044,8 @@ const VoiceTutor = {
             this.aiSpeakStartTime = Date.now();
             
             SpeechManager.speak(response, 'voice-tutor', () => {
-                this.isProcessing = false;
+                if (this.safetyTimer) clearTimeout(this.safetyTimer);
+                this.isProcessing = false; // Giải phóng trạng thái ngay sau khi nói xong
                 console.log("VoiceTutor: AI finished speaking.");
                 if (this.isCalling && this.isLiveMode) {
                     this.lastTranscript = '';
@@ -1042,7 +1089,8 @@ const VoiceTutor = {
     }
 };
 
-// Khởi tạo VoiceTutor
+// Khởi tạo VoiceTutor và gán vào window để debug
+window.VoiceTutor = VoiceTutor;
 VoiceTutor.init();
 
 function renderSingleQuestion(idx) {
