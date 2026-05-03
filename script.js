@@ -23,6 +23,222 @@ let scrollObserver = null;
 let currentFileData = null, currentMimeType = null;
 let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false';
 
+// ======================== AUTH MANAGER (FIREBASE) ========================
+const AuthManager = {
+    user: null,
+    db: null,
+    
+    init() {
+        // Hiệu ứng hiện card đăng nhập
+        setTimeout(() => {
+            const card = document.getElementById('authCard');
+            if (card) card.classList.add('active');
+        }, 300);
+
+        // Chuyển đổi tab Login/Register
+        const tabLogin = document.getElementById('tabLogin');
+        const tabRegister = document.getElementById('tabRegister');
+        const btnSubmit = document.getElementById('btnSubmitLogin');
+
+        tabLogin?.addEventListener('click', () => {
+            tabLogin.className = 'flex-1 py-2 text-sm font-bold text-white rounded-lg bg-white/10 transition-all';
+            tabRegister.className = 'flex-1 py-2 text-sm font-bold text-white/40 rounded-lg hover:text-white transition-all';
+            btnSubmit.innerText = 'Bắt đầu học ngay';
+            this.mode = 'login';
+        });
+
+        tabRegister?.addEventListener('click', () => {
+            tabRegister.className = 'flex-1 py-2 text-sm font-bold text-white rounded-lg bg-white/10 transition-all';
+            tabLogin.className = 'flex-1 py-2 text-sm font-bold text-white/40 rounded-lg hover:text-white transition-all';
+            btnSubmit.innerText = 'Tạo tài khoản mới';
+            this.mode = 'register';
+        });
+
+        // Các sự kiện nút bấm
+        btnSubmit?.addEventListener('click', () => {
+            if (this.mode === 'login') this.loginWithEmail();
+            else this.registerWithEmail();
+        });
+        document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
+        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
+        
+        // Khởi tạo Firebase với Config của người dùng
+        const firebaseConfig = {
+            apiKey: "AIzaSyCkLNCdbRWpWXV9vms9wmSyBT5WS3VdLdM",
+            authDomain: "haianhstudy-99611.firebaseapp.com",
+            projectId: "haianhstudy-99611",
+            storageBucket: "haianhstudy-99611.firebasestorage.app",
+            messagingSenderId: "278856696620",
+            appId: "1:278856696620:web:7e8aa3fb21f952122fe289",
+            measurementId: "G-7TWPWZ58R5"
+        };
+        
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        this.db = firebase.firestore();
+
+        // Lắng nghe trạng thái đăng nhập
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                this.user = user;
+                this.onLoginSuccess();
+            } else {
+                this.user = null;
+                document.getElementById('authOverlay').classList.remove('hidden');
+            }
+        });
+    },
+
+    mode: 'login',
+
+    async registerWithEmail() {
+        const email = document.getElementById('loginEmail').value;
+        const pass = document.getElementById('loginPassword').value;
+        if (!email || !pass) { showToast("Vui lòng nhập đủ thông tin!"); return; }
+        if (pass.length < 6) { showToast("Mật khẩu phải ít nhất 6 ký tự!"); return; }
+        
+        try {
+            showLoading(true, "Đang tạo tài khoản...");
+            await firebase.auth().createUserWithEmailAndPassword(email, pass);
+            showLoading(false);
+            showToast("Đăng ký thành công!");
+        } catch (err) {
+            showLoading(false);
+            showToast("Lỗi đăng ký: " + err.message);
+        }
+    },
+
+    async loginWithEmail() {
+        const email = document.getElementById('loginEmail').value;
+        const pass = document.getElementById('loginPassword').value;
+        if (!email || !pass) { showToast("Vui lòng nhập đủ thông tin!"); return; }
+        
+        try {
+            showLoading(true, "Đang xác thực...");
+            await firebase.auth().signInWithEmailAndPassword(email, pass);
+            showLoading(false);
+        } catch (err) {
+            showLoading(false);
+            showToast("Lỗi đăng nhập: " + err.message);
+        }
+    },
+
+    async loginWithGoogle() {
+        try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            await firebase.auth().signInWithPopup(provider);
+        } catch (err) {
+            showToast("Lỗi Google Auth: " + err.message);
+        }
+    },
+
+    onLoginSuccess() {
+        showToast(`Chào mừng ${this.user.displayName || this.user.email}!`);
+        const overlay = document.getElementById('authOverlay');
+        overlay.classList.add('opacity-0');
+        setTimeout(() => overlay.classList.add('hidden'), 500);
+        
+        // Bắt đầu nạp dữ liệu từ Cloud
+        this.syncFromCloud();
+    },
+
+    async syncFromCloud() {
+        if (!this.user) return;
+        try {
+            console.log("AuthManager: Starting Cloud Sync...");
+            
+            // 1. Đồng bộ Review Stats
+            const reviewDoc = await this.db.collection('users').doc(this.user.uid).collection('data').doc('review_stats').get();
+            if (reviewDoc.exists) {
+                const cloudStats = reviewDoc.data();
+                // Merge hoặc ghi đè tùy chiến lược (ở đây ta ưu tiên Cloud)
+                ReviewManager.stats = { ...ReviewManager.stats, ...cloudStats };
+                ReviewManager.saveLocal(); // Lưu lại bản local
+                ReviewManager.updateDashboardUI();
+            } else {
+                // Nếu cloud chưa có, đẩy local lên
+                this.db.collection('users').doc(this.user.uid).collection('data').doc('review_stats').set(ReviewManager.stats);
+            }
+
+            // 2. Đồng bộ Progress
+            const progressDoc = await this.db.collection('users').doc(this.user.uid).collection('data').doc('exam_progress').get();
+            if (progressDoc.exists) {
+                const cloudProgress = progressDoc.data();
+                ProgressManager.applyProgress(cloudProgress);
+            }
+            
+            showToast("✅ Đồng bộ dữ liệu đám mây hoàn tất!");
+        } catch (err) {
+            console.error("Sync Error:", err);
+            showToast("❌ Lỗi đồng bộ: " + err.message);
+        }
+    },
+
+    async logout() {
+        try {
+            await firebase.auth().signOut();
+            location.reload(); // Reload để xóa sạch state
+        } catch (err) {
+            showToast("Lỗi đăng xuất: " + err.message);
+        }
+    }
+};
+
+const ProgressManager = {
+    load() {
+        const d = localStorage.getItem(PROGRESS_KEY);
+        if (d) {
+            const progress = JSON.parse(d);
+            this.applyProgress(progress);
+        }
+    },
+
+    applyProgress(p) {
+        if (!p) return;
+        try {
+            currentBankId = p.bankId;
+            currentBankName = p.bankName;
+            currentQuestions = p.questions || [];
+            userAnswers = p.userAnswers || [];
+            flagged = p.flagged || [];
+            timeRemainingSeconds = p.timeRemaining || 0;
+            examActive = p.examActive || false;
+            
+            if (examActive) {
+                document.getElementById('examSection')?.classList.remove('hidden');
+                renderQuestionGrid();
+                updateProgress();
+                initLazyRender();
+                if (timeRemainingSeconds > 0) startTimer(timeRemainingSeconds);
+            }
+        } catch (e) { console.error("Error applying progress:", e); }
+    },
+
+    save() {
+        const progress = {
+            bankId: currentBankId,
+            bankName: currentBankName,
+            questions: currentQuestions,
+            userAnswers: userAnswers,
+            flagged: flagged,
+            timeRemaining: timeRemainingSeconds,
+            examActive: examActive,
+            timestamp: Date.now()
+        };
+        
+        // Lưu Local
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+        
+        // Lưu Cloud nếu đã đăng nhập
+        if (AuthManager.user && AuthManager.db) {
+            AuthManager.db.collection('users').doc(AuthManager.user.uid)
+                .collection('data').doc('exam_progress').set(progress)
+                .catch(e => console.error("Cloud Save Error:", e));
+        }
+    }
+};
+
 // Cấu hình ứng dụng
 let appSettings = {
     showAiExplain: localStorage.getItem('haianh_show_ai_explain') !== 'false',
@@ -157,10 +373,29 @@ function toggleReviewPanel(show) {
 }
 
 const ReviewManager = {
-    stats: JSON.parse(localStorage.getItem('haianh_review_stats') || '{}'),
+    stats: {},
+
+    init() {
+        const saved = localStorage.getItem('haianh_review_stats');
+        if (saved) {
+            this.stats = JSON.parse(saved);
+        }
+        this.updateDashboardUI();
+    },
+
+    saveLocal() {
+        localStorage.setItem('haianh_review_stats', JSON.stringify(this.stats));
+    },
 
     save() {
-        localStorage.setItem('haianh_review_stats', JSON.stringify(this.stats));
+        this.saveLocal();
+        
+        // Lưu Cloud nếu đã đăng nhập
+        if (AuthManager.user && AuthManager.db) {
+            AuthManager.db.collection('users').doc(AuthManager.user.uid)
+                .collection('data').doc('review_stats').set(this.stats)
+                .catch(e => console.error("Review Cloud Save Error:", e));
+        }
     },
 
     getQId(text) {
@@ -524,22 +759,8 @@ function copyToClipboard(text) {
     document.body.removeChild(tempTextarea);
 }
 
-function saveProgress(progress) { try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) { console.warn(e); } }
-function loadProgress() { const d = localStorage.getItem(PROGRESS_KEY); return d ? JSON.parse(d) : null; }
-function clearProgress() { localStorage.removeItem(PROGRESS_KEY); }
-
 function saveProgressToLocal() {
-    if (!currentBankId) return;
-    saveProgress({
-        bankId: currentBankId,
-        bankName: currentBankName,
-        userAnswers: userAnswers,
-        flagged: flagged,
-        timeRemainingSeconds: timeRemainingSeconds,
-        examActive: examActive,
-        isPaused: isPaused,
-        submitted: submitted
-    });
+    ProgressManager.save();
 }
 
 function updateProgress() {
@@ -766,7 +987,7 @@ const VoiceTutor = {
     aiSpeakStartTime: 0,
     isProcessing: false,
     chatHistory: [],
-    currentRequestId: 0, // Theo dõi ID yêu cầu mới nhất
+    currentRequestId: 0,
 
     init() {
         this.stt.onEnd = () => {
@@ -817,9 +1038,8 @@ const VoiceTutor = {
         document.getElementById('voiceTranscript').innerText = "Đang kết nối...";
         document.getElementById('voiceTextInput').value = "";
         
-        // Hiện ô nhập liệu nếu không có STT hoặc người dùng muốn
+        // Hiện ô nhập liệu văn bản ngay khi bắt đầu cuộc gọi
         const inputContainer = document.getElementById('voiceInputContainer');
-        // Luôn hiển thị ô chat văn bản ngay khi bắt đầu cuộc gọi theo yêu cầu người dùng
         inputContainer?.classList.remove('hidden');
 
         const greeting = 'Tôi đang nghe đây. Bạn cần tôi hỗ trợ gì về câu hỏi số ' + (qIdx + 1) + '?';
@@ -833,6 +1053,7 @@ const VoiceTutor = {
         }, 300);
     },
 
+
     updateUI(state, text = "") {
         const badge = document.getElementById('voiceStatusBadge');
         const transcript = document.getElementById('voiceTranscript');
@@ -842,7 +1063,6 @@ const VoiceTutor = {
 
         if (text) {
             transcript.innerText = text;
-            // Tự động cuộn xuống đáy khi có nội dung mới
             const container = transcript.parentElement;
             if (container) {
                 setTimeout(() => {
@@ -852,19 +1072,19 @@ const VoiceTutor = {
         }
 
         badge.className = 'voice-status-badge text-[10px] font-medium';
-        wave.classList.add('hidden');
-        pulse.classList.add('hidden');
-        avatar.classList.remove('speaking');
+        if (wave) wave.classList.add('hidden');
+        if (pulse) pulse.classList.add('hidden');
+        if (avatar) avatar.classList.remove('speaking');
 
         if (state === 'listening') {
             badge.innerText = 'Đang lắng nghe...';
             badge.classList.add('text-indigo-500');
-            pulse.classList.remove('hidden');
+            if (pulse) pulse.classList.remove('hidden');
         } else if (state === 'speaking') {
             badge.innerText = 'Gia sư đang nói...';
             badge.classList.add('voice-status-speaking');
-            wave.classList.remove('hidden');
-            avatar.classList.add('speaking');
+            if (wave) wave.classList.remove('hidden');
+            if (avatar) avatar.classList.add('speaking');
         } else if (state === 'thinking') {
             badge.innerText = 'Đang suy nghĩ...';
             badge.classList.add('voice-status-thinking');
@@ -908,6 +1128,7 @@ const VoiceTutor = {
     startListening() {
         if (!this.isCalling) return;
         
+        console.log("VoiceTutor: startListening() called.");
         if (!SpeechToTextManager.isSupported()) {
             this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
             return;
@@ -1093,7 +1314,7 @@ const VoiceTutor = {
             this.silenceTimer = null;
         }
         
-        // 4. UI Reset
+        // 5. UI Reset
         const modal = document.getElementById('voiceCallModal');
         modal.classList.add('hidden');
         modal.classList.remove('flex');
@@ -3184,7 +3405,16 @@ Tiếng Việt.`;
     } catch (e) { console.error("Lỗi Khởi tạo Hệ thống:", e); }
 }
 
-initGIA();
+// Chạy khởi tạo khi DOM sẵn sàng
+window.addEventListener('DOMContentLoaded', () => {
+    FontSizeManager.init();
+    ReviewManager.init();
+    AuthManager.init(); // Kích hoạt hệ thống đăng nhập
+    ProgressManager.load();
+    
+    // Khởi tạo các sự kiện Global và UI
+    initGIA();
+});
 
 // ======================== PWA SERVICE WORKER REGISTRATION ========================
 if ('serviceWorker' in navigator) {

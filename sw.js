@@ -5,7 +5,8 @@ const ASSETS = [
   './AI_Hello-X4_index.html',
   './style.css',
   './script.js',
-  './BTS_Icon.webp',
+  './icon-192.png',
+  './icon-512.png',
   './manifest.json'
 ];
 
@@ -31,11 +32,11 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - serving from cache if available
+// Fetch event - Network-First strategy
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
     })
   );
 });
