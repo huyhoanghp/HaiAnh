@@ -21,7 +21,14 @@ const BATCH_SIZE = 20;
 let filteredIndices = [];
 let scrollObserver = null;
 let currentFileData = null, currentMimeType = null;
-let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false'; // Default true
+let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false';
+
+// Cấu hình ứng dụng
+let appSettings = {
+    showAiExplain: localStorage.getItem('haianh_show_ai_explain') !== 'false',
+    showAiCall: localStorage.getItem('haianh_show_ai_call') !== 'false',
+    defaultReadSpeed: parseFloat(localStorage.getItem('haianh_default_read_speed') || '1.0')
+};
 
 // ======================== VOICE ENGINE (NEW) ========================
 let vietnameseVoice = null;
@@ -135,17 +142,147 @@ const FontSizeManager = {
     }
 };
 
+function toggleReviewPanel(show) {
+    const card = document.getElementById('reviewDashboardCard');
+    const overlay = document.getElementById('sidePanelOverlay');
+    if (card && overlay) {
+        if (show) {
+            card.classList.remove('translate-x-full');
+            overlay.classList.remove('hidden');
+        } else {
+            card.classList.add('translate-x-full');
+            overlay.classList.add('hidden');
+        }
+    }
+}
+
+const ReviewManager = {
+    stats: JSON.parse(localStorage.getItem('haianh_review_stats') || '{}'),
+
+    save() {
+        localStorage.setItem('haianh_review_stats', JSON.stringify(this.stats));
+    },
+
+    getQId(text) {
+        let hash = 0;
+        for (let i = 0; i < text.length; i++) {
+            hash = ((hash << 5) - hash) + text.charCodeAt(i);
+            hash |= 0;
+        }
+        return "q_" + Math.abs(hash).toString(16);
+    },
+
+    // quality: 0 (sai) hoặc 5 (đúng) - Đơn giản hóa cho trắc nghiệm
+    update(qText, isCorrect) {
+        const id = this.getQId(qText);
+        const quality = isCorrect ? 5 : 0;
+        
+        let item = this.stats[id] || {
+            reps: 0,
+            interval: 0,
+            ease: 2.5,
+            nextDate: Date.now()
+        };
+
+        if (quality >= 3) {
+            if (item.reps === 0) item.interval = 1;
+            else if (item.reps === 1) item.interval = 6;
+            else item.interval = Math.round(item.interval * item.ease);
+            item.reps++;
+        } else {
+            item.reps = 0;
+            item.interval = 1;
+        }
+
+        item.ease = Math.max(1.3, item.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+        item.nextDate = Date.now() + item.interval * 24 * 60 * 60 * 1000;
+        
+        this.stats[id] = item;
+        this.save();
+        this.updateDashboardUI();
+    },
+
+    getDueCount() {
+        const now = Date.now();
+        return Object.values(this.stats).filter(item => item.nextDate <= now).length;
+    },
+
+    getLearningCount() {
+        return Object.values(this.stats).filter(item => item.reps > 0 && item.reps < 5).length;
+    },
+
+    getMasteredCount() {
+        return Object.values(this.stats).filter(item => item.reps >= 5).length;
+    },
+
+    updateDashboardUI() {
+        const dueCount = this.getDueCount();
+        const learningCount = this.getLearningCount();
+        const masteredCount = this.getMasteredCount();
+        const total = dueCount + learningCount + masteredCount;
+
+        // Cập nhật con số
+        const elDue = document.getElementById('reviewDueCount');
+        const elLearn = document.getElementById('reviewLearningCount');
+        const elMaster = document.getElementById('reviewMasteredCount');
+        if (elDue) elDue.innerText = dueCount;
+        if (elLearn) elLearn.innerText = learningCount;
+        if (elMaster) elMaster.innerText = masteredCount;
+
+        // Cập nhật Thanh Progress Bar
+        const barDue = document.getElementById('barDue');
+        const barLearning = document.getElementById('barLearning');
+        const barMastered = document.getElementById('barMastered');
+        const masteryPercentEl = document.getElementById('masteryPercent');
+        
+        if (total > 0 && barDue) {
+            barDue.style.width = (dueCount / total * 100) + '%';
+            barLearning.style.width = (learningCount / total * 100) + '%';
+            barMastered.style.width = (masteredCount / total * 100) + '%';
+            
+            if (masteryPercentEl) {
+                const percent = Math.round((masteredCount / total) * 100);
+                masteryPercentEl.innerText = percent + '%';
+            }
+        }
+
+        // Cập nhật Badge trên Header
+        const badge = document.getElementById('reviewBadge');
+        if (badge) {
+            if (dueCount > 0) {
+                badge.innerText = dueCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    }
+};
+
 const SpeechManager = {
     queue: [],
     currentIdx: 0,
     isPaused: false,
-    rate: 1.0,
+    rate: appSettings.defaultReadSpeed,
     activeQIdx: null,
     currentUtterance: null,
     pauseTimer: null,
     heartbeatInterval: null,
-    sessionId: 0, // ID phiên để tránh chồng lấn
+    sessionId: 0, 
     watchdogTimer: null,
+    onEndCallback: null,
+
+    speak(text, qIdx, onEnd = null) {
+        if (!text) return;
+        const sid = String(qIdx);
+        if (this.activeQIdx === sid && sid !== 'voice-tutor') {
+            if (this.isPaused) this.resume();
+            else this.pause();
+        } else {
+            this.onEndCallback = onEnd;
+            this.start(normalizeText(text), sid);
+        }
+    },
 
     init() {
         const savedRate = localStorage.getItem('voice_rate');
@@ -224,7 +361,11 @@ const SpeechManager = {
 
     play(session) {
         if (session !== this.sessionId || this.currentIdx >= this.queue.length || this.isPaused) {
-            if (this.currentIdx >= this.queue.length && session === this.sessionId) this.stop();
+            if (this.currentIdx >= this.queue.length && session === this.sessionId) {
+                const cb = this.onEndCallback;
+                this.stop();
+                if (cb) cb();
+            }
             return;
         }
 
@@ -300,6 +441,7 @@ const SpeechManager = {
         this.currentIdx = 0;
         this.isPaused = false;
         this.activeQIdx = null;
+        this.onEndCallback = null;
         this.updateUI();
     },
 
@@ -362,14 +504,7 @@ if (window.speechSynthesis.onvoiceschanged !== undefined) {
 initVoice();
 
 function speak(text, qIdx) {
-    if (!text) return;
-    const sid = String(qIdx);
-    if (SpeechManager.activeQIdx === sid) {
-        if (SpeechManager.isPaused) SpeechManager.resume();
-        else SpeechManager.pause();
-    } else {
-        SpeechManager.start(normalizeText(text), sid);
-    }
+    SpeechManager.speak(text, qIdx);
 }
 
 const AI_TEXT_CACHE = {};
@@ -451,8 +586,15 @@ function generateQuestionHTML(idx, rawSearch = "") {
     q.options.forEach((opt, optIdx) => {
         const isChecked = userChoice.includes(optIdx), inputType = q.type === 'multiple' ? 'checkbox' : 'radio'; let extraClass = "", badge = false;
         if (isSubmitted && correctIndices.includes(optIdx)) { extraClass = "bg-green-50 border-green-200"; badge = true; } else if (isSubmitted && isChecked && !correctIndices.includes(optIdx)) extraClass = "bg-red-50 border-red-200";
-        const voiceOptBtn = `<i class="fas fa-volume-up speak-toggle-btn ml-auto text-gray-400 hover:text-blue-600 cursor-pointer" data-qidx="${idx}-opt-${optIdx}" title="Nghe đáp án"></i>`;
-        optionsHtml += `<label class="flex items-start gap-3 p-3 rounded-xl border ${extraClass} hover:bg-gray-50 transition cursor-pointer mb-2"><input type="${inputType}" name="q${idx}" value="${optIdx}" ${isChecked ? "checked" : ""} ${isSubmitted ? "disabled" : ""} class="mt-1 option-input" data-qidx="${idx}" data-optidx="${optIdx}"><span class="text-gray-700 text-sm flex-1">${escapeHtml(opt)}</span>${badge ? '<span class="text-green-600 text-xs font-medium bg-white px-2 py-0.5 rounded-full mr-2">✓ Đúng</span>' : ''}${voiceOptBtn}</label>`;
+        const voiceOptBtn = `<button class="speak-toggle-btn flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors ml-auto" data-qidx="${idx}-opt-${optIdx}" title="Nghe đáp án">
+            <i class="fas fa-volume-up text-xs"></i>
+        </button>`;
+        optionsHtml += `<label class="flex items-center gap-3 p-3 rounded-xl border ${extraClass} hover:bg-gray-50 transition cursor-pointer mb-2">
+            <input type="${inputType}" name="q${idx}" value="${optIdx}" ${isChecked ? "checked" : ""} ${isSubmitted ? "disabled" : ""} class="option-input flex-shrink-0" data-qidx="${idx}" data-optidx="${optIdx}">
+            <span class="text-gray-700 text-sm flex-1 leading-snug">${escapeHtml(opt)}</span>
+            ${badge ? '<span class="flex-shrink-0 text-green-600 text-[10px] font-bold bg-white px-2 py-0.5 rounded-full border border-green-100 mr-1">✓ Đúng</span>' : ''}
+            ${voiceOptBtn}
+        </label>`;
     });
 
     const speakerIcon = `<div class="flex items-center gap-2 mb-2">
@@ -470,8 +612,11 @@ function generateQuestionHTML(idx, rawSearch = "") {
     </div>`;
 
     const feedback = isSubmitted ? (isCorrect ? `<div class="mt-3 text-sm text-green-700 bg-green-50 p-2 rounded-lg"><i class="fas fa-check-circle"></i> Chính xác!</div>` : `<div class="mt-3 text-sm bg-amber-50 p-2 rounded-lg text-amber-800"><i class="fas fa-info-circle"></i> Đáp án đúng: ${correctIndices.map(i => q.options[i]).join('; ')}</div>`) : "";
-    const aiExplainBtn = `<button class="ai-explain-btn text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 transition" data-qidx="${idx}"><i class="fas fa-magic"></i> Giải thích AI</button>`;
-    const aiCallBtn = `<button class="ai-call-btn text-xs px-3 py-1.5 rounded-lg border transition font-bold" data-qidx="${idx}"><i class="fas fa-phone"></i> Gọi Gia sư AI</button>`;
+    
+    // Hiển thị nút dựa trên cài đặt
+    const aiExplainBtn = appSettings.showAiExplain ? `<button class="ai-explain-btn text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-200 transition" data-qidx="${idx}"><i class="fas fa-magic"></i> Giải thích AI</button>` : "";
+    const aiCallBtn = appSettings.showAiCall ? `<button class="ai-call-btn text-xs px-3 py-1.5 rounded-lg border transition font-bold" data-qidx="${idx}"><i class="fas fa-phone"></i> Gọi Gia sư AI</button>` : "";
+    
     const aiExplainBox = `<div id="ai-explanation-${idx}" class="ai-explanation-box mt-3 rounded-lg hidden shadow-sm" data-loaded="false"></div>`;
     
     return `<div id="question-${idx}" class="card-question bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6 overflow-visible transition-all">
@@ -514,56 +659,178 @@ class SpeechToTextManager {
     constructor() {
         this.recognition = null;
         this.isListening = false;
+        this.isStarting = false;
+        this.safeStartTimer = null; // Quản lý timer khởi động lại
         this.onResult = null;
         this.onEnd = null;
-
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            this.recognition = new SpeechRecognition();
-            this.recognition.lang = 'vi-VN';
-            this.recognition.continuous = false;
-            this.recognition.interimResults = true;
-
-            this.recognition.onresult = (e) => {
-                const transcript = Array.from(e.results).map(res => res[0].transcript).join('');
-                if (this.onResult) this.onResult(transcript, e.results[0].isFinal);
-            };
-
-            this.recognition.onend = () => {
-                this.isListening = false;
-                if (this.onEnd) this.onEnd();
-            };
-
-            this.recognition.onerror = (e) => {
-                console.error("STT Error:", e.error);
-                this.stop();
-            };
-        }
     }
 
-    start() { if (this.recognition && !this.isListening) { this.recognition.start(); this.isListening = true; } }
-    stop() { if (this.recognition && this.isListening) { this.recognition.stop(); this.isListening = false; } }
+    static isSupported() {
+        return !!(window.webkitSpeechRecognition || window.SpeechRecognition);
+    }
+
+    initRecognition() {
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        if (!SpeechRecognition) return null;
+        
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'vi-VN';
+        recognition.continuous = false; // Chuyển sang false để kiểm soát vòng lặp thủ công tốt hơn
+        recognition.interimResults = true;
+        
+        recognition.onresult = (e) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = e.resultIndex; i < e.results.length; ++i) {
+                if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+                else interimTranscript += e.results[i][0].transcript;
+            }
+            const transcript = finalTranscript || interimTranscript;
+            if (this.onResult) this.onResult(transcript, !!finalTranscript);
+        };
+
+        recognition.onstart = () => { 
+            this.isListening = true; 
+            this.isStarting = false;
+        };
+
+        recognition.onend = () => { 
+            this.isListening = false; 
+            this.isStarting = false;
+            if (this.onEnd) this.onEnd();
+            
+            // Tự động khởi động lại bền bỉ trong chế độ LIVE
+            if (window.VoiceTutor && VoiceTutor.isLiveMode && VoiceTutor.isCalling) {
+                this.safeStart();
+            }
+        };
+
+        recognition.onerror = (e) => {
+            this.isStarting = false;
+            if (e.error === 'no-speech') return; 
+            console.error("STT Error:", e.error);
+        };
+        return recognition;
+    }
+
+    safeStart() {
+        if (this.isListening || this.isStarting) return;
+        this.isStarting = true;
+        
+        // Đảm bảo dọn dẹp recognition cũ nếu còn tồn tại
+        if (this.recognition) {
+            try { this.recognition.onend = null; this.recognition.stop(); } catch(e) {}
+            this.recognition = null;
+        }
+
+        this.safeStartTimer = setTimeout(() => {
+            if (window.VoiceTutor && !VoiceTutor.isCalling) {
+                this.isStarting = false;
+                return;
+            }
+            try {
+                this.recognition = this.initRecognition();
+                if (this.recognition) {
+                    this.recognition.start();
+                    console.log("STT: Microphone restarted successfully.");
+                }
+            } catch (err) {
+                console.error("STT SafeStart Failed:", err);
+                this.isStarting = false;
+                this.isListening = false;
+            }
+        }, 400);
+    }
+
+    start() {
+        this.safeStart();
+    }
+
+    stop() {
+        this.isStarting = false;
+        if (this.recognition) {
+            try { this.recognition.stop(); } catch(e) {}
+            this.recognition = null;
+        }
+        this.isListening = false;
+    }
 }
 
 const VoiceTutor = {
     stt: new SpeechToTextManager(),
     activeQIdx: null,
     isCalling: false,
+    isLiveMode: false,
+    lastTranscript: '',
+    silenceTimer: null,
+    aiSpeakStartTime: 0,
+    isProcessing: false,
+    chatHistory: [],
+    currentRequestId: 0, // Theo dõi ID yêu cầu mới nhất
+
+    init() {
+        this.stt.onEnd = () => {
+            if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking && !this.isProcessing) {
+                this.stt.start();
+            }
+        };
+    },
 
     async startCall(qIdx) {
         if (!localStorage.getItem('gemini_api_key')) { showToast("Vui lòng cài đặt API Key để dùng tính năng này."); return; }
-        SpeechManager.stop(); // Ngắt các âm thanh đang phát khác
-        this.activeQIdx = qIdx;
+        
+        // 1. Reset trạng thái hoàn toàn
         this.isCalling = true;
+        this.activeQIdx = qIdx;
+        this.lastTranscript = '';
+        this.chatHistory = []; // Reset lịch sử khi bắt đầu cuộc gọi mới
+        if (this.silenceTimer) clearTimeout(this.silenceTimer);
+        
+        SpeechManager.stop(); // Ngắt các âm thanh đang phát khác
+        this.stt.stop();      // Ngắt Microphone cũ nếu có
         
         const modal = document.getElementById('voiceCallModal');
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
-        this.updateUI('speaking', 'Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?');
-        SpeechManager.speak('Xin chào! Tôi là Gia sư AI. Bạn muốn hỏi gì về câu hỏi số ' + (qIdx + 1) + '?', 'voice-tutor', () => {
-            this.startListening();
-        });
+        // Cưỡng bức hiện khung chat ngay lập tức
+        const chatInput = document.getElementById('voiceInputContainer');
+        if (chatInput) chatInput.classList.remove('hidden');
+        
+        // 2. Gán sự kiện nút Copy & Chat Text
+        const copyBtn = document.getElementById('copyVoiceTranscriptBtn');
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                const text = document.getElementById('voiceTranscript').innerText;
+                navigator.clipboard.writeText(text).then(() => showToast("✅ Đã sao chép nội dung!")).catch(() => showToast("❌ Không thể sao chép"));
+            };
+        }
+
+        const sendBtn = document.getElementById('sendVoiceTextBtn');
+        const textInput = document.getElementById('voiceTextInput');
+        if (sendBtn && textInput) {
+            sendBtn.onclick = () => this.handleTextSubmit();
+            textInput.onkeypress = (e) => { if (e.key === 'Enter') this.handleTextSubmit(); };
+        }
+
+        // Luôn xóa nội dung cũ
+        document.getElementById('voiceTranscript').innerText = "Đang kết nối...";
+        document.getElementById('voiceTextInput').value = "";
+        
+        // Hiện ô nhập liệu nếu không có STT hoặc người dùng muốn
+        const inputContainer = document.getElementById('voiceInputContainer');
+        // Luôn hiển thị ô chat văn bản ngay khi bắt đầu cuộc gọi theo yêu cầu người dùng
+        inputContainer?.classList.remove('hidden');
+
+        const greeting = 'Tôi đang nghe đây. Bạn cần tôi hỗ trợ gì về câu hỏi số ' + (qIdx + 1) + '?';
+        this.updateUI('speaking', greeting);
+        
+        // Chờ 1 chút để UI modal hiện ra mượt mà rồi mới nói
+        setTimeout(() => {
+            SpeechManager.speak(greeting, 'voice-tutor', () => {
+                if (this.isCalling) this.startListening();
+            });
+        }, 300);
     },
 
     updateUI(state, text = "") {
@@ -573,16 +840,25 @@ const VoiceTutor = {
         const wave = document.getElementById('aiWaveform');
         const pulse = document.getElementById('userMicPulse');
 
-        if (text) transcript.innerText = text;
+        if (text) {
+            transcript.innerText = text;
+            // Tự động cuộn xuống đáy khi có nội dung mới
+            const container = transcript.parentElement;
+            if (container) {
+                setTimeout(() => {
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                }, 100);
+            }
+        }
 
-        badge.className = 'voice-status-badge';
+        badge.className = 'voice-status-badge text-[10px] font-medium';
         wave.classList.add('hidden');
         pulse.classList.add('hidden');
         avatar.classList.remove('speaking');
 
         if (state === 'listening') {
             badge.innerText = 'Đang lắng nghe...';
-            badge.classList.add('voice-status-listening');
+            badge.classList.add('text-indigo-500');
             pulse.classList.remove('hidden');
         } else if (state === 'speaking') {
             badge.innerText = 'Gia sư đang nói...';
@@ -595,51 +871,243 @@ const VoiceTutor = {
         }
     },
 
+    handleTextSubmit() {
+        const input = document.getElementById('voiceTextInput');
+        const text = input.value.trim();
+        if (text && this.isCalling) {
+            // Ngắt AI ngay lập tức nếu đang nói hoặc đang xử lý câu cũ
+            SpeechManager.stop();
+            this.stt.stop();
+            if (this.silenceTimer) clearTimeout(this.silenceTimer);
+            if (this.safetyTimer) clearTimeout(this.safetyTimer);
+            
+            // Giải phóng isProcessing để ưu tiên tin nhắn mới nhất
+            this.isProcessing = false;
+            
+            input.value = '';
+            this.updateUI('listening', text); 
+            this.askGemini(text);
+        }
+    },
+
+    async unlockMicrophone() {
+        try {
+            showLoading(true, "Đang yêu cầu quyền Micro...");
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+            showLoading(false);
+            showToast("✅ Đã cấp quyền Micro thành công! Bây giờ bạn có thể dùng Voice Chat.");
+            return true;
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ Lỗi Micro: " + err.message);
+            return false;
+        }
+    },
+
     startListening() {
         if (!this.isCalling) return;
-        this.updateUI('listening', 'Hãy nói đi, tôi đang nghe...');
+        
+        if (!SpeechToTextManager.isSupported()) {
+            this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
+            return;
+        }
+
+        // Hiện khung chat khi người dùng tương tác với mic
+        const chatInput = document.getElementById('voiceInputContainer');
+        if (chatInput) chatInput.classList.remove('hidden');
+
+        this.updateUI('listening', this.isLiveMode ? 'Đang lắng nghe rảnh tay...' : 'Hãy nói đi, tôi đang nghe...');
+        
         this.stt.onResult = (text, isFinal) => {
-            document.getElementById('voiceTranscript').innerText = text;
-            if (isFinal && text.trim().length > 2) {
-                this.stt.stop();
-                this.askGemini(text);
+            if (!text || this.isProcessing) return; // Bỏ qua nếu đang xử lý câu trả lời cũ
+            this.updateUI('listening', text); 
+            this.lastTranscript = text;
+
+            if (this.isLiveMode) {
+                // BARGE-IN: Nếu AI đang nói, cho phép ngắt lời
+                if (window.speechSynthesis.speaking) {
+                    const timeSpeaking = Date.now() - this.aiSpeakStartTime;
+                    if (timeSpeaking > 500 && text.trim().split(/\s+/).length >= 2) {
+                        console.log("Barge-in: Interrupting AI...");
+                        SpeechManager.stop();
+                        this.aiSpeakStartTime = 0; 
+                        this.updateUI('listening', text);
+                    }
+                    return; 
+                }
+
+                if (this.silenceTimer) clearTimeout(this.silenceTimer);
+                this.silenceTimer = setTimeout(() => {
+                    if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking && !this.isProcessing) {
+                        this.askGemini(this.lastTranscript);
+                    }
+                }, 1100);
             }
         };
+        
         this.stt.start();
     },
 
+    stopListeningAndSubmit() {
+        if (!this.isCalling || this.isLiveMode) return;
+        
+        if (this.silenceTimer) clearTimeout(this.silenceTimer);
+        const finalContent = this.lastTranscript;
+        
+        this.stt.stop();
+        if (finalContent.trim().length > 1) {
+            this.askGemini(finalContent);
+        } else {
+            this.updateUI('listening', 'Bạn chưa nói gì cả...');
+        }
+        this.lastTranscript = '';
+    },
+
+    toggleLiveMode() {
+        this.isLiveMode = !this.isLiveMode;
+        const btn = document.getElementById('liveModeToggle');
+        if (!btn) return;
+
+        if (this.isLiveMode) {
+            btn.classList.add('active');
+            btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-indigo-500 status-dot"></div> LIVE MODE: ON';
+            showToast("🚀 Đã bật Chế độ Live (Tự động đàm thoại)");
+            this.startListening();
+        } else {
+            btn.classList.remove('active');
+            btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF';
+            showToast("✋ Đã tắt Chế độ Live. Hãy nhấn giữ Mic để nói.");
+            this.stt.stop();
+        }
+    },
+
     async askGemini(userText) {
+        if (!this.isCalling) return;
+        
+        // Tạo ID mới cho yêu cầu này
+        const requestId = ++this.currentRequestId;
+        this.isProcessing = true;
         this.updateUI('thinking', 'Đang phân tích...');
+        
+        // Dừng STT và TTS cũ ngay lập tức
+        this.stt.stop();
+        SpeechManager.stop();
+        if (this.silenceTimer) clearTimeout(this.silenceTimer);
+        if (this.safetyTimer) clearTimeout(this.safetyTimer);
+
+        // Safety: Tự động giải phóng sau 15s nếu kẹt (phòng lỗi TTS/API)
+        this.safetyTimer = setTimeout(() => {
+            if (this.isProcessing && requestId === this.currentRequestId) {
+                console.warn("VoiceTutor: Safety timer triggered. Resetting isProcessing.");
+                this.isProcessing = false;
+            }
+        }, 15000);
+
         try {
             const q = currentQuestions[this.activeQIdx];
-            const systemPrompt = `Bạn là một gia sư AI thân thiện và am hiểu. Người dùng đang hỏi bạn về một câu hỏi trắc nghiệm sau đây:
-            Câu hỏi: ${q.text}
-            Các phương án: ${q.options.map((o, i) => String.fromCharCode(65 + i) + ". " + o).join(", ")}
-            Đáp án đúng là: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
             
-            Hãy trả lời câu hỏi của người dùng một cách ngắn gọn, súc tích (dưới 100 từ), sử dụng ngôn ngữ tự nhiên như đang nói chuyện trực tiếp. Đừng quá cứng nhắc. Nếu người dùng hỏi lạc đề, hãy khéo léo dẫn dắt họ quay lại nội dung bài học.
-            Người dùng nói: "${userText}"`;
+            // 1. Cập nhật lịch sử với tin nhắn mới của người dùng
+            this.chatHistory.push({ role: "user", parts: [{ text: userText }] });
+            
+            // 2. Giới hạn lịch sử (chỉ giữ 10 lượt gần nhất để tối ưu)
+            if (this.chatHistory.length > 10) this.chatHistory = this.chatHistory.slice(-10);
 
-            const response = await callGemini(systemPrompt);
+            // 3. Xây dựng System Instruction kèm ngữ cảnh câu hỏi
+            const contextPrompt = `Bạn là gia sư AI Hai Anh. Hãy hỗ trợ học sinh học tập.
+            Bối cảnh câu hỏi hiện tại:
+            - Nội dung: ${q.text}
+            - Đáp án đúng: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
+            
+            Yêu cầu quan trọng: 
+            1. PHẢN HỒI THEO YÊU CẦU: Nếu người dùng yêu cầu giải thích chi tiết, chuyên sâu hoặc dài, hãy đáp ứng chính xác. Nếu không yêu cầu gì đặc biệt, hãy giải thích đầy đủ nhưng súc tích.
+            2. Xưng hô là "tôi" và "bạn". 
+            3. ĐI THẲNG VÀO VẤN ĐỀ: Không chào hỏi lặp lại, không rườm rà.
+            4. CHỐNG ẢO GIÁC: Tuyệt đối không bịa đặt thông tin.`;
+
+            const payload = { 
+                contents: [
+                    { role: "user", parts: [{ text: contextPrompt }] },
+                    { role: "model", parts: [{ text: "Tôi đã hiểu. Tôi sẽ giải thích dựa trên độ dài mà bạn yêu cầu." }] },
+                    ...this.chatHistory 
+                ], 
+                generationConfig: { 
+                    temperature: 0.7,
+                    maxOutputTokens: 4096 // Tăng giới hạn để hỗ trợ bài viết dài
+                } 
+            };
+            
+            const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+            const response = data.candidates[0].content.parts[0].text;
+            
+            // KIỂM TRA: Nếu có yêu cầu mới hơn (Barge-in), bỏ qua kết quả này
+            if (requestId !== this.currentRequestId || !this.isCalling) {
+                return;
+            }
+
+            // 4. Lưu câu trả lời của AI vào lịch sử
+            this.chatHistory.push({ role: "model", parts: [{ text: response }] });
+            
+            if (!this.isCalling) {
+                this.isProcessing = false;
+                return;
+            }
+
             this.updateUI('speaking', response);
+            this.aiSpeakStartTime = Date.now();
+            
             SpeechManager.speak(response, 'voice-tutor', () => {
-                if (this.isCalling) this.startListening();
+                // Chỉ giải phóng và restart nếu đây vẫn là yêu cầu cuối cùng
+                if (requestId === this.currentRequestId) {
+                    if (this.safetyTimer) clearTimeout(this.safetyTimer);
+                    this.isProcessing = false;
+                    console.log("VoiceTutor: AI finished speaking.");
+                    if (this.isCalling && this.isLiveMode) {
+                        this.lastTranscript = '';
+                        this.startListening();
+                    }
+                }
             });
         } catch (err) {
-            this.updateUI('speaking', "Có lỗi xảy ra khi kết nối với não bộ của tôi. Thử lại sau nhé!");
-            SpeechManager.speak("Có lỗi xảy ra. Thử lại sau nhé!", 'voice-tutor');
+            if (requestId !== this.currentRequestId) return;
+            console.error("Voice Gemini Error:", err);
+            this.isProcessing = false;
+            this.updateUI('listening', "Lỗi kết nối. Bạn hãy thử nhắn lại nhé.");
         }
     },
 
     endCall() {
+        console.log("VoiceTutor: Ending call and performing hard reset...");
         this.isCalling = false;
+        
+        // 1. Dọn dẹp STT
+        if (this.stt.safeStartTimer) clearTimeout(this.stt.safeStartTimer);
         this.stt.stop();
+        
+        // 2. Dọn dẹp TTS
         SpeechManager.stop();
+        
+        // 3. Dọn dẹp các bộ đệm nội bộ
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+        
+        // 4. UI Reset
         const modal = document.getElementById('voiceCallModal');
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+        
+        document.getElementById('voiceTranscript').innerText = "Cuộc gọi đã kết thúc.";
+        this.lastTranscript = '';
+        this.aiSpeakStartTime = 0;
+        this.isProcessing = false;
     }
 };
+
+// Khởi tạo VoiceTutor và gán vào window để debug
+window.VoiceTutor = VoiceTutor;
+VoiceTutor.init();
 
 function renderSingleQuestion(idx) {
     const oldDiv = document.getElementById(`question-${idx}`);
@@ -877,9 +1345,32 @@ async function compressImage(base64Str) {
 async function callAiProxy({ provider, model, payload }) {
     const apiKey = getApiKey();
     if (!apiKey || provider !== 'google') return await callLegacyProxy({ provider, model, payload });
-    const baseModels = ['gemini-3.1-flash-lite', 'gemini-3.1-flash-lite-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-flash-lite-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-preview', 'gemini-3-flash', 'gemini-3-flash-preview', 'gemini-3-flash-live', 'gemini-3-flash-live-preview'];
-    if (cachedWorkingModel && !baseModels.includes(cachedWorkingModel)) { cachedWorkingModel = null; localStorage.removeItem('last_working_model'); }
-    const modelsToTry = cachedWorkingModel ? [cachedWorkingModel, ...baseModels.filter(m => m !== cachedWorkingModel)] : baseModels;
+    const baseModels = [
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-8b',
+        'gemini-2.0-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-exp-1206',
+        'gemini-1.5-pro-002',
+        'learnlm-1.5-pro-experimental'
+    ];
+    
+    const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+    
+    // Thuật toán sắp xếp thông minh:
+    // 1. Lấy danh sách cứng làm nòng cốt
+    // 2. Thêm các model khám phá được mà không nằm trong danh sách cứng vào cuối
+    const otherDiscovered = discovered.filter(m => !baseModels.includes(m));
+    const allAvailable = [...baseModels, ...otherDiscovered];
+
+    // Ưu tiên cao nhất: 1. Model người dùng chọn -> 2. Danh sách đã sắp xếp
+    const userSelectedModel = localStorage.getItem('last_working_model');
+    const modelsToTry = userSelectedModel && allAvailable.includes(userSelectedModel) 
+        ? [userSelectedModel, ...allAvailable.filter(m => m !== userSelectedModel)]
+        : allAvailable;
     let lastError = "Không có phản hồi từ AI";
     for (const currentModel of modelsToTry) {
         const versions = ['v1beta', 'v1'];
@@ -911,14 +1402,81 @@ async function callAiProxy({ provider, model, payload }) {
     showApiError(null, lastError); throw new Error(lastError);
 }
 
-async function checkAvailableModels() {
-    const apiKey = getApiKey(); if (!apiKey) { showToast("❌ Hãy nhập và lưu API Key trước!"); return; }
-    showLoading(true, "Đang kiểm tra danh sách mô hình...");
+async function discoverModels() {
+    const apiKey = getApiKey();
+    if (!apiKey) return;
     try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
-        const data = await res.json(); showLoading(false);
-        if (data.models) { const list = data.models.map(m => m.name.replace('models/', '')).join('\n'); alert("✅ Các mô hình khả dụng:\n\n" + list); }
-        else { alert("❌ Lỗi: " + JSON.stringify(data)); }
+        const data = await res.json();
+        if (data.models) {
+            // Lọc các model hỗ trợ generateContent
+            const activeModels = data.models
+                .filter(m => m.supportedGenerationMethods.includes('generateContent'))
+                .map(m => m.name.replace('models/', ''));
+            
+            if (activeModels.length > 0) {
+                const oldDiscovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+                localStorage.setItem('haianh_discovered_models', JSON.stringify(activeModels));
+                updateModelDropdownUI(activeModels);
+                
+                // Nếu có model mới hoàn toàn so với trước đây
+                if (activeModels.some(m => !oldDiscovered.includes(m))) {
+                    showSettingsBadge(true);
+                }
+            }
+        }
+    } catch (e) { console.warn("Dynamic Discovery: Không thể kết nối API danh sách model."); }
+}
+
+function showSettingsBadge(show) {
+    const btn = document.getElementById('settingsToggleBtn');
+    if (!btn) return;
+    let badge = btn.querySelector('.new-model-badge');
+    if (show) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'new-model-badge absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white dark:border-slate-900 rounded-full animate-pulse';
+            btn.appendChild(badge);
+        }
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
+function updateModelDropdownUI(models) {
+    const select = document.getElementById('aiModelSelect');
+    if (!select) return;
+    
+    const currentVal = select.value;
+    select.innerHTML = '';
+    
+    // Tạo nhóm "Khám phá từ API"
+    const groupApi = document.createElement('optgroup');
+    groupApi.label = "Đã cập nhật từ API (Mới nhất)";
+    
+    models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.text = m.replace('gemini-', '').toUpperCase();
+        groupApi.appendChild(opt);
+    });
+    
+    select.appendChild(groupApi);
+    if (models.includes(currentVal)) select.value = currentVal;
+}
+
+async function checkAvailableModels() {
+    const apiKey = getApiKey(); if (!apiKey) { showToast("❌ Hãy nhập và lưu API Key trước!"); return; }
+    showLoading(true, "Đang quét các mô hình khả dụng...");
+    try {
+        await discoverModels();
+        const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+        showLoading(false);
+        if (discovered.length) {
+            alert(`✅ Đã tìm thấy ${discovered.length} mô hình đang hoạt động!\n\nDanh sách đã được cập nhật vào mục Cài đặt.`);
+        } else {
+            alert("❌ Không tìm thấy mô hình nào hoặc API Key không hợp lệ.");
+        }
     } catch (e) { showLoading(false); alert("❌ Lỗi: " + e.message); }
 }
 
@@ -1498,6 +2056,60 @@ function initExam(questionsArray, timeMinutes) {
 
 function startFullTest() { if (!masterQuestions.length) showToast("Chưa có bộ câu hỏi."); else { showToast("Đang tải đề thi..."); initExam(masterQuestions, parseInt(document.getElementById('timeMinutes')?.value) || 30); } }
 function startRandomTest() { if (!masterQuestions.length) showToast("Chưa có bộ câu hỏi."); else { let num = parseInt(document.getElementById('questionCount')?.value); if (isNaN(num) || num <= 0) num = masterQuestions.length; if (num > masterQuestions.length) num = masterQuestions.length; const shuffled = [...masterQuestions]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } showToast("Đang tạo đề ngẫu nhiên..."); initExam(shuffled.slice(0, num), parseInt(document.getElementById('timeMinutes')?.value) || 30); } }
+
+async function startReviewSession() {
+    showLoading(true, "Đang quét các câu hỏi cần ôn tập...");
+    try {
+        const banks = await getAllBanks();
+        const stats = ReviewManager.stats;
+        const now = Date.now();
+        
+        let dueQuestions = [];
+        let allLearningQuestions = [];
+        
+        const allQuestions = [];
+        for (const bank of banks) {
+            if (bank.questions) allQuestions.push(...bank.questions);
+        }
+
+        allQuestions.forEach(q => {
+            const id = ReviewManager.getQId(q.text);
+            const item = stats[id];
+            if (item) {
+                if (item.nextDate <= now) dueQuestions.push(q);
+                allLearningQuestions.push(q);
+            }
+        });
+        
+        showLoading(false);
+
+        if (dueQuestions.length > 0) {
+            showConfirm(`Bạn có ${dueQuestions.length} câu hỏi đã đến hạn ôn tập. Bắt đầu ngay?`, (yes) => {
+                if (yes) {
+                    toggleReviewPanel(false);
+                    initExam(dueQuestions, 15);
+                    const modeInfo = document.getElementById('modeInfo');
+                    if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Định kỳ (Đến hạn)";
+                }
+            });
+        } else if (allLearningQuestions.length > 0) {
+            showConfirm(`Tuyệt vời! Bạn đã hoàn thành hết các câu của hôm nay. Bạn có muốn ôn lại ${allLearningQuestions.length} câu đang học để nhớ sâu hơn không?`, (yes) => {
+                if (yes) {
+                    toggleReviewPanel(false);
+                    initExam(allLearningQuestions, 20);
+                    const modeInfo = document.getElementById('modeInfo');
+                    if (modeInfo) modeInfo.innerText = "Chế độ: Ôn tập Chủ động (Cram Mode)";
+                }
+            });
+        } else {
+            showToast("Bạn chưa có dữ liệu học tập. Hãy làm thử một bộ đề bất kỳ trước nhé!");
+        }
+    } catch (err) {
+        console.error("Review Session Error:", err);
+        showLoading(false);
+        showToast("❌ Lỗi khởi tạo ôn tập: " + err.message);
+    }
+}
 function resetCurrentExam() { if (!currentQuestions.length) showToast("Chưa có bài."); else if (!examActive) showToast("Bài đã nộp."); else { showToast("Đang làm mới bài thi..."); stopTimer(); userAnswers = Array(currentQuestions.length).fill().map(() => []); flagged = Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = false; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (document.getElementById('resultPanel')) document.getElementById('resultPanel').classList.add('hidden'); startTimer((parseInt(document.getElementById('timeMinutes')?.value) || 30) * 60); saveProgressToLocal(); } }
 
 function submitExam() {
@@ -1514,6 +2126,13 @@ function submitExam() {
             initLazyRender(() => { while (displayedCount < Math.min(50, filteredIndices.length)) renderNextBatch(''); setTimeout(() => resultPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); });
             const wrongIndices = [], wrongTexts = []; for (let i = 0; i < currentQuestions.length; i++) { if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { wrongIndices.push(i); wrongTexts.push(currentQuestions[i].text); } }
             if (currentBankId) { await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); }
+
+            // GIAI ĐOẠN 2: Cập nhật Lộ trình ôn tập (SM-2)
+            scoreDetails.forEach((detail, i) => {
+                if (userAnswers[i]?.length > 0) { // Chỉ cập nhật nếu người dùng có làm câu đó
+                    ReviewManager.update(currentQuestions[i].text, detail.correct);
+                }
+            });
             const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.add('hidden');
             renderQuestionGrid();
             showToast("Đã lưu kết quả."); clearProgress();
@@ -1618,50 +2237,59 @@ function attachGlobalEvents() { const container = document.getElementById('quest
 async function restoreProgress() {
     try {
         const saved = loadProgress(); if (!saved || !saved.bankId) return false;
-        const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return false; }
-        masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
-        const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
-        if (saved.submitted) { 
-            currentQuestions = [...masterQuestions]; 
-            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
-            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
-            submitted = true; examActive = false; isPaused = false; 
-            timeRemainingSeconds = 0; 
-            updateProgress(); 
-            initLazyRender(); 
-            document.getElementById('questionsContainer')?.classList.remove('hidden');
-            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
-            const evalRes = evaluateAll();
-            scoreDetails = evalRes.details;
-            const resultPanel = document.getElementById('resultPanel');
-            if (resultPanel) {
-                const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
-                const resultContent = document.getElementById('resultContent');
-                if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p></div>`;
-                resultPanel.classList.remove('hidden');
+        
+        // Hiển thị thông báo hỏi người dùng
+        showConfirm(`♻️ Phát hiện bài tập đang làm dở từ phiên trước. Bạn có muốn tiếp tục làm bài "${saved.bankName}" không?`, async (yes) => {
+            if (!yes) {
+                clearProgress();
+                return;
             }
-            renderQuestionGrid();
-            showToast(`♻️ Đã khôi phục phiên làm bài: ${bank.name}`); 
-        }
-        else if (saved.examActive) { 
-            currentQuestions = [...masterQuestions]; 
-            userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
-            flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
-            submitted = false; examActive = true; isPaused = saved.isPaused || false; 
-            timeRemainingSeconds = saved.timeRemainingSeconds || 0; 
-            const btn = document.getElementById('pauseResumeBtn'); 
-            if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; 
-            updateProgress(); initLazyRender(); 
-            document.getElementById('questionsContainer')?.classList.remove('hidden');
-            document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
-            document.getElementById('progressArea')?.classList.remove('hidden');
-            document.getElementById('setupArea')?.classList.add('hidden');
-            renderQuestionGrid();
-            if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); 
-            if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; 
-            showToast(`♻️ Đã khôi phục bài thi đang làm dở: ${bank.name}`); 
-        }
-        else { return false; }
+
+            const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return; }
+            masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
+            const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
+            
+            if (saved.submitted) { 
+                currentQuestions = [...masterQuestions]; 
+                userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+                flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+                submitted = true; examActive = false; isPaused = false; 
+                timeRemainingSeconds = 0; 
+                updateProgress(); 
+                initLazyRender(); 
+                document.getElementById('questionsContainer')?.classList.remove('hidden');
+                document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+                const evalRes = evaluateAll();
+                scoreDetails = evalRes.details;
+                const resultPanel = document.getElementById('resultPanel');
+                if (resultPanel) {
+                    const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
+                    const resultContent = document.getElementById('resultContent');
+                    if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p></div>`;
+                    resultPanel.classList.remove('hidden');
+                }
+                renderQuestionGrid();
+                showToast(`✅ Đã khôi phục kết quả: ${bank.name}`); 
+            }
+            else if (saved.examActive) { 
+                currentQuestions = [...masterQuestions]; 
+                userAnswers = saved.userAnswers || Array(currentQuestions.length).fill().map(() => []); 
+                flagged = saved.flagged || Array(currentQuestions.length).fill(false); 
+                submitted = false; examActive = true; isPaused = saved.isPaused || false; 
+                timeRemainingSeconds = saved.timeRemainingSeconds || 0; 
+                const btn = document.getElementById('pauseResumeBtn'); 
+                if (btn) btn.innerHTML = isPaused ? '<i class="fas fa-play"></i> Tiếp tục' : '<i class="fas fa-pause"></i> Tạm dừng'; 
+                updateProgress(); initLazyRender(); 
+                document.getElementById('questionsContainer')?.classList.remove('hidden');
+                document.getElementById('loadMoreTrigger')?.classList.remove('hidden');
+                document.getElementById('progressArea')?.classList.remove('hidden');
+                document.getElementById('setupArea')?.classList.add('hidden');
+                renderQuestionGrid();
+                if (!isPaused) startTimer(timeRemainingSeconds); else updateTimerDisplay(); 
+                if (document.getElementById('modeInfo')) document.getElementById('modeInfo').innerText = `Đang thi: ${currentQuestions.length} câu`; 
+                showToast(`🚀 Tiếp tục làm bài: ${bank.name}`); 
+            }
+        });
         return true;
     } catch (e) { clearProgress(); return false; }
 }
@@ -1670,6 +2298,7 @@ async function initGIA() {
     try {
         await openDB(); await refreshBankDropdown(); initDarkMode(); updateApiKeyBadge();
         FontSizeManager.init();
+        discoverModels(); // Khởi chạy ngầm khám phá model mới
         const restored = await restoreProgress(); if (!restored) { const banks = await getAllBanks(); if (banks.length) await loadBankById(banks[0].id); }
         const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn');
         searchInput?.addEventListener('input', () => { if (searchInput.value.length > 0) clearSearchBtn?.classList.remove('hidden'); else clearSearchBtn?.classList.add('hidden'); if (searchDebounceTimer) clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => { initLazyRender(); }, 300); });
@@ -1686,6 +2315,18 @@ async function initGIA() {
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('endCallBtn')?.addEventListener('click', () => VoiceTutor.endCall());
+        document.getElementById('toggleMicBtn')?.addEventListener('click', () => {
+            if (VoiceTutor.isCalling) {
+                SpeechManager.stop();
+                VoiceTutor.startListening();
+                // Hiện ô nhập liệu khi nhấn mic (để người dùng có thêm lựa chọn)
+                document.getElementById('voiceInputContainer')?.classList.remove('hidden');
+            }
+        });
+        document.getElementById('sendVoiceTextBtn')?.addEventListener('click', () => VoiceTutor.handleTextSubmit());
+        document.getElementById('voiceTextInput')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') VoiceTutor.handleTextSubmit();
+        });
         const toggleGridView = () => {
             if (currentQuestions.length) {
                 const panel = document.getElementById('questionGridPanel');
@@ -1741,27 +2382,170 @@ async function initGIA() {
         document.getElementById('reviewWrongMainBtn')?.addEventListener('click', async () => { const history = await getAllHistory(); if (history.length === 0) { showToast("Chưa có lịch sử để ôn tập."); return; } const currentBankWrongTexts = new Set(); for (const h of history) { if (h.bankId === currentBankId && h.wrongQuestionsText) { h.wrongQuestionsText.forEach(txt => currentBankWrongTexts.add(txt)); } } if (currentBankWrongTexts.size === 0) { showToast("Không có câu sai nào trong bộ hiện tại."); return; } const wrongQuestions = masterQuestions.filter(q => currentBankWrongTexts.has(q.text)); if (wrongQuestions.length === 0) { showToast("Không tìm thấy câu hỏi tương ứng."); return; } initExam(wrongQuestions, parseInt(document.getElementById('timeMinutes')?.value) || 30); showToast(`Đã tạo bài ôn tập với ${wrongQuestions.length} câu sai.`); });
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => { if (!submitted) { showToast("Hãy nộp bài trước."); return; } showLoading(true, "Đang chuẩn bị báo cáo..."); try { const correctCount = scoreDetails.filter(d => d.correct).length; const percent = (correctCount / currentQuestions.length * 100).toFixed(1); const canvasChart = document.createElement('canvas'); canvasChart.width = 400; canvasChart.height = 200; const ctx = canvasChart.getContext('2d'); if (!ctx) return; new Chart(ctx, { type: 'doughnut', data: { labels: ['Đúng', 'Sai'], datasets: [{ data: [correctCount, currentQuestions.length - correctCount], backgroundColor: ['#22c55e', '#ef4444'] }] }, options: { animation: false, responsive: false, plugins: { legend: { position: 'top' } } } }); const chartImg = canvasChart.toDataURL(); let printWindow = window.open('', '_blank'); if (!printWindow) return; let html = `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Báo cáo kết quả thi<\/title><style>body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; line-height: 1.5; } h1 { color: #1e40af; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; } th, td { border: 1px solid #ccc; padding: 10px; text-align: left; } th { background-color: #f2f2f2; } .correct { color: #166534; font-weight: bold; } .wrong { color: #991b1b; font-weight: bold; } img { max-width: 300px; margin-bottom: 20px; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } table { page-break-inside: auto; } tr { page-break-inside: avoid; page-break-after: auto; } thead { display: table-header-group; } }<\/style><\/head><body><h1>Báo cáo kết quả thi<\/h1><p><strong>Bộ câu hỏi:<\/strong> ${currentBankName}<\/p><p><strong>Ngày thi:<\/strong> ${new Date().toLocaleString()}<\/p><p><strong>Điểm số:<\/strong> ${correctCount}\/${currentQuestions.length} (${percent}%)<\/p><img src="${chartImg}" alt="Biểu đồ kết quả" \/><hr\/><h3>Chi tiết từng câu hỏi<\/h3><table><thead><tr><th style="width:5%">STT<\/th><th style="width:40%">Nội dung<\/th><th style="width:25%">Đáp án đã chọn<\/th><th style="width:20%">Đáp án đúng<\/th><th style="width:10%">Kết quả<\/th><\/tr><\/thead><tbody>`; for (let i = 0; i < currentQuestions.length; i++) { const q = currentQuestions[i]; const userAns = userAnswers[i] || []; const userText = userAns.length ? userAns.map(a => q.options[a]).join('<br>') : '(Chưa trả lời)'; const correctText = q.correctIndices.map(i => q.options[i]).join('<br>'); const status = scoreDetails[i].correct ? 'Đúng' : (userAns.length ? 'Sai' : 'Chưa trả lời'); const statusClass = scoreDetails[i].correct ? 'correct' : 'wrong'; html += `<tr><td>${i + 1}<\/td><td>${escapeHtml(q.text)}<\/td><td>${userText}<\/td><td>${correctText}<\/td><td class="${statusClass}">${status}<\/td><\/tr>`; } html += `<\/tbody><\/table><\/body><\/html>`; printWindow.document.open(); printWindow.document.write(html); printWindow.document.close(); setTimeout(() => { showLoading(false); printWindow.print(); }, 500); } catch (e) { console.error(e); showToast("Lỗi xuất báo cáo: " + e.message); showLoading(false); } });
         document.getElementById('clearHistoryBtn')?.addEventListener('click', () => { showConfirm("Xóa toàn bộ lịch sử?", async (yes) => { if (!yes) return; await clearAllHistory(); showToast("Đã xóa lịch sử."); document.getElementById('statsModal')?.classList.add('hidden'); }); });
-        document.getElementById('aiSettingsBtn')?.addEventListener('click', () => {
-            document.getElementById('settingsDropdown')?.classList.remove('show');
-            const input = document.getElementById('geminiApiKeyInput');
-            if (input) input.value = localStorage.getItem('gemini_api_key') || '';
-            const modal = document.getElementById('aiSettingsModal');
-            if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+        
+        // Sidebar Toggle Logic
+        const settingsSidePanel = document.getElementById('settingsSidePanel');
+        const reviewSidePanel = document.getElementById('reviewDashboardCard');
+        const overlay = document.getElementById('sidePanelOverlay');
+
+        const toggleSettings = (show) => {
+            if (show) {
+                settingsSidePanel?.classList.remove('-translate-x-full');
+                overlay?.classList.remove('hidden');
+                showSettingsBadge(false);
+                
+                // 1. Nạp Cấu hình AI
+                if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
+                if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('last_working_model') || 'gemini-1.5-flash';
+
+                // 2. Nạp Tính năng học tập
+                const hintTog = document.getElementById('hintToggleSide');
+                if (hintTog) hintTog.checked = (localStorage.getItem('haianh_hint_enabled') !== 'false');
+
+                const explainTog = document.getElementById('aiExplainToggleSide');
+                if (explainTog) explainTog.checked = (localStorage.getItem('haianh_show_ai_explain') !== 'false');
+
+                const callTog = document.getElementById('aiCallToggleSide');
+                if (callTog) callTog.checked = (localStorage.getItem('haianh_show_ai_call') !== 'false');
+
+                // 3. Nạp Âm thanh
+                const speedSlider = document.getElementById('aiSpeedSliderSide');
+                const speedVal = document.getElementById('aiSpeedValSide');
+                const savedRate = localStorage.getItem('voice_rate') || '1.0';
+                if (speedSlider) speedSlider.value = savedRate;
+                if (speedVal) speedVal.innerText = savedRate + 'x';
+
+                // 4. Nạp Hiển thị
+                const darkTog = document.getElementById('darkModeToggleSide');
+                if (darkTog) darkTog.checked = document.body.classList.contains('dark');
+
+                const sizeSlider = document.getElementById('sideFontSizeSlider');
+                const sizeVal = document.getElementById('sideFontSizeVal');
+                const savedScale = localStorage.getItem('haianh_font_scale') || '100';
+                if (sizeSlider) sizeSlider.value = savedScale;
+                if (sizeVal) sizeVal.innerText = savedScale + '%';
+
+            } else {
+                settingsSidePanel?.classList.add('-translate-x-full');
+                if (reviewSidePanel?.classList.contains('translate-x-full')) overlay?.classList.add('hidden');
+            }
+        };
+
+        const toggleReview = (show) => {
+            if (show) {
+                reviewSidePanel?.classList.remove('translate-x-full');
+                overlay?.classList.remove('hidden');
+                ReviewManager.updateDashboardUI();
+            } else {
+                reviewSidePanel?.classList.add('translate-x-full');
+                if (settingsSidePanel?.classList.contains('-translate-x-full')) overlay?.classList.add('hidden');
+            }
+        };
+
+        document.getElementById('settingsToggleBtn')?.addEventListener('click', () => toggleSettings(true));
+        document.getElementById('closeSettingsPanel')?.addEventListener('click', () => toggleSettings(false));
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReview(true));
+        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReview(false));
+        overlay?.addEventListener('click', () => { toggleSettings(false); toggleReview(false); });
+
+        // Logic Lưu toàn bộ cài đặt
+        document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => {
+            // 1. Lưu AI
+            const key = document.getElementById('apiKeyInput').value.trim();
+            const model = document.getElementById('aiModelSelect').value;
+            localStorage.setItem('gemini_api_key', key);
+            localStorage.setItem('last_working_model', model);
+            updateApiKeyBadge();
+
+            // 2. Lưu Tính năng
+            const hintEnabledSide = document.getElementById('hintToggleSide').checked;
+            localStorage.setItem('haianh_hint_enabled', hintEnabledSide);
+            hintEnabled = hintEnabledSide;
+            FontSizeManager.applyHintVisibility();
+
+            const explainEnabled = document.getElementById('aiExplainToggleSide').checked;
+            localStorage.setItem('haianh_show_ai_explain', explainEnabled);
+            appSettings.showAiExplain = explainEnabled;
+
+            const callEnabled = document.getElementById('aiCallToggleSide').checked;
+            localStorage.setItem('haianh_show_ai_call', callEnabled);
+            appSettings.showAiCall = callEnabled;
+            // Cập nhật hiển thị nút gọi AI nổi nếu có
+            const floatingAi = document.getElementById('floatingAiBtn');
+            if (floatingAi) {
+                if (callEnabled) floatingAi.classList.remove('hidden');
+                else floatingAi.classList.add('hidden');
+            }
+
+            // 3. Lưu Âm thanh
+            const rate = document.getElementById('aiSpeedSliderSide').value;
+            localStorage.setItem('voice_rate', rate);
+            SpeechManager.rate = parseFloat(rate);
+
+            // 4. Lưu Dark Mode
+            const isDark = document.getElementById('darkModeToggleSide').checked;
+            if (isDark) document.body.classList.add('dark');
+            else document.body.classList.remove('dark');
+            localStorage.setItem('darkMode', isDark);
+
+            // 5. Lưu Cỡ chữ
+            const scale = document.getElementById('sideFontSizeSlider').value;
+            localStorage.setItem('haianh_font_scale', scale);
+            FontSizeManager.scale = parseInt(scale);
+            FontSizeManager.apply();
+
+            showToast("✅ Đã cập nhật toàn bộ cài đặt hệ thống!");
+            toggleSettings(false);
         });
-        document.getElementById('closeAiSettingsBtn')?.addEventListener('click', () => { const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } });
-        document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => { const input = document.getElementById('geminiApiKeyInput'); const key = input?.value.trim(); if (key) { localStorage.setItem('gemini_api_key', key); showToast('✅ Đã lưu API Key!'); } else { localStorage.removeItem('gemini_api_key'); showToast('Đã xoá API Key!'); } const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } updateApiKeyBadge(); });
-        document.getElementById('checkModelsBtn')?.addEventListener('click', checkAvailableModels);
+
+        // Event listeners cho các thanh trượt (Cập nhật số hiển thị tức thì)
+        document.getElementById('aiSpeedSliderSide')?.addEventListener('input', (e) => {
+            const val = document.getElementById('aiSpeedValSide');
+            if (val) val.innerText = e.target.value + 'x';
+        });
+
+        document.getElementById('sideFontSizeSlider')?.addEventListener('input', (e) => {
+            const val = document.getElementById('sideFontSizeVal');
+            if (val) val.innerText = e.target.value + '%';
+            // Áp dụng thử cỡ chữ ngay để người dùng thấy
+            const decimal = e.target.value / 100;
+            document.documentElement.style.setProperty('--font-scale', decimal);
+            document.body.style.setProperty('--font-scale', decimal);
+        });
+
+        // Bổ sung: Kiểm tra Mic và Quét Model
+        document.getElementById('sideUnlockMicBtn')?.addEventListener('click', () => {
+            VoiceTutor.unlockMicrophone();
+        });
+
+        document.getElementById('sideCheckModelsBtn')?.addEventListener('click', () => {
+            checkAvailableModels();
+        });
+
+        // Data Management in Sidebar
+        document.getElementById('sideDataCenterBtn')?.addEventListener('click', () => {
+            toggleSettings(false);
+            document.getElementById('dataCenterModal')?.classList.remove('hidden');
+            document.getElementById('dataCenterModal')?.classList.add('flex');
+        });
+        document.getElementById('sideClearAllBtn')?.addEventListener('click', () => {
+            showConfirm("Xóa toàn bộ dữ liệu hệ thống?", async (yes) => {
+                if (!yes) return;
+                await clearAllBanks();
+                localStorage.clear();
+                location.reload();
+            });
+        });
 
         // AI Generator modal logic
         const openAiGenBtn = document.getElementById('openAiGenBtn');
         const aiGenModal = document.getElementById('aiGenModal');
         const closeAiGenBtn = document.getElementById('closeAiGenBtn');
-        const submitAiGenBtn = document.getElementById('submitAiGenBtn');
-        const removeFileBtn = document.getElementById('removeFileBtn');
         const uploadFileArea = document.getElementById('uploadFileArea');
         const fileInput = document.getElementById('fileInput');
 
-        let currentAiFiles = []; // Mảng chứa các file {name, type, data, size}
+        let currentAiFiles = [];
+        let isBatchMode = false;
 
         const updateAiFileListUI = () => {
             const container = document.getElementById('multiFileContainer');
@@ -1776,26 +2560,37 @@ async function initGIA() {
             }
 
             container?.classList.remove('hidden');
-            // uploadArea?.classList.add('hidden'); // Giữ lại để người dùng có thể bấm thêm file
-
+            uploadArea?.classList.add('hidden');
             if (listWrapper) {
-                listWrapper.innerHTML = currentAiFiles.map((f, i) => `
-                    <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100 dark:border-slate-700 shadow-sm">
-                        <div class="flex items-center gap-2 overflow-hidden">
-                            <i class="${f.type.startsWith('image/') ? 'fas fa-image text-blue-500' : 'fas fa-file-pdf text-red-500'} text-lg"></i>
+                listWrapper.innerHTML = currentAiFiles.map((f, i) => {
+                    const isImg = f.type.startsWith('image/');
+                    const previewSrc = isImg ? `data:${f.type};base64,${f.data}` : '';
+                    
+                    return `
+                    <div class="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-xl border border-indigo-100 dark:border-slate-700 shadow-sm group">
+                        <div class="flex items-center gap-3 overflow-hidden flex-1 cursor-pointer" onclick="viewFullAiFile(${i})">
+                            ${isImg ? 
+                                `<div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-800 flex-shrink-0 bg-gray-50">
+                                    <img src="${previewSrc}" class="w-full h-full object-cover">
+                                 </div>` :
+                                `<div class="w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-500 flex-shrink-0">
+                                    <i class="${f.type.startsWith('audio/') ? 'fas fa-volume-high' : 'fas fa-file-pdf'} text-xl"></i>
+                                 </div>`
+                            }
                             <div class="flex flex-col overflow-hidden">
-                                <span class="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
-                                <span class="text-[9px] text-gray-500">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">${f.name}</span>
+                                <span class="text-[9px] text-gray-500 font-medium">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
                             </div>
                         </div>
-                        <button class="remove-ai-file text-red-400 hover:text-red-600 p-1" data-index="${i}">
-                            <i class="fas fa-times-circle"></i>
+                        <button class="remove-ai-file w-8 h-8 rounded-full text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center justify-center" data-index="${i}">
+                            <i class="fas fa-trash-alt text-sm"></i>
                         </button>
                     </div>
-                `).join('');
+                `}).join('');
 
                 listWrapper.querySelectorAll('.remove-ai-file').forEach(btn => {
                     btn.onclick = (e) => {
+                        e.stopPropagation();
                         const idx = parseInt(e.currentTarget.dataset.index);
                         currentAiFiles.splice(idx, 1);
                         updateAiFileListUI();
@@ -1821,27 +2616,141 @@ async function initGIA() {
         });
         
         closeAiGenBtn?.addEventListener('click', () => { aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex'); });
-        uploadFileArea?.addEventListener('click', () => { fileInput?.click(); });
+        uploadFileArea?.addEventListener('click', () => { isBatchMode = false; fileInput?.removeAttribute('capture'); fileInput?.click(); });
+        
+        let cameraStream = null;
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraVideo = document.getElementById('cameraVideo');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const cameraCountBadge = document.getElementById('cameraCountBadge');
+
+        const stopCamera = () => {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraModal?.classList.add('hidden');
+            cameraModal?.classList.remove('flex');
+        };
+
+        const startCamera = async () => {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }
+                });
+                if (cameraVideo) {
+                    cameraVideo.srcObject = cameraStream;
+                    cameraModal?.classList.remove('hidden');
+                    cameraModal?.classList.add('flex');
+                    cameraCountBadge.innerText = currentAiFiles.length;
+                }
+            } catch (err) {
+                showToast("❌ Không thể truy cập Camera: " + err.message);
+                isBatchMode = false;
+            }
+        };
+
+        document.getElementById('batchScanBtn')?.addEventListener('click', () => {
+            isBatchMode = true;
+            startCamera();
+        });
+
+        document.getElementById('cancelCameraBtn')?.addEventListener('click', stopCamera);
+        document.getElementById('finishCameraBtn')?.addEventListener('click', () => {
+            stopCamera();
+            isBatchMode = false;
+            updateAiFileListUI();
+        });
+
+        document.getElementById('captureBtn')?.addEventListener('click', async () => {
+            if (!cameraVideo || !cameraCanvas) return;
+            const ctx = cameraCanvas.getContext('2d');
+            
+            // Tính toán khung crop (40px border từ HTML)
+            const videoW = cameraVideo.videoWidth;
+            const videoH = cameraVideo.videoHeight;
+            
+            // Giả định khung viền là 40px trên giao diện hiển thị
+            // Ta sẽ crop lấy phần trung tâm 80% của video để đảm bảo chất lượng
+            const cropScale = 0.8;
+            const sw = videoW * cropScale;
+            const sh = videoH * cropScale;
+            const sx = (videoW - sw) / 2;
+            const sy = (videoH - sh) / 2;
+
+            cameraCanvas.width = sw;
+            cameraCanvas.height = sh;
+            ctx.drawImage(cameraVideo, sx, sy, sw, sh, 0, 0, sw, sh);
+
+            // Hiệu ứng flash
+            const flash = document.getElementById('cameraFlash');
+            if (flash) {
+                flash.classList.remove('active');
+                void flash.offsetWidth;
+                flash.classList.add('active');
+                flash.classList.remove('hidden');
+                setTimeout(() => flash.classList.add('hidden'), 400);
+            }
+
+            const dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.85);
+            const base64Data = dataUrl.split(',')[1];
+            
+            currentAiFiles.push({
+                name: `Trang ${currentAiFiles.length + 1}`,
+                type: 'image/jpeg',
+                data: base64Data,
+                size: Math.round(base64Data.length * 0.75)
+            });
+
+            cameraCountBadge.innerText = currentAiFiles.length;
+
+            const toast = document.createElement('div');
+            toast.className = 'camera-success-toast';
+            toast.innerText = `📸 Đã quét trang ${currentAiFiles.length}`;
+            cameraModal.appendChild(toast);
+            setTimeout(() => toast.remove(), 1200);
+        });
+
+        // Hàm xem full ảnh AI
+        window.viewFullAiFile = (idx) => {
+            const file = currentAiFiles[idx];
+            if (!file || !file.type.startsWith('image/')) return;
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/90 z-[500] flex flex-col items-center justify-center p-4 backdrop-blur-md';
+            modal.innerHTML = `
+                <div class="absolute top-6 right-6 flex gap-4">
+                    <button class="w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20" onclick="this.closest('.fixed').remove()">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <img src="data:${file.type};base64,${file.data}" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border border-white/10">
+                <div class="mt-6 text-white text-center">
+                    <p class="font-bold">${file.name}</p>
+                    <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">${(file.size/1024/1024).toFixed(2)} MB</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
 
         fileInput?.addEventListener('change', async (e) => {
             const files = Array.from(e.target.files || []);
-            if (!files.length) return;
+            if (!files.length) { isBatchMode = false; return; }
 
-            showLoading(true, `Đang xử lý ${files.length} tệp tin...`);
+            showLoading(true, isBatchMode ? "Đang nạp trang sách..." : `Đang xử lý ${files.length} tệp tin...`);
             
             for (const file of files) {
                 const fileName = file.name.toLowerCase();
-                // Kiểm tra dung lượng tổng
                 const currentTotal = currentAiFiles.reduce((acc, f) => acc + f.size, 0);
                 if (currentTotal + file.size > 100 * 1024 * 1024) {
-                    showToast(`⚠️ File "${file.name}" vượt quá hạn mức 100MB còn lại.`);
+                    showToast(`⚠️ File "${file.name}" vượt quá hạn mức 100MB.`);
                     continue;
                 }
 
                 if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-                    const data = await new Promise((resolve) => {
+                    const data = await new Promise((res) => {
                         const reader = new FileReader();
-                        reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                        reader.onload = (ev) => res(ev.target.result.split(',')[1]);
                         reader.readAsDataURL(file);
                     });
                     
@@ -1849,62 +2758,42 @@ async function initGIA() {
                     if (file.type.startsWith('image/')) finalData = await compressImage(data);
                     
                     currentAiFiles.push({
-                        name: file.name,
+                        name: isBatchMode ? `Trang ${currentAiFiles.length + 1}` : file.name,
                         type: file.type,
                         data: finalData,
                         size: file.size
                     });
+                } else if (file.type.startsWith('audio/')) {
+                    const data = await new Promise((res) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => res(ev.target.result.split(',')[1]);
+                        reader.readAsDataURL(file);
+                    });
+                    currentAiFiles.push({ name: file.name, type: file.type, data: data, size: file.size });
                 } else if (fileName.endsWith('.docx')) {
-                    const text = await new Promise((resolve) => {
+                    const text = await new Promise((res) => {
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
-                            mammoth.extractRawText({ arrayBuffer: ev.target.result })
-                                .then(res => resolve(res.value))
-                                .catch(() => resolve(""));
-                        };
+                        reader.onload = (ev) => mammoth.extractRawText({ arrayBuffer: ev.target.result }).then(r => res(r.value)).catch(() => res(""));
                         reader.readAsArrayBuffer(file);
                     });
-                    if (text) {
-                        const area = document.getElementById('aiGenTextArea');
-                        if (area) area.value += `\n--- NỘI DUNG TỪ ${file.name} ---\n${text}\n`;
-                    }
+                    if (text) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += `\n--- NỘI DUNG TỪ ${file.name} ---\n${text}\n`; }
                 } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
-                    const text = await new Promise((resolve) => {
+                    const text = await new Promise((res) => {
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
-                            try {
-                                const wb = XLSX.read(ev.target.result, { type: 'array' });
-                                let res = "";
-                                wb.SheetNames.forEach(name => {
-                                    const sheet = wb.Sheets[name];
-                                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                                    res += json.map(row => row.join(" ")).join("\n") + "\n";
-                                });
-                                resolve(res);
-                            } catch(e) { resolve(""); }
-                        };
+                        reader.onload = (ev) => { try { const wb = XLSX.read(ev.target.result, { type: 'array' }); let rs = ""; wb.SheetNames.forEach(n => { const sh = wb.Sheets[n]; const js = XLSX.utils.sheet_to_json(sh, { header: 1 }); rs += js.map(r => r.join(" ")).join("\n") + "\n"; }); res(rs); } catch(e) { res(""); } };
                         reader.readAsArrayBuffer(file);
                     });
-                    if (text) {
-                        const area = document.getElementById('aiGenTextArea');
-                        if (area) area.value += `\n--- DỮ LIỆU TỪ ${file.name} ---\n${text}\n`;
-                    }
+                    if (text) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += `\n--- DỮ LIỆU TỪ ${file.name} ---\n${text}\n`; }
                 } else if (file.type.startsWith('text/')) {
-                    const text = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (ev) => resolve(ev.target.result);
-                        reader.readAsText(file);
-                    });
-                    if (text) {
-                        const area = document.getElementById('aiGenTextArea');
-                        if (area) area.value += `\n--- VĂN BẢN TỪ ${file.name} ---\n${text}\n`;
-                    }
+                    const text = await new Promise((res) => { const reader = new FileReader(); reader.onload = (ev) => res(ev.target.result); reader.readAsText(file); });
+                    if (text) { const area = document.getElementById('aiGenTextArea'); if (area) area.value += `\n--- VĂN BẢN TỪ ${file.name} ---\n${text}\n`; }
                 }
             }
             
             updateAiFileListUI();
             showLoading(false);
             if (fileInput) fileInput.value = '';
+
         });
 
         let tempAiQuestions = [];
@@ -2134,10 +3023,29 @@ async function initGIA() {
             const diff = document.getElementById('aiGenDifficulty')?.value;
             const difficultyText = diff !== 'Mặc định' ? `Mức độ câu hỏi: ${diff}.` : '';
             
+            const isOcrPro = document.getElementById('ocrProToggle')?.checked;
+            const ocrProText = isOcrPro ? "\n[CHẾ ĐỘ OCR PRO KÍCH HOẠT]: Hãy phân tích cực kỳ chi tiết các hình ảnh. Chú ý đến các sơ đồ, bảng biểu, công thức toán học và các đoạn văn bản nhỏ trong hình vẽ. Đảm bảo bóc tách đúng cấu trúc kiến thức của trang sách giáo khoa." : "";
+            
             aiGenModal?.classList.add('hidden'); aiGenModal?.classList.remove('flex');
-            showLoading(true, "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
+            showLoading(true, isOcrPro ? "🚀 OCR Pro: Đang quét sâu dữ liệu hình ảnh..." : "AI đang tổng hợp dữ liệu... (Có thể mất 20-40 giây)");
 
-            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm. Hãy đọc TẤT CẢ các tài liệu đính kèm và văn bản dưới đây. Tổng hợp kiến thức và tạo ra đúng ${count} câu hỏi trắc nghiệm. ${difficultyText}\nBẮT BUỘC trả về JSON array. Cấu trúc mẫu:\n[\n  {\n    "text": "Câu hỏi?",\n    "options": ["A", "B", "C", "D"],\n    "correctIndices": [0],\n    "type": "single"\n  }\n]\nTiếng Việt.`;
+            const basePrompt = `Bạn là chuyên gia thiết kế đề thi trắc nghiệm (OCR Pro & Voice Mode). ${ocrProText}
+Hãy phân tích TẤT CẢ các tài liệu đính kèm (Hình ảnh sách giáo khoa, file âm thanh bài giảng, tài liệu văn bản). 
+1. Với Hình ảnh: Hãy nhận diện cấu trúc trang sách, các công thức, hình vẽ và chuyển thành câu hỏi phù hợp.
+2. Với Âm thanh: Hãy nghe nội dung bài giảng và trích xuất các ý chính để đặt câu hỏi.
+3. Với Văn bản: Tổng hợp kiến thức chuyên sâu.
+
+Tạo ra đúng ${count} câu hỏi trắc nghiệm chất lượng cao. ${difficultyText}
+BẮT BUỘC trả về JSON array. Cấu trúc mẫu:
+[
+  {
+    "text": "Câu hỏi?",
+    "options": ["A", "B", "C", "D"],
+    "correctIndices": [0],
+    "type": "single"
+  }
+]
+Tiếng Việt.`;
             
             let finalPrompt = basePrompt; if (rawText) finalPrompt += "\n\nVĂN BẢN TỔNG HỢP:\n" + rawText;
             
@@ -2207,6 +3115,44 @@ async function initGIA() {
             }
         });
 
+        // Voice Chat Modal Events
+        document.getElementById('endCallBtn')?.addEventListener('pointerdown', (e) => { e.preventDefault(); VoiceTutor.endCall(); });
+        
+        const micBtn = document.getElementById('toggleMicBtn');
+        if (micBtn) {
+            // Nhấn xuống: Bắt đầu nghe
+            micBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                if (VoiceTutor.isCalling) {
+                    micBtn.classList.add('mic-active-pulse');
+                    SpeechManager.stop();
+                    VoiceTutor.startListening();
+                }
+            });
+
+            // Nhả ra: Dừng và Gửi (PTT)
+            const stopMic = (e) => {
+                e.preventDefault();
+                if (VoiceTutor.isCalling) {
+                    micBtn.classList.remove('mic-active-pulse');
+                    VoiceTutor.stopListeningAndSubmit();
+                }
+            };
+            micBtn.addEventListener('pointerup', stopMic);
+            micBtn.addEventListener('pointerleave', stopMic);
+            micBtn.addEventListener('pointercancel', stopMic);
+        }
+
+        document.getElementById('liveModeToggle')?.addEventListener('click', () => VoiceTutor.toggleLiveMode());
+        
+        document.getElementById('sendVoiceTextBtn')?.addEventListener('pointerdown', (e) => { e.preventDefault(); VoiceTutor.handleTextSubmit(); });
+        document.getElementById('voiceTextInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                VoiceTutor.handleTextSubmit();
+            }
+        });
+
         document.getElementById('shareBankBtn')?.addEventListener('click', () => {
             const bankId = document.getElementById('bankSelect')?.value;
             if (!bankId) {
@@ -2216,7 +3162,25 @@ async function initGIA() {
             exportSingleBank(bankId);
         });
 
+        document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
+
+
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
+        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
+        document.getElementById('sidePanelOverlay')?.addEventListener('click', () => toggleReviewPanel(false));
+
+        document.getElementById('startReviewBtn')?.addEventListener('click', startReviewSession);
+
+        document.getElementById('copyVoiceTranscriptBtn')?.addEventListener('click', () => {
+            const text = document.getElementById('voiceTranscript').innerText;
+            if (!text || text.includes("Đang kết nối")) return;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("✅ Đã sao chép nội dung!");
+            });
+        });
+
         attachGlobalEvents();
+        ReviewManager.updateDashboardUI();
     } catch (e) { console.error("Lỗi Khởi tạo Hệ thống:", e); }
 }
 
