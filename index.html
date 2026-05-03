@@ -768,15 +768,28 @@
                 <i class="far fa-copy text-sm"></i>
             </button>
 
-            <!-- AI Waveform Canvas Area -->
-            <div id="aiWaveArea" class="flex flex-col items-center justify-center py-6 relative">
-                <canvas id="aiWaveCanvas" class="w-full h-32 md:h-40 max-w-lg"></canvas>
+            <!-- AI Waveform Area -->
+            <div id="aiWaveform" class="hidden flex justify-center mb-6 mt-2">
+                <div class="flex gap-1 items-end h-8">
+                    <div class="w-1.5 bg-indigo-500 animate-wave-1 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-2 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-3 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-1 rounded-full"></div>
+                </div>
             </div>
             
-            <!-- Transcript content -->
-            <div id="voiceTranscriptContainer" class="flex-1 overflow-y-auto px-4 py-4 min-h-[100px] max-h-[30vh]">
-                <div id="voiceTranscript" class="text-[15px] md:text-base font-semibold text-gray-700 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap text-center">
-                    Hãy nhấn Micro để bắt đầu nói...
+            <!-- Nội dung Chat: Căn lề trên, font size tối ưu -->
+            <div id="voiceTranscript" class="text-[15px] md:text-base font-semibold text-gray-700 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap pt-2">
+                Hãy nhấn Micro để bắt đầu nói...
+            </div>
+ 
+            <!-- User Mic Pulse Area -->
+            <div id="userMicPulse" class="hidden flex justify-center mt-10">
+                <div class="relative w-12 h-12 flex items-center justify-center">
+                    <div class="absolute inset-0 bg-indigo-500 rounded-full animate-ping opacity-25"></div>
+                    <div class="relative bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg">
+                        <i class="fas fa-microphone text-xs"></i>
+                    </div>
                 </div>
             </div>
 
