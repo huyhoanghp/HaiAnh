@@ -766,7 +766,14 @@ const VoiceTutor = {
     aiSpeakStartTime: 0,
     isProcessing: false,
     chatHistory: [],
-    currentRequestId: 0, // Theo dõi ID yêu cầu mới nhất
+    currentRequestId: 0,
+    visualizer: {
+        context: null,
+        analyser: null,
+        source: null,
+        animationId: null,
+        stream: null
+    },
 
     init() {
         this.stt.onEnd = () => {
@@ -817,10 +824,7 @@ const VoiceTutor = {
         document.getElementById('voiceTranscript').innerText = "Đang kết nối...";
         document.getElementById('voiceTextInput').value = "";
         
-        // Hiện ô nhập liệu nếu không có STT hoặc người dùng muốn
-        const inputContainer = document.getElementById('voiceInputContainer');
-        // Luôn hiển thị ô chat văn bản ngay khi bắt đầu cuộc gọi theo yêu cầu người dùng
-        inputContainer?.classList.remove('hidden');
+        this.initVisualizer();
 
         const greeting = 'Tôi đang nghe đây. Bạn cần tôi hỗ trợ gì về câu hỏi số ' + (qIdx + 1) + '?';
         this.updateUI('speaking', greeting);
@@ -831,6 +835,89 @@ const VoiceTutor = {
                 if (this.isCalling) this.startListening();
             });
         }, 300);
+    },
+
+    async initVisualizer() {
+        try {
+            if (this.visualizer.animationId) return; // Đã chạy rồi
+
+            this.visualizer.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.visualizer.context = new (window.AudioContext || window.webkitAudioContext)();
+            this.visualizer.analyser = this.visualizer.context.createAnalyser();
+            this.visualizer.analyser.fftSize = 256;
+            
+            this.visualizer.source = this.visualizer.context.createMediaStreamSource(this.visualizer.stream);
+            this.visualizer.source.connect(this.visualizer.analyser);
+            
+            this.drawVisualizer();
+        } catch (err) {
+            console.error("Visualizer Error:", err);
+        }
+    },
+
+    drawVisualizer() {
+        const canvas = document.getElementById('aiWaveCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const bufferLength = this.visualizer.analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const draw = () => {
+            if (!this.isCalling) return;
+            this.visualizer.animationId = requestAnimationFrame(draw);
+            this.visualizer.analyser.getByteFrequencyData(dataArray);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerX = width / 2;
+            const barWidth = 3;
+            const gap = 2;
+            let barHeight;
+
+            // Chỉ vẽ 40 thanh ở giữa để trông gọn gàng
+            const barsToDraw = 40;
+            const step = Math.floor(bufferLength / barsToDraw);
+
+            for (let i = 0; i < barsToDraw; i++) {
+                // Lấy trung bình dữ liệu để sóng mượt hơn
+                let sum = 0;
+                for(let j=0; j<step; j++) sum += dataArray[i*step + j];
+                const avg = sum / step;
+                
+                barHeight = (avg / 255) * height * 0.8;
+                if (barHeight < 4) barHeight = 4; // Luôn có một chút sóng nhỏ cho đẹp
+
+                const xOffset = i * (barWidth + gap);
+                
+                // Màu sắc gradient động theo biên độ
+                const hue = 230 + (avg / 255) * 30; // Chuyển từ Indigo sang Purple
+                ctx.fillStyle = `hsla(${hue}, 80%, 60%, 0.8)`;
+                
+                // Vẽ đối xứng qua tâm
+                // Bên phải
+                ctx.fillRect(centerX + xOffset, (height - barHeight) / 2, barWidth, barHeight);
+                // Bên trái
+                ctx.fillRect(centerX - xOffset - barWidth, (height - barHeight) / 2, barWidth, barHeight);
+            }
+        };
+        draw();
+    },
+
+    stopVisualizer() {
+        if (this.visualizer.animationId) {
+            cancelAnimationFrame(this.visualizer.animationId);
+            this.visualizer.animationId = null;
+        }
+        if (this.visualizer.stream) {
+            this.visualizer.stream.getTracks().forEach(track => track.stop());
+            this.visualizer.stream = null;
+        }
+        if (this.visualizer.context) {
+            this.visualizer.context.close();
+            this.visualizer.context = null;
+        }
     },
 
     updateUI(state, text = "") {
@@ -1097,6 +1184,9 @@ const VoiceTutor = {
         const modal = document.getElementById('voiceCallModal');
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+        
+        // 5. Visualizer Reset
+        this.stopVisualizer();
         
         document.getElementById('voiceTranscript').innerText = "Cuộc gọi đã kết thúc.";
         this.lastTranscript = '';
