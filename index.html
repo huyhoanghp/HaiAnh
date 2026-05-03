@@ -20,9 +20,44 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="apple-mobile-web-app-title" content="Hai Anh Study">
+    
+    <!-- Firebase SDK (v8 Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
 <body class="font-sans antialiased bg-gray-100">
 <div id="loadingOverlay"><div class="spinner"></div><div id="loadingText">Đang xử lý, vui lòng chờ...</div></div>
+
+<!-- Auth Overlay -->
+<div id="authOverlay" class="fixed inset-0 z-[5000] flex items-center justify-center bg-slate-900 overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-black"></div>
+    <div id="authCard" class="relative w-full max-w-[400px] mx-4 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-8 shadow-2xl transition-all duration-500 opacity-0 scale-95">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-blue-400 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4 rotate-3">
+                <i class="fas fa-graduation-cap text-3xl text-white"></i>
+            </div>
+            <h1 class="text-2xl font-black text-white tracking-tight">Hai Anh Study</h1>
+            <p class="text-indigo-200/60 text-sm font-medium mt-1">Nâng tầm trí tuệ của bạn</p>
+        </div>
+
+        <div id="loginForm" class="space-y-4">
+            <input type="email" id="loginEmail" placeholder="Email" class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-indigo-400">
+            <input type="password" id="loginPassword" placeholder="Mật khẩu" class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-indigo-400">
+            <button id="btnSubmitLogin" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-all">Đăng nhập</button>
+        </div>
+
+        <div class="mt-8">
+            <div class="relative flex items-center justify-center mb-6">
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/10"></div></div>
+                <span class="relative px-4 bg-transparent text-[10px] font-black text-white/30 uppercase tracking-widest">Hoặc</span>
+            </div>
+            <button id="btnGoogleLogin" class="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-white font-bold text-xs">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/action/google.svg" class="w-5 h-5"> Google
+            </button>
+        </div>
+    </div>
+</div>
 
 <div id="fileProtocolBanner" class="hidden fixed top-0 left-0 right-0 z-[2000] bg-red-600 text-white px-4 py-3 text-sm shadow-lg" style="line-height:1.6">
     ⚠️ <strong>Chức năng AI bị chặn</strong> — Bạn đang mở file bằng <code style="background:rgba(0,0,0,0.3);padding:0 4px;border-radius:3px">file://</code>, trình duyệt sẽ chặn mọi kết nối ra ngoài.<br>
@@ -36,75 +71,22 @@
         <div class="flex flex-col md:flex-row justify-between items-center gap-4">
             <h1 class="text-2xl font-bold text-blue-800 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> Hai Anh Study</h1>
             
-            <div class="flex gap-2 flex-wrap justify-center md:justify-end">
+            <div class="flex items-center gap-2 flex-wrap justify-center md:justify-end">
                 <button id="openAiGenBtn" class="btn-unified btn-ghost"><i class="fas fa-magic"></i> AI Gen</button>
                 
-                <div class="relative">
-                    <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
-                        <i class="fas fa-cog text-lg"></i>
-                    </button>
+                <!-- Nút Lộ trình (Brain) -->
+                <button id="toggleReviewCardBtn" class="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Lộ trình học tập">
+                    <i class="fas fa-brain text-lg"></i>
+                    <span id="reviewBadge" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-slate-800 hidden">0</span>
+                </button>
 
-                    <div id="settingsDropdown">
-                        <!-- Cấu hình AI -->
-                        <button id="aiSettingsBtn" class="menu-item">
-                            <i class="fas fa-robot text-purple-600"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Cấu hình AI</div>
-                                <div class="text-[10px] text-gray-400">Thiết lập API Key & Model</div>
-                            </div>
-                            <span id="apiKeyBadge" class="w-2 h-2 rounded-full bg-red-500"></span>
-                        </button>
+                <button id="settingsToggleBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm" title="Cài đặt hệ thống">
+                    <i class="fas fa-cog text-lg"></i>
+                </button>
 
-                        <!-- Dữ liệu -->
-                        <button id="dataCenterBtn" class="menu-item">
-                            <i class="fas fa-database text-emerald-600"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Trung tâm Dữ liệu</div>
-                                <div class="text-[10px] text-gray-400">Sao lưu & Khôi phục file</div>
-                            </div>
-                        </button>
-
-                        <!-- Dark Mode -->
-                        <button id="darkModeToggle" class="menu-item">
-                            <i class="fas fa-circle-half-stroke text-blue-600"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Chế độ hiển thị</div>
-                                <div id="darkModeText" class="text-[10px] text-gray-400">Chuyển Sáng / Tối</div>
-                            </div>
-                        </button>
-
-                        <!-- Gợi ý đáp án -->
-                        <div class="menu-item py-3">
-                            <i class="fas fa-lightbulb text-amber-500"></i>
-                            <div class="flex-1">
-                                <div class="font-bold text-gray-800 dark:text-white text-sm">Gợi ý đáp án</div>
-                                <div class="text-[10px] text-gray-400">Hiển thị nút xem nhanh đáp án</div>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="hintToggle" class="sr-only peer" checked>
-                                <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-500 peer-checked:bg-blue-500"></div>
-                            </label>
-                        </div>
-
-                        <!-- Xoá bộ câu hỏi (Mới) -->
-                        <button id="deleteAllBanksBtn" class="menu-item text-red-600 border-t border-gray-100 dark:border-slate-800">
-                            <i class="fas fa-trash-can text-red-500"></i>
-                            <div class="flex-1 text-left">
-                                <div class="font-bold text-sm">Xoá TẤT CẢ bộ đề</div>
-                                <div class="text-[10px] text-red-400">Xoá vĩnh viễn toàn bộ dữ liệu đã lưu</div>
-                            </div>
-                        </button>
-
-                        <!-- Font Size -->
-                        <div class="p-4 bg-gray-50/50 dark:bg-slate-950/20">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cỡ chữ hệ thống</span>
-                                <span id="fontSizeVal" class="text-xs font-bold text-indigo-600">100%</span>
-                            </div>
-                            <input type="range" id="fontSizeSlider" min="80" max="250" value="100" class="font-range-input">
-                        </div>
-                    </div>
-                </div>
+                <button id="logoutBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition shadow-sm" title="Đăng xuất">
+                    <i class="fas fa-sign-out-alt text-lg"></i>
+                </button>
                 
                 <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">
@@ -114,6 +96,232 @@
                     <button id="submitBtn" class="btn-unified btn-primary text-xs px-3 py-1.5"><i class="fas fa-paper-plane"></i> Nộp bài</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Cài đặt hệ thống (Side-Panel / Cánh gà bên trái) -->
+    <div id="settingsSidePanel" class="fixed top-0 left-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-r border-indigo-100 dark:border-slate-800">
+        <!-- Header -->
+        <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h2 class="text-xl font-black text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-cog text-indigo-500"></i> Cài đặt
+                </h2>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Hệ thống & AI</p>
+            </div>
+            <button id="closeSettingsPanel" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400 transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <!-- Mục AI Configuration -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-robot"></i> Trí tuệ nhân tạo
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-500 mb-1 ml-1 uppercase">API Key (Gemini)</label>
+                        <input type="password" id="apiKeyInput" placeholder="Nhập API Key..." class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 focus:ring-2 focus:ring-indigo-400 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-gray-500 mb-1 ml-1 uppercase">Mô hình xử lý (Ưu tiên)</label>
+                        <div class="flex gap-2">
+                            <select id="aiModelSelect" class="flex-1 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-indigo-400">
+                                <optgroup label="Thế hệ 1.5">
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Mặc định)</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                </optgroup>
+                                <optgroup label="Thế hệ 2.5 (Thử nghiệm)">
+                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                                </optgroup>
+                                <optgroup label="Thế hệ 3.1 (Mới nhất)">
+                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+                                    <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Preview</option>
+                                </optgroup>
+                            </select>
+                            <button id="sideCheckModelsBtn" class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800" title="Quét model khả dụng">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mục Tính năng học tập -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-amber-500 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-graduation-cap"></i> Tính năng học tập
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Gợi ý đáp án</span>
+                            <span class="text-[9px] text-gray-400">Hiện nút xem nhanh đáp án</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="hintToggleSide" class="sr-only peer" checked>
+                            <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Giải thích AI</span>
+                            <span class="text-[9px] text-gray-400">Tự động phân tích sau mỗi câu</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="aiExplainToggleSide" class="sr-only peer" checked>
+                            <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Nút Gọi AI hỗ trợ</span>
+                            <span class="text-[9px] text-gray-400">Menu AI nổi trên màn hình</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="aiCallToggleSide" class="sr-only peer" checked>
+                            <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mục Âm thanh -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-volume-up"></i> Âm thanh & Giọng đọc
+                </div>
+                <div class="space-y-3">
+                    <div class="p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Tốc độ đọc AI</span>
+                            <span id="aiSpeedValSide" class="text-xs font-bold text-emerald-600">1.0x</span>
+                        </div>
+                        <input type="range" id="aiSpeedSliderSide" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full h-1.5 bg-gray-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-600">
+                    </div>
+                    <button id="sideUnlockMicBtn" class="w-full py-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold border border-emerald-100 dark:border-emerald-800/30 flex items-center justify-center gap-2 hover:bg-emerald-100 transition">
+                        <i class="fas fa-microphone"></i> KIỂM TRA & MỞ KHÓA MIC
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mục Hiển thị -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-gray-400 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-eye"></i> Tùy chỉnh hiển thị
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Giao diện tối</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="darkModeToggleSide" class="sr-only peer">
+                            <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-slate-950 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Cỡ chữ hệ thống</span>
+                            <span id="sideFontSizeVal" class="text-xs font-bold text-indigo-600">100%</span>
+                        </div>
+                        <input type="range" id="sideFontSizeSlider" min="80" max="200" value="100" class="w-full h-1.5 bg-gray-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <button id="saveAiSettingsBtn" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition active:scale-95">
+                    LƯU TOÀN BỘ CÀI ĐẶT
+                </button>
+            </div>
+
+            <!-- Mục Dữ liệu -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-widest">
+                    <i class="fas fa-database"></i> Quản lý dữ liệu
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="sideDataCenterBtn" class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-100 dark:border-blue-800/30">
+                        TRUNG TÂM DATA
+                    </button>
+                    <button id="sideClearAllBtn" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold border border-red-100 dark:border-red-800/30">
+                        XÓA TẤT CẢ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lớp phủ mờ (Overlay) cho Side Panel -->
+    <div id="sidePanelOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] hidden transition-opacity duration-300"></div>
+
+    <!-- Lộ trình học tập (Side-Panel / Cánh gà) -->
+    <div id="reviewDashboardCard" class="fixed top-0 right-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-l border-indigo-100 dark:border-indigo-900/50">
+        <!-- Header Panel -->
+        <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h2 class="text-xl font-black text-gray-800 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-brain text-indigo-500"></i> Lộ trình
+                </h2>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Spaced Repetition</p>
+            </div>
+            <button id="closeReviewPanel" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400 transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Content Panel -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-8">
+            <!-- Stats -->
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex flex-col">
+                        <span id="reviewDueCount" class="text-3xl font-black text-indigo-600 dark:text-indigo-400">0</span>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase">Cần ôn ngay</span>
+                    </div>
+                    <i class="fas fa-clock text-indigo-100 dark:text-indigo-900/30 text-4xl"></i>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                        <span id="reviewLearningCount" class="text-2xl font-black text-amber-500 block">0</span>
+                        <span class="text-[9px] font-bold text-amber-600/70 uppercase">Đang học</span>
+                    </div>
+                    <div class="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                        <span id="reviewMasteredCount" class="text-2xl font-black text-emerald-500 block">0</span>
+                        <span class="text-[9px] font-bold text-emerald-600/70 uppercase">Đã nhớ</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div>
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-[11px] font-bold text-gray-500">TIẾN ĐỘ TỔNG THỂ</span>
+                    <span id="masteryPercent" class="text-[11px] font-black text-indigo-600">0%</span>
+                </div>
+                <div class="w-full h-3 bg-gray-100 dark:bg-slate-800 rounded-full flex overflow-hidden p-0.5 border border-gray-200 dark:border-slate-700">
+                    <div id="barDue" class="h-full bg-indigo-500 rounded-l-full transition-all duration-700" style="width: 0%"></div>
+                    <div id="barLearning" class="h-full bg-amber-400 transition-all duration-700" style="width: 0%"></div>
+                    <div id="barMastered" class="h-full bg-emerald-500 rounded-r-full transition-all duration-700" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl text-[11px] text-indigo-700 dark:text-indigo-300 leading-relaxed">
+                <i class="fas fa-lightbulb mr-1"></i> Mẹo: Ôn tập các câu "Cần ôn ngay" sớm nhất có thể để tối ưu khả năng ghi nhớ dài hạn của bộ não.
+            </div>
+        </div>
+
+        <!-- Footer Panel -->
+        <div class="p-6 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-100 dark:border-slate-800">
+            <button id="startReviewBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center justify-center gap-3 active:scale-95">
+                <i class="fas fa-bolt text-lg"></i>
+                BẮT ĐẦU ÔN TẬP
+            </button>
         </div>
     </div>
 
@@ -239,8 +447,8 @@
         <p id="customModalText" class="text-sm text-gray-600 mb-4"></p>
         <input type="text" id="customModalInput" class="hidden w-full border rounded-lg p-2 mb-4 bg-white text-gray-800 focus:outline-none focus:border-blue-500">
         <div class="flex justify-end gap-3">
-            <button id="customModalCancel" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Hủy</button>
-            <button id="customModalConfirm" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">Đồng ý</button>
+            <button id="customModalCancel" class="px-5 py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-xl text-sm font-bold hover:bg-gray-200 transition">Hủy</button>
+            <button id="customModalConfirm" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 dark:shadow-none transition">Đồng ý</button>
         </div>
     </div>
 </div>
@@ -249,12 +457,54 @@
 <div id="aiSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
     <div id="aiSettingsModalContent" class="bg-white dark:bg-slate-900 rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
         <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Để sử dụng AI ở môi trường thật (Internet), bạn cần cung cấp API Key của Google Gemini.</p>
-        <input type="password" id="geminiApiKeyInput" placeholder="Nhập Google Gemini API Key..." class="w-full border rounded-lg p-2 mb-4 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:border-purple-500">
-        <div class="flex flex-wrap justify-end gap-3">
-            <button id="checkModelsBtn" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition"><i class="fas fa-list"></i> Kiểm tra Models</button>
-            <button id="closeAiSettingsBtn" class="btn-secondary px-4 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm transition">Đóng</button>
-            <button id="saveAiSettingsBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition">Lưu Key</button>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Cung cấp Gemini API Key để sử dụng tính năng Gia sư AI và Sinh đề tự động.</p>
+        
+        <div class="space-y-3 mb-6">
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">Gemini API Key</label>
+                <input type="password" id="geminiApiKeyInput" placeholder="Dán API Key tại đây..." class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+
+            <div class="grid grid-cols-1 gap-2">
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
+                    <span class="text-xs font-bold text-gray-600 dark:text-gray-400">Hiện nút Giải thích AI</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="showAiExplainToggle" class="sr-only peer" checked>
+                        <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
+                    <span class="text-xs font-bold text-gray-600 dark:text-gray-400">Hiện nút Gọi Gia sư AI</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="showAiCallToggle" class="sr-only peer" checked>
+                        <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Tốc độ đọc mặc định</label>
+                <select id="defaultReadSpeed" class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none text-sm">
+                    <option value="0.8">0.8x (Chậm)</option>
+                    <option value="1.0" selected>1.0x (Bình thường)</option>
+                    <option value="1.2">1.2x (Nhanh)</option>
+                    <option value="1.5">1.5x (Rất nhanh)</option>
+                    <option value="2.0">2.0x (Siêu nhanh)</option>
+                </select>
+            </div>
+
+            <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                <p class="text-[10px] text-indigo-700 dark:text-indigo-300 mb-2 font-medium"><i class="fas fa-info-circle mr-1"></i> Nhấn để mở khóa Micro (nếu gặp lỗi):</p>
+                <button id="unlockMicBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md">
+                    <i class="fas fa-microphone mr-2"></i> MỞ KHÓA MICRO
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-100 dark:border-slate-800 pt-4">
+            <button id="checkModelsBtn" class="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-100 transition">Models</button>
+            <button id="closeAiSettingsBtn" class="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg text-xs font-bold transition">Đóng</button>
+            <button id="saveAiSettingsBtn" class="px-5 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-md transition">Lưu Cấu Hình</button>
         </div>
     </div>
 </div>
@@ -267,10 +517,16 @@
         
         <div class="space-y-4 flex-1 flex flex-col">
             <div class="border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl p-4 text-center hover:bg-indigo-50 dark:hover:bg-slate-800 transition cursor-pointer" id="uploadFileArea">
-                <i class="fas fa-cloud-upload-alt text-3xl text-indigo-400 mb-2"></i>
-                <div class="text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-1">Nhấn để Tải lên Ảnh, PDF, Word, Excel, TXT</div>
-                <div class="text-xs text-gray-500">(Hoặc dùng điện thoại để chụp ảnh trực tiếp)</div>
-                <input type="file" id="fileInput" accept="image/*,.pdf,.docx,.txt,.csv,.xlsx,.xls" class="hidden" multiple>
+                <i class="fas fa-file-import text-3xl text-indigo-400 mb-2"></i>
+                <div class="text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-1">Tải lên Ảnh, Audio, PDF, Word, Excel, TXT</div>
+                <div class="text-xs text-gray-500">(Hỗ trợ chụp ảnh sách, nạp bài giảng .mp3 trực tiếp)</div>
+                <input type="file" id="fileInput" accept="image/*,audio/*,.pdf,.docx,.txt,.csv,.xlsx,.xls" class="hidden" multiple>
+            </div>
+            
+            <div class="flex gap-2">
+                <button id="batchScanBtn" class="flex-1 py-2.5 bg-white dark:bg-slate-800 border-2 border-indigo-100 dark:border-indigo-900/50 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-images"></i> CHỤP LIÊN TIẾP (BATCH)
+                </button>
             </div>
 
             <div id="multiFileContainer" class="hidden space-y-2">
@@ -307,6 +563,22 @@
                     <input type="text" id="aiGenName" placeholder="Mặc định: Bộ đề AI" class="w-full border rounded-lg p-2 text-sm bg-white dark:bg-slate-900 text-gray-800 dark:text-white">
                 </div>
             </div>
+
+            <div class="p-3 bg-indigo-50 dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
+                        <i class="fas fa-microscope text-xs"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase">Chế độ OCR Pro</div>
+                        <div class="text-[9px] text-indigo-500">Quét sâu sơ đồ, công thức, bảng biểu trong sách</div>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="ocrProToggle" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+            </div>
         </div>
 
         <div class="flex justify-end gap-3 mt-6">
@@ -314,6 +586,31 @@
             <button id="submitAiGenBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"><i class="fas fa-bolt mr-1"></i> Bắt đầu tạo</button>
         </div>
     </div>
+</div>
+
+<!-- Modal Trình quét ảnh Pro (In-app Camera) -->
+<div id="cameraModal" class="fixed inset-0 bg-black z-[300] hidden flex-col items-center justify-center p-0 overflow-hidden">
+    <video id="cameraVideo" class="w-full h-full object-cover" autoplay playsinline></video>
+    <div class="absolute inset-0 border-[40px] border-black/40 pointer-events-none flex items-center justify-center">
+        <div class="w-full h-full border-2 border-white/30 rounded-2xl border-dashed"></div>
+    </div>
+    <div class="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-6 px-6">
+        <button id="cancelCameraBtn" class="w-14 h-14 rounded-full bg-black/40 backdrop-blur-md text-white border border-white/20 flex items-center justify-center hover:bg-black/60 transition">
+            <i class="fas fa-times text-xl"></i>
+        </button>
+        <div class="relative">
+            <button id="captureBtn" class="w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
+                <div class="w-16 h-16 rounded-full border-4 border-slate-900/10 flex items-center justify-center">
+                    <div class="w-12 h-12 rounded-full bg-indigo-600"></div>
+                </div>
+            </button>
+        </div>
+        <button id="finishCameraBtn" class="flex-1 max-w-[120px] h-14 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+            XONG <span id="cameraCountBadge" class="bg-white/20 px-2 py-0.5 rounded-lg text-[10px]">0</span>
+        </button>
+    </div>
+    <div id="cameraFlash" class="fixed inset-0 bg-white hidden z-[301] pointer-events-none"></div>
+    <canvas id="cameraCanvas" class="hidden"></canvas>
 </div>
 
 <!-- Modal Data Center (Backup/Restore) -->
@@ -484,37 +781,89 @@
 </div>
 
 <!-- Voice Call AI Tutor Modal -->
-<div id="voiceCallModal" class="fixed inset-0 voice-modal hidden items-center justify-center z-[10000] p-4">
-    <div class="voice-card max-w-sm w-full rounded-[2.5rem] overflow-hidden p-8 flex flex-col items-center">
-        <!-- AI Status -->
-        <div id="voiceStatusBadge" class="voice-status-badge voice-status-thinking mb-8">Đang chờ...</div>
+<div id="voiceCallModal" class="fixed inset-0 voice-modal hidden items-center justify-center z-[10000] p-2 md:p-4">
+    <div class="voice-card max-w-sm w-full rounded-[2rem] overflow-hidden flex flex-col h-[650px] max-h-[95vh] shadow-2xl bg-white dark:bg-slate-900">
         
-        <!-- AI Avatar & Wave -->
-        <div class="relative mb-10">
-            <div id="aiAvatar" class="ai-avatar">🤖</div>
-            <div id="aiWaveform" class="wave-container absolute -bottom-6 left-1/2 -translate-x-1/2 hidden">
-                <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        <!-- Header: Tối ưu không gian & Cân bằng -->
+        <div class="px-4 py-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div id="aiAvatar" class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-gray-100 dark:border-slate-700 overflow-hidden flex-shrink-0">
+                    <img src="https://api.dicebear.com/7.x/bottts/svg?seed=HaiAnhAI" alt="AI" class="w-full h-full object-cover">
+                </div>
+                <div class="flex flex-col">
+                    <h3 class="text-xs font-black text-gray-800 dark:text-white uppercase tracking-wider leading-none mb-1">Gia sư Hai Anh</h3>
+                    <div id="voiceStatusBadge" class="voice-status-badge text-[9px] font-bold uppercase tracking-tight">Đang chờ...</div>
+                </div>
             </div>
-            <div id="userMicPulse" class="absolute inset-0 mic-pulse hidden"></div>
-        </div>
-
-        <h3 class="text-xl font-extrabold text-gray-800 dark:text-white mb-2">Gia sư AI 24/7</h3>
-        <p class="text-gray-500 dark:text-slate-400 text-sm mb-6 text-center">Tôi đang lắng nghe, hãy hỏi tôi bất cứ điều gì!</p>
-        
-        <!-- Realtime Transcript -->
-        <div class="w-full bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-4 min-h-[100px] mb-8 text-sm italic text-gray-600 dark:text-slate-300 border border-gray-100 dark:border-slate-700 text-center overflow-y-auto max-h-32">
-            <span id="voiceTranscript">"Đang kết nối với gia sư..."</span>
-        </div>
-
-        <!-- Controls -->
-        <div class="flex gap-4">
-            <button id="endCallBtn" class="w-16 h-16 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-200 dark:shadow-none transition-all hover:scale-110 active:scale-95">
-                <i class="fas fa-phone-slash text-2xl"></i>
+            <button id="liveModeToggle" class="text-[9px] font-black px-3 py-2 rounded-full border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all flex items-center gap-2 bg-gray-50 dark:bg-slate-800 shadow-sm">
+                <div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF
             </button>
+        </div>
+
+        <!-- Transcript Area: Mở rộng diện tích hiển thị -->
+        <div class="flex-1 overflow-y-auto p-5 relative bg-gray-50/20 dark:bg-slate-900/20 scroll-smooth">
+            <!-- Nút Copy -->
+            <button id="copyVoiceTranscriptBtn" class="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-full shadow-lg text-gray-400 hover:text-indigo-600 active:scale-90 transition-all z-20 border border-gray-100 dark:border-slate-700" title="Sao chép">
+                <i class="far fa-copy text-sm"></i>
+            </button>
+
+            <!-- AI Waveform Area -->
+            <div id="aiWaveform" class="hidden flex justify-center mb-6 mt-2">
+                <div class="flex gap-1 items-end h-8">
+                    <div class="w-1.5 bg-indigo-500 animate-wave-1 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-2 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-3 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-1 rounded-full"></div>
+                </div>
+            </div>
+            
+            <!-- Nội dung Chat: Căn lề trên, font size tối ưu -->
+            <div id="voiceTranscript" class="text-[15px] md:text-base font-semibold text-gray-700 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap pt-2">
+                Hãy nhấn Micro để bắt đầu nói...
+            </div>
+ 
+            <!-- User Mic Pulse Area -->
+            <div id="userMicPulse" class="hidden flex justify-center mt-10">
+                <div class="relative w-12 h-12 flex items-center justify-center">
+                    <div class="absolute inset-0 bg-indigo-500 rounded-full animate-ping opacity-25"></div>
+                    <div class="relative bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg">
+                        <i class="fas fa-microphone text-xs"></i>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer: Cố định tuyệt đối -->
+        <div class="p-6 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <!-- Input Area: Luôn hiển thị ngay khi bắt đầu cuộc gọi -->
+            <div id="voiceInputContainer" class="mb-6">
+                <div class="relative">
+                    <input type="text" id="voiceTextInput" class="w-full pl-5 pr-12 py-3 bg-gray-100 dark:bg-slate-800 border-none rounded-2xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 transition-all" placeholder="Gõ tin nhắn của bạn...">
+                    <button id="sendVoiceTextBtn" class="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-md hover:bg-indigo-700 active:scale-90 transition-all">
+                        <i class="fas fa-paper-plane text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex gap-10 items-center justify-center">
+                <div class="w-20 h-20 relative flex items-center justify-center">
+                    <button id="toggleMicBtn" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-2xl shadow-indigo-200 dark:shadow-none transition-all active:scale-90 z-20">
+                        <i class="fas fa-microphone text-2xl"></i>
+                    </button>
+                </div>
+                <div class="w-20 h-20 relative flex items-center justify-center">
+                    <button id="endCallBtn" class="w-16 h-16 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl shadow-red-200 dark:shadow-none transition-all active:scale-90 z-20">
+                        <i class="fas fa-phone-slash text-2xl"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+    </div>
+</div>
 
-<script src="script.js"></script>
+<script src="script.js?v=voice-review-v17"></script>
 </body>
 </html>
