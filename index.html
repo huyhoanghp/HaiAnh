@@ -742,75 +742,85 @@
 </div>
 
 <!-- Voice Call AI Tutor Modal -->
-<div id="voiceCallModal" class="fixed inset-0 voice-modal hidden items-center justify-center z-[10000] p-4">
-    <div class="voice-card max-w-sm w-full rounded-[2.5rem] overflow-hidden p-8 flex flex-col items-center">
-        <!-- AI Status -->
-    <div class="voice-card max-w-sm w-full rounded-[2.5rem] overflow-hidden flex flex-col h-[600px] max-h-[90vh]">
+<div id="voiceCallModal" class="fixed inset-0 voice-modal hidden items-center justify-center z-[10000] p-2 md:p-4">
+    <div class="voice-card max-w-sm w-full rounded-[2rem] overflow-hidden flex flex-col h-[650px] max-h-[95vh] shadow-2xl bg-white dark:bg-slate-900">
         
-        <!-- Header -->
-        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/50">
+        <!-- Header: Tối ưu không gian & Cân bằng -->
+        <div class="px-4 py-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <div id="aiAvatar" class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border-2 border-white dark:border-slate-700 shadow-sm overflow-hidden">
+                <div id="aiAvatar" class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-gray-100 dark:border-slate-700 overflow-hidden flex-shrink-0">
                     <img src="https://api.dicebear.com/7.x/bottts/svg?seed=HaiAnhAI" alt="AI" class="w-full h-full object-cover">
                 </div>
-                <div>
-                    <h3 class="text-sm font-bold text-gray-800 dark:text-white">Gia sư Hai Anh</h3>
-                    <div id="voiceStatusBadge" class="voice-status-badge text-[10px] font-medium text-gray-500">Đang sẵn sàng...</div>
+                <div class="flex flex-col">
+                    <h3 class="text-xs font-black text-gray-800 dark:text-white uppercase tracking-wider leading-none mb-1">Gia sư Hai Anh</h3>
+                    <div id="voiceStatusBadge" class="voice-status-badge text-[9px] font-bold uppercase tracking-tight">Đang chờ...</div>
                 </div>
             </div>
-            <button id="liveModeToggle" class="text-[10px] font-bold px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all flex items-center gap-2">
+            <button id="liveModeToggle" class="text-[9px] font-black px-3 py-2 rounded-full border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all flex items-center gap-2 bg-gray-50 dark:bg-slate-800 shadow-sm">
                 <div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF
             </button>
         </div>
 
-        <!-- Transcript Area (Tự cuộn) -->
-        <div class="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center min-h-[250px]">
-            <div id="aiWaveform" class="hidden mb-6">
+        <!-- Transcript Area: Mở rộng diện tích hiển thị -->
+        <div class="flex-1 overflow-y-auto p-5 relative bg-gray-50/20 dark:bg-slate-900/20 scroll-smooth">
+            <!-- Nút Copy -->
+            <button id="copyVoiceTranscriptBtn" class="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-full shadow-lg text-gray-400 hover:text-indigo-600 active:scale-90 transition-all z-20 border border-gray-100 dark:border-slate-700" title="Sao chép">
+                <i class="far fa-copy text-sm"></i>
+            </button>
+
+            <!-- AI Waveform Area -->
+            <div id="aiWaveform" class="hidden flex justify-center mb-6 mt-2">
                 <div class="flex gap-1 items-end h-8">
-                    <div class="w-1 bg-indigo-500 animate-wave-1"></div>
-                    <div class="w-1 bg-indigo-500 animate-wave-2"></div>
-                    <div class="w-1 bg-indigo-500 animate-wave-3"></div>
-                    <div class="w-1 bg-indigo-500 animate-wave-1"></div>
-                    <div class="w-1 bg-indigo-500 animate-wave-2"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-1 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-2 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-3 rounded-full"></div>
+                    <div class="w-1.5 bg-indigo-500 animate-wave-1 rounded-full"></div>
                 </div>
             </div>
             
-            <div id="voiceTranscript" class="text-lg font-medium text-gray-700 dark:text-gray-300 text-center leading-relaxed px-4 max-w-full break-words">
+            <!-- Nội dung Chat: Căn lề trên, font size tối ưu -->
+            <div id="voiceTranscript" class="text-[15px] md:text-base font-semibold text-gray-700 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap pt-2">
                 Hãy nhấn Micro để bắt đầu nói...
             </div>
 
-            <div id="userMicPulse" class="hidden mt-6">
+            <!-- User Mic Pulse Area -->
+            <div id="userMicPulse" class="hidden flex justify-center mt-10">
                 <div class="relative w-12 h-12 flex items-center justify-center">
                     <div class="absolute inset-0 bg-indigo-500 rounded-full animate-ping opacity-25"></div>
-                    <div class="relative bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center">
+                    <div class="relative bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg">
                         <i class="fas fa-microphone text-xs"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Input Area (Nếu dùng bàn phím) -->
-        <div id="voiceInputContainer" class="px-6 py-2 hidden">
-            <div class="relative">
-                <input type="text" id="voiceTextInput" class="w-full pl-4 pr-12 py-2.5 bg-gray-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500" placeholder="Nhập tin nhắn của bạn...">
-                <button id="sendVoiceTextBtn" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
-                    <i class="fas fa-paper-plane text-xs"></i>
-                </button>
+        <!-- Footer: Cố định tuyệt đối -->
+        <div class="p-6 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <!-- Input Area Fallback -->
+            <div id="voiceInputContainer" class="mb-5 hidden">
+                <div class="relative">
+                    <input type="text" id="voiceTextInput" class="w-full pl-5 pr-12 py-3 bg-gray-100 dark:bg-slate-800 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all" placeholder="Gõ tin nhắn của bạn...">
+                    <button id="sendVoiceTextBtn" class="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-md hover:bg-indigo-700 active:scale-90 transition-all">
+                        <i class="fas fa-paper-plane text-xs"></i>
+                    </button>
+                </div>
             </div>
-        </div>
 
-        <div class="flex gap-8 items-center justify-center">
-            <div class="w-20 h-20 flex items-center justify-center flex-shrink-0">
-                <button id="toggleMicBtn" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none active:scale-90 transition-transform duration-200" title="Giữ để nói">
-                    <i class="fas fa-microphone text-2xl"></i>
-                </button>
-            </div>
-            <div class="w-20 h-20 flex items-center justify-center flex-shrink-0">
-                <button id="endCallBtn" class="w-16 h-16 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-200 dark:shadow-none active:scale-90 transition-transform duration-200" title="Kết thúc">
-                    <i class="fas fa-phone-slash text-2xl"></i>
-                </button>
+            <div class="flex gap-10 items-center justify-center">
+                <div class="w-20 h-20 relative flex items-center justify-center">
+                    <button id="toggleMicBtn" class="w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-2xl shadow-indigo-200 dark:shadow-none transition-all active:scale-90 z-20">
+                        <i class="fas fa-microphone text-2xl"></i>
+                    </button>
+                </div>
+                <div class="w-20 h-20 relative flex items-center justify-center">
+                    <button id="endCallBtn" class="w-16 h-16 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl shadow-red-200 dark:shadow-none transition-all active:scale-90 z-20">
+                        <i class="fas fa-phone-slash text-2xl"></i>
+                    </button>
+                </div>
             </div>
         </div>
+    </div>
+</div>
     </div>
 </div>
 

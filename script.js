@@ -716,15 +716,25 @@ class SpeechToTextManager {
         if (this.isListening || this.isStarting) return;
         this.isStarting = true;
         
+        // Đảm bảo dọn dẹp recognition cũ nếu còn tồn tại
+        if (this.recognition) {
+            try { this.recognition.onend = null; this.recognition.stop(); } catch(e) {}
+            this.recognition = null;
+        }
+
         setTimeout(() => {
             try {
                 this.recognition = this.initRecognition();
-                if (this.recognition) this.recognition.start();
+                if (this.recognition) {
+                    this.recognition.start();
+                    console.log("STT: Microphone restarted successfully.");
+                }
             } catch (err) {
+                console.error("STT SafeStart Failed:", err);
                 this.isStarting = false;
                 this.isListening = false;
             }
-        }, 300);
+        }, 400); // Tăng delay lên 400ms để trình duyệt kịp giải phóng phần cứng
     }
 
     start() {
@@ -766,6 +776,15 @@ const VoiceTutor = {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
+        // 2. Gán sự kiện nút Copy (nếu chưa có)
+        const copyBtn = document.getElementById('copyVoiceTranscriptBtn');
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                const text = document.getElementById('voiceTranscript').innerText;
+                navigator.clipboard.writeText(text).then(() => showToast("✅ Đã sao chép nội dung!")).catch(() => showToast("❌ Không thể sao chép"));
+            };
+        }
+
         // Luôn xóa nội dung cũ
         document.getElementById('voiceTranscript').innerText = "Đang kết nối...";
         document.getElementById('voiceTextInput').value = "";
@@ -866,28 +885,33 @@ const VoiceTutor = {
         
         this.stt.onResult = (text, isFinal) => {
             if (!text) return;
-            this.updateUI('listening', text); // Cập nhật text và tự động cuộn
+            this.updateUI('listening', text); 
             this.lastTranscript = text;
 
             if (this.isLiveMode) {
-                // BARGE-IN: Nếu AI đang nói và người dùng phát ra âm thanh
+                // BARGE-IN: Tăng độ nhạy - Ngắt lời ngay khi người dùng nói
                 if (window.speechSynthesis.speaking) {
                     const timeSpeaking = Date.now() - this.aiSpeakStartTime;
-                    // Nhạy bén hơn nhưng bỏ qua 0.8s đầu để tránh echo
-                    if (timeSpeaking > 800 && text.trim().split(' ').length >= 3) {
+                    // Bỏ qua 0.5s đầu (Echo guard), sau đó chỉ cần nói 2 từ là ngắt ngay
+                    if (timeSpeaking > 500 && text.trim().split(/\s+/).length >= 2) {
+                        console.log("Barge-in triggered: Stopping AI speaking...");
                         SpeechManager.stop();
                         this.aiSpeakStartTime = 0; 
+                        // Cập nhật UI trạng thái đang lắng nghe người dùng
+                        this.updateUI('listening', text);
                     }
                     return; 
                 }
 
                 if (this.silenceTimer) clearTimeout(this.silenceTimer);
                 this.silenceTimer = setTimeout(() => {
-                    if (this.lastTranscript.trim().length > 2 && !window.speechSynthesis.speaking) {
+                    // Kiểm tra kỹ tránh gửi khi AI đang nói (nếu barge-in thất bại)
+                    if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking) {
+                        console.log("Auto-submitting via Live Mode...");
                         this.stt.stop();
                         this.askGemini(this.lastTranscript);
                     }
-                }, 1200); // Rút ngắn thời gian chờ xuống 1.2s để nhanh hơn
+                }, 1100); // Rút ngắn xuống 1.1s để phản hồi cực nhanh
             }
         };
         
