@@ -924,12 +924,10 @@ const VoiceTutor = {
         const badge = document.getElementById('voiceStatusBadge');
         const transcript = document.getElementById('voiceTranscript');
         const avatar = document.getElementById('aiAvatar');
-        const wave = document.getElementById('aiWaveform');
-        const pulse = document.getElementById('userMicPulse');
+        const waveCanvas = document.getElementById('aiWaveCanvas');
 
-        if (text) {
+        if (text && transcript) {
             transcript.innerText = text;
-            // Tự động cuộn xuống đáy khi có nội dung mới
             const container = transcript.parentElement;
             if (container) {
                 setTimeout(() => {
@@ -938,23 +936,35 @@ const VoiceTutor = {
             }
         }
 
-        badge.className = 'voice-status-badge text-[10px] font-medium';
-        wave.classList.add('hidden');
-        pulse.classList.add('hidden');
-        avatar.classList.remove('speaking');
+        if (badge) {
+            badge.className = 'voice-status-badge text-[10px] font-medium';
+        }
+        
+        if (avatar) {
+            avatar.classList.remove('speaking');
+        }
+
+        // Tự động ẩn/hiện Canvas sóng âm để tiết kiệm tài nguyên
+        if (waveCanvas) {
+            waveCanvas.style.opacity = (state === 'speaking' || state === 'listening') ? "1" : "0.2";
+        }
 
         if (state === 'listening') {
-            badge.innerText = 'Đang lắng nghe...';
-            badge.classList.add('text-indigo-500');
-            pulse.classList.remove('hidden');
+            if (badge) {
+                badge.innerText = 'Đang lắng nghe...';
+                badge.classList.add('text-indigo-500');
+            }
         } else if (state === 'speaking') {
-            badge.innerText = 'Gia sư đang nói...';
-            badge.classList.add('voice-status-speaking');
-            wave.classList.remove('hidden');
-            avatar.classList.add('speaking');
+            if (badge) {
+                badge.innerText = 'Gia sư đang nói...';
+                badge.classList.add('voice-status-speaking');
+            }
+            if (avatar) avatar.classList.add('speaking');
         } else if (state === 'thinking') {
-            badge.innerText = 'Đang suy nghĩ...';
-            badge.classList.add('voice-status-thinking');
+            if (badge) {
+                badge.innerText = 'Đang suy nghĩ...';
+                badge.classList.add('voice-status-thinking');
+            }
         }
     },
 
@@ -995,6 +1005,7 @@ const VoiceTutor = {
     startListening() {
         if (!this.isCalling) return;
         
+        console.log("VoiceTutor: startListening() called.");
         if (!SpeechToTextManager.isSupported()) {
             this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
             return;
