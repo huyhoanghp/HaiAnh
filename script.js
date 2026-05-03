@@ -765,7 +765,8 @@ const VoiceTutor = {
     silenceTimer: null,
     aiSpeakStartTime: 0,
     isProcessing: false,
-    chatHistory: [], // Lưu trữ lịch sử hội thoại của phiên gọi hiện tại
+    chatHistory: [],
+    currentRequestId: 0, // Theo dõi ID yêu cầu mới nhất
 
     init() {
         this.stt.onEnd = () => {
@@ -873,10 +874,15 @@ const VoiceTutor = {
     handleTextSubmit() {
         const input = document.getElementById('voiceTextInput');
         const text = input.value.trim();
-        if (text && this.isCalling && !this.isProcessing) {
+        if (text && this.isCalling) {
+            // Ngắt AI ngay lập tức nếu đang nói hoặc đang xử lý câu cũ
             SpeechManager.stop();
             this.stt.stop();
             if (this.silenceTimer) clearTimeout(this.silenceTimer);
+            if (this.safetyTimer) clearTimeout(this.safetyTimer);
+            
+            // Giải phóng isProcessing để ưu tiên tin nhắn mới nhất
+            this.isProcessing = false;
             
             input.value = '';
             this.updateUI('listening', text); 
@@ -977,24 +983,26 @@ const VoiceTutor = {
     },
 
     async askGemini(userText) {
-        if (!this.isCalling || this.isProcessing) return;
+        if (!this.isCalling) return;
         
-        console.log("VoiceTutor: Processing request...");
+        // Tạo ID mới cho yêu cầu này
+        const requestId = ++this.currentRequestId;
         this.isProcessing = true;
+        this.updateUI('thinking', 'Đang phân tích...');
         
+        // Dừng STT và TTS cũ ngay lập tức
+        this.stt.stop();
+        SpeechManager.stop();
+        if (this.silenceTimer) clearTimeout(this.silenceTimer);
+        if (this.safetyTimer) clearTimeout(this.safetyTimer);
+
         // Safety: Tự động giải phóng sau 15s nếu kẹt (phòng lỗi TTS/API)
         this.safetyTimer = setTimeout(() => {
-            if (this.isProcessing) {
+            if (this.isProcessing && requestId === this.currentRequestId) {
                 console.warn("VoiceTutor: Safety timer triggered. Resetting isProcessing.");
                 this.isProcessing = false;
             }
         }, 15000);
-
-        this.updateUI('thinking', 'Đang phân tích...');
-        
-        // Dừng STT tạm thời khi đang xử lý để tránh nhiễu
-        this.stt.stop();
-        if (this.silenceTimer) clearTimeout(this.silenceTimer);
 
         try {
             const q = currentQuestions[this.activeQIdx];
@@ -1032,6 +1040,11 @@ const VoiceTutor = {
             const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
             const response = data.candidates[0].content.parts[0].text;
             
+            // KIỂM TRA: Nếu có yêu cầu mới hơn (Barge-in), bỏ qua kết quả này
+            if (requestId !== this.currentRequestId || !this.isCalling) {
+                return;
+            }
+
             // 4. Lưu câu trả lời của AI vào lịch sử
             this.chatHistory.push({ role: "model", parts: [{ text: response }] });
             
@@ -1044,19 +1057,22 @@ const VoiceTutor = {
             this.aiSpeakStartTime = Date.now();
             
             SpeechManager.speak(response, 'voice-tutor', () => {
-                if (this.safetyTimer) clearTimeout(this.safetyTimer);
-                this.isProcessing = false; // Giải phóng trạng thái ngay sau khi nói xong
-                console.log("VoiceTutor: AI finished speaking.");
-                if (this.isCalling && this.isLiveMode) {
-                    this.lastTranscript = '';
-                    this.startListening();
+                // Chỉ giải phóng và restart nếu đây vẫn là yêu cầu cuối cùng
+                if (requestId === this.currentRequestId) {
+                    if (this.safetyTimer) clearTimeout(this.safetyTimer);
+                    this.isProcessing = false;
+                    console.log("VoiceTutor: AI finished speaking.");
+                    if (this.isCalling && this.isLiveMode) {
+                        this.lastTranscript = '';
+                        this.startListening();
+                    }
                 }
             });
         } catch (err) {
+            if (requestId !== this.currentRequestId) return;
             console.error("Voice Gemini Error:", err);
             this.isProcessing = false;
-            this.updateUI('listening', "Xin lỗi, tôi gặp trục trặc kỹ thuật. Bạn nói lại được không?");
-            if (this.isLiveMode) this.startListening();
+            this.updateUI('listening', "Lỗi kết nối. Bạn hãy thử nhắn lại nhé.");
         }
     },
 
