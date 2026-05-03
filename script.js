@@ -659,6 +659,7 @@ class SpeechToTextManager {
     constructor() {
         this.recognition = null;
         this.isListening = false;
+        this.isStarting = false; // Guard chống kẹt trạng thái
         this.onResult = null;
         this.onEnd = null;
     }
@@ -673,7 +674,7 @@ class SpeechToTextManager {
         
         const recognition = new SpeechRecognition();
         recognition.lang = 'vi-VN';
-        recognition.continuous = true;
+        recognition.continuous = false; // Chuyển sang false để kiểm soát vòng lặp thủ công tốt hơn
         recognition.interimResults = true;
         
         recognition.onresult = (e) => {
@@ -687,48 +688,51 @@ class SpeechToTextManager {
             if (this.onResult) this.onResult(transcript, !!finalTranscript);
         };
 
-        recognition.onstart = () => { this.isListening = true; };
+        recognition.onstart = () => { 
+            this.isListening = true; 
+            this.isStarting = false;
+        };
+
         recognition.onend = () => { 
             this.isListening = false; 
+            this.isStarting = false;
             if (this.onEnd) this.onEnd();
             
-            // Tự động khởi động lại trong chế độ LIVE
+            // Tự động khởi động lại bền bỉ trong chế độ LIVE
             if (window.VoiceTutor && VoiceTutor.isLiveMode && VoiceTutor.isCalling) {
-                setTimeout(() => {
-                    if (VoiceTutor.isCalling && VoiceTutor.isLiveMode && !this.isListening) {
-                        this.start();
-                    }
-                }, 300);
+                this.safeStart();
             }
         };
 
         recognition.onerror = (e) => {
+            this.isStarting = false;
+            if (e.error === 'no-speech') return; 
             console.error("STT Error:", e.error);
-            let msg = "Lỗi Micro: " + e.error;
-            if (e.error === 'not-allowed') msg = "Cảnh báo: Bạn chưa cấp quyền Micro!";
-            else if (e.error === 'network') msg = "Lỗi mạng: Không thể nhận diện giọng nói.";
-            else if (e.error === 'no-speech') return; // Bỏ qua nếu không nghe thấy gì
-            
-            const transcriptDiv = document.getElementById('voiceTranscript');
-            if (transcriptDiv) transcriptDiv.innerHTML = `<span class="text-red-500 text-xs">${msg}</span>`;
-            this.stop();
         };
         return recognition;
     }
 
-    start() {
-        if (this.isListening) this.stop();
-        this.recognition = this.initRecognition();
-        if (this.recognition) {
+    safeStart() {
+        if (this.isListening || this.isStarting) return;
+        this.isStarting = true;
+        
+        setTimeout(() => {
             try {
-                this.recognition.start();
+                this.recognition = this.initRecognition();
+                if (this.recognition) this.recognition.start();
             } catch (err) {
-                console.error("Start Recognition Failed:", err);
+                this.isStarting = false;
+                this.isListening = false;
             }
-        }
+        }, 300);
+    }
+
+    start() {
+        this.safeStart();
     }
 
     stop() {
+        this.isStarting = false;
         if (this.recognition) {
             try { this.recognition.stop(); } catch(e) {}
             this.recognition = null;
@@ -791,21 +795,27 @@ const VoiceTutor = {
         const avatar = document.getElementById('aiAvatar');
         const wave = document.getElementById('aiWaveform');
         const pulse = document.getElementById('userMicPulse');
-        const dots = document.getElementById('listeningDots');
 
-        if (text) transcript.innerText = text;
+        if (text) {
+            transcript.innerText = text;
+            // Tự động cuộn xuống đáy khi có nội dung mới
+            const container = transcript.parentElement;
+            if (container) {
+                setTimeout(() => {
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                }, 100);
+            }
+        }
 
-        badge.className = 'voice-status-badge';
+        badge.className = 'voice-status-badge text-[10px] font-medium';
         wave.classList.add('hidden');
         pulse.classList.add('hidden');
-        if (dots) dots.classList.add('hidden');
         avatar.classList.remove('speaking');
 
         if (state === 'listening') {
             badge.innerText = 'Đang lắng nghe...';
-            badge.classList.add('voice-status-listening');
+            badge.classList.add('text-indigo-500');
             pulse.classList.remove('hidden');
-            if (dots) dots.classList.remove('hidden');
         } else if (state === 'speaking') {
             badge.innerText = 'Gia sư đang nói...';
             badge.classList.add('voice-status-speaking');
@@ -847,11 +857,6 @@ const VoiceTutor = {
     startListening() {
         if (!this.isCalling) return;
         
-        if (location.protocol === 'file:') {
-            this.updateUI('speaking', 'Yêu cầu chạy qua máy chủ (http/https) để dùng Micro.');
-            return;
-        }
-
         if (!SpeechToTextManager.isSupported()) {
             this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
             return;
@@ -861,16 +866,15 @@ const VoiceTutor = {
         
         this.stt.onResult = (text, isFinal) => {
             if (!text) return;
-            document.getElementById('voiceTranscript').innerText = text;
+            this.updateUI('listening', text); // Cập nhật text và tự động cuộn
             this.lastTranscript = text;
 
             if (this.isLiveMode) {
-                // BARGE-IN: Nếu AI đang nói và người dùng phát ra âm thanh (không phải chỉ là 1-2 từ vọng)
+                // BARGE-IN: Nếu AI đang nói và người dùng phát ra âm thanh
                 if (window.speechSynthesis.speaking) {
                     const timeSpeaking = Date.now() - this.aiSpeakStartTime;
-                    // Nhạy bén hơn: 1s grace period, > 3 từ là ngắt
-                    if (timeSpeaking > 1000 && text.trim().split(' ').length >= 3) {
-                        console.log("Barge-in via voice!");
+                    // Nhạy bén hơn nhưng bỏ qua 0.8s đầu để tránh echo
+                    if (timeSpeaking > 800 && text.trim().split(' ').length >= 3) {
                         SpeechManager.stop();
                         this.aiSpeakStartTime = 0; 
                     }
@@ -879,12 +883,11 @@ const VoiceTutor = {
 
                 if (this.silenceTimer) clearTimeout(this.silenceTimer);
                 this.silenceTimer = setTimeout(() => {
-                    // Chỉ gửi yêu cầu nếu AI không đang nói và có nội dung thực sự
                     if (this.lastTranscript.trim().length > 2 && !window.speechSynthesis.speaking) {
                         this.stt.stop();
                         this.askGemini(this.lastTranscript);
                     }
-                }, 1500);
+                }, 1200); // Rút ngắn thời gian chờ xuống 1.2s để nhanh hơn
             }
         };
         

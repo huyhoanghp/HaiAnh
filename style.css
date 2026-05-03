@@ -665,9 +665,18 @@ body.dark .font-range-input {
 
 @keyframes pulse-green {
     0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.5; }
+    50% { transform: scale(1.4); opacity: 0.6; }
     100% { transform: scale(1); opacity: 1; }
 }
+
+@keyframes wave {
+    0%, 100% { height: 8px; }
+    50% { height: 32px; }
+}
+
+.animate-wave-1 { animation: wave 1s ease-in-out infinite; }
+.animate-wave-2 { animation: wave 1.2s ease-in-out infinite; animation-delay: 0.2s; }
+.animate-wave-3 { animation: wave 0.8s ease-in-out infinite; animation-delay: 0.4s; }
 
 @keyframes mic-glow {
     from { box-shadow: 0 0 10px rgba(79, 70, 229, 0.4); transform: scale(1); }
@@ -703,18 +712,20 @@ body.dark .font-range-input {
 .voice-card {
     background: white;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    max-height: 95vh;
-    width: 95%;
-    max-width: 400px;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
     position: relative;
+    border: none;
 }
 
 .dark .voice-card {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+}
+
+.ai-avatar.speaking {
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+    border-color: #4f46e5;
 }
 
 .ai-call-btn {
