@@ -62,32 +62,21 @@ const AuthManager = {
         document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
         document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
         
-        // Khởi tạo Firebase với Config của người dùng
-        const firebaseConfig = {
-            apiKey: "AIzaSyCkLNCdbRWpWXV9vms9wmSyBT5WS3VdLdM",
-            authDomain: "haianhstudy-99611.firebaseapp.com",
-            projectId: "haianhstudy-99611",
-            storageBucket: "haianhstudy-99611.firebasestorage.app",
-            messagingSenderId: "278856696620",
-            appId: "1:278856696620:web:7e8aa3fb21f952122fe289",
-            measurementId: "G-7TWPWZ58R5"
-        };
-        
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        this.db = firebase.firestore();
+        // Sử dụng tham chiếu toàn cục từ firebase-config.js
+        this.db = typeof db !== 'undefined' ? db : null;
 
         // Lắng nghe trạng thái đăng nhập
-        firebase.auth().onAuthStateChanged((user) => {
-            if (user) {
-                this.user = user;
-                this.onLoginSuccess();
-            } else {
-                this.user = null;
-                document.getElementById('authOverlay').classList.remove('hidden');
-            }
-        });
+        if (typeof auth !== 'undefined') {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    this.user = user;
+                    this.onLoginSuccess();
+                } else {
+                    this.user = null;
+                    document.getElementById('authOverlay').classList.remove('hidden');
+                }
+            });
+        }
     },
 
     mode: 'login',
@@ -141,6 +130,9 @@ const AuthManager = {
         
         // Bắt đầu nạp dữ liệu từ Cloud
         this.syncFromCloud();
+        
+        // Khôi phục tiến độ cục bộ sau khi login
+        restoreProgress();
     },
 
     async syncFromCloud() {
@@ -164,14 +156,51 @@ const AuthManager = {
             // 2. Đồng bộ Progress
             const progressDoc = await this.db.collection('users').doc(this.user.uid).collection('data').doc('exam_progress').get();
             if (progressDoc.exists) {
-                const cloudProgress = progressDoc.data();
-                ProgressManager.applyProgress(cloudProgress);
+                const cloudData = progressDoc.data();
+                if (cloudData && cloudData.data) {
+                    const cloudProgress = JSON.parse(cloudData.data);
+                    ProgressManager.applyProgress(cloudProgress);
+                }
             }
+
+            // 3. Đồng bộ Question Banks
+            const localBanks = await getAllBanks();
+            const banksSnapshot = await this.db.collection('users').doc(this.user.uid).collection('banks').get();
+            const cloudBanksMap = new Map();
             
+            if (!banksSnapshot.empty) {
+                banksSnapshot.docs.forEach(doc => cloudBanksMap.set(doc.id, doc.data()));
+            }
+
+            // A. Pull từ Cloud về Local
+            for (const [id, cloudBank] of cloudBanksMap) {
+                const localBank = await getBankById(cloudBank.id);
+                if (!localBank) {
+                    console.log(`Sync: Pulling bank "${cloudBank.name}" from cloud.`);
+                    await saveBankToLocal(cloudBank);
+                }
+            }
+
+            // B. Push từ Local lên Cloud (nếu Cloud chưa có)
+            for (const localBank of localBanks) {
+                if (!cloudBanksMap.has(String(localBank.id))) {
+                    console.log(`Sync: Pushing bank "${localBank.name}" to cloud.`);
+                    await this.db.collection('users').doc(this.user.uid)
+                        .collection('banks').doc(String(localBank.id)).set(localBank)
+                        .catch(e => console.error("Push Bank Error:", e));
+                }
+            }
+
+            await refreshBankDropdown();
             showToast("✅ Đồng bộ dữ liệu đám mây hoàn tất!");
         } catch (err) {
             console.error("Sync Error:", err);
-            showToast("❌ Lỗi đồng bộ: " + err.message);
+            // Nếu lỗi phân quyền, ta vẫn cho phép dùng bản Local
+            if (err.code === 'permission-denied') {
+                showToast("⚠️ Cloud Sync bị chặn (Lỗi phân quyền). Vui lòng cập nhật Firebase Rules.");
+            } else {
+                showToast("❌ Lỗi đồng bộ: " + err.message);
+            }
         }
     },
 
@@ -224,17 +253,32 @@ const ProgressManager = {
             flagged: flagged,
             timeRemaining: timeRemainingSeconds,
             examActive: examActive,
-            timestamp: Date.now()
+            submitted: submitted,
+            lastUpdate: Date.now()
         };
-        
-        // Lưu Local
+
+        // 1. Lưu Local (vẫn dùng JSON string)
         localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-        
-        // Lưu Cloud nếu đã đăng nhập
+
+        // 2. Lưu Cloud nếu đã đăng nhập
+        if (AuthManager.user && AuthManager.db) {
+            // Firestore KHÔNG hỗ trợ mảng lồng nhau (Nested Arrays) trong userAnswers.
+            // Giải pháp: Chuyển toàn bộ progress thành JSON string khi lưu lên Cloud.
+            AuthManager.db.collection('users').doc(AuthManager.user.uid)
+                .collection('data').doc('exam_progress').set({
+                    data: JSON.stringify(progress),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+                .catch(e => console.error("Cloud Progress Save Error:", e));
+        }
+    },
+
+    clear() {
+        localStorage.removeItem(PROGRESS_KEY);
         if (AuthManager.user && AuthManager.db) {
             AuthManager.db.collection('users').doc(AuthManager.user.uid)
-                .collection('data').doc('exam_progress').set(progress)
-                .catch(e => console.error("Cloud Save Error:", e));
+                .collection('data').doc('exam_progress').delete()
+                .catch(e => console.error("Cloud Clear Error:", e));
         }
     }
 };
@@ -1361,9 +1405,74 @@ async function openDB() {
     });
 }
 async function getAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
-async function saveBank(name, questions) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).add({ name, questions, createdAt: new Date().toISOString() }); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
-async function deleteBank(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).delete(id); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
-async function clearAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
+
+// Hàm lưu cục bộ (dùng khi sync từ cloud)
+async function saveBankToLocal(bank) {
+    await openDB();
+    return new Promise((res, rej) => {
+        const tx = db.transaction(STORE_BANKS, 'readwrite');
+        const req = tx.objectStore(STORE_BANKS).put(bank);
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => rej(req.error);
+    });
+}
+
+async function saveBank(name, questions) {
+    const bank = { 
+        name, 
+        questions, 
+        createdAt: new Date().toISOString(),
+        id: Date.now() // Dùng timestamp làm ID thủ công để đồng bộ dễ hơn
+    };
+    
+    // 1. Lưu Local
+    await saveBankToLocal(bank);
+
+    // 2. Lưu Cloud nếu đã login
+    if (AuthManager.user && AuthManager.db) {
+        AuthManager.db.collection('users').doc(AuthManager.user.uid)
+            .collection('banks').doc(String(bank.id)).set(bank)
+            .catch(e => console.error("Bank Cloud Sync Error:", e));
+    }
+    return bank.id;
+}
+
+async function deleteBank(id) {
+    await openDB();
+    // 1. Xóa Local
+    const p1 = new Promise((res, rej) => {
+        const tx = db.transaction(STORE_BANKS, 'readwrite');
+        const req = tx.objectStore(STORE_BANKS).delete(id);
+        req.onsuccess = () => res();
+        req.onerror = () => rej(req.error);
+    });
+
+    // 2. Xóa Cloud
+    if (AuthManager.user && AuthManager.db) {
+        AuthManager.db.collection('users').doc(AuthManager.user.uid)
+            .collection('banks').doc(String(id)).delete()
+            .catch(e => console.error("Bank Cloud Delete Error:", e));
+    }
+    return p1;
+}
+
+async function clearAllBanks() { 
+    await openDB(); 
+    if (AuthManager.user && AuthManager.db) {
+        // Xóa toàn bộ collection banks trên cloud (cẩn thận)
+        const snapshot = await AuthManager.db.collection('users').doc(AuthManager.user.uid).collection('banks').get();
+        const batch = AuthManager.db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit().catch(e => console.error("Clear Cloud Banks Error:", e));
+    }
+
+    return new Promise((res, rej) => { 
+        const tx = db.transaction(STORE_BANKS, 'readwrite'); 
+        const req = tx.objectStore(STORE_BANKS).clear(); 
+        req.onsuccess = () => res(); 
+        req.onerror = () => rej(req.error); 
+    }); 
+}
 async function getBankById(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).get(id); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function saveHistory(bankId, bankName, totalQuestions, correctCount, wrongDetails, wrongQuestionsText) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readwrite'); const req = tx.objectStore(STORE_HISTORY).add({ bankId, bankName, totalQuestions, correctCount, wrongCount: totalQuestions - correctCount, wrongDetails, wrongQuestionsText, date: new Date().toISOString(), timestamp: Date.now() }); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 async function getAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readonly'); const req = tx.objectStore(STORE_HISTORY).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
@@ -2148,7 +2257,7 @@ function startTimer(seconds) {
         if (!examActive || isPaused || submitted) return; // Kiểm tra isPaused cực kỳ nghiêm ngặt
         if (timeRemainingSeconds <= 1) { 
             stopTimer(); 
-            if (!submitted && currentQuestions.length) submitExam(); 
+            if (!submitted && currentQuestions.length) submitExam(true); // true = skip confirm
         } else { 
             timeRemainingSeconds--; 
             updateTimerDisplay(); 
@@ -2333,10 +2442,10 @@ async function startReviewSession() {
 }
 function resetCurrentExam() { if (!currentQuestions.length) showToast("Chưa có bài."); else if (!examActive) showToast("Bài đã nộp."); else { showToast("Đang làm mới bài thi..."); stopTimer(); userAnswers = Array(currentQuestions.length).fill().map(() => []); flagged = Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = false; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (document.getElementById('resultPanel')) document.getElementById('resultPanel').classList.add('hidden'); startTimer((parseInt(document.getElementById('timeMinutes')?.value) || 30) * 60); saveProgressToLocal(); } }
 
-function submitExam() {
+function submitExam(skipConfirm = false) {
     if (!currentQuestions.length || submitted) return;
-    showConfirm("Bạn có chắc muốn nộp bài?", async (yes) => {
-        if (!yes) return;
+    
+    const doSubmit = async () => {
         try {
             stopTimer(); examActive = false; submitted = true; const evalRes = evaluateAll(); scoreDetails = evalRes.details; const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
             const resultContent = document.getElementById('resultContent'); if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p><p class="text-sm text-gray-700 mt-1">Đúng: ${evalRes.correctCount} | Sai: ${evalRes.total - evalRes.correctCount}</p><div class="w-full bg-gray-200 rounded-full h-2 mt-3"><div class="bg-green-500 h-2 rounded-full" style="width:${percent}%"></div></div></div><div class="mt-3 text-sm italic text-gray-600">💡 Kết quả chi tiết bên dưới. Tận dụng "Gia sư AI" để phân tích lỗi sai nhé!</div>`;
@@ -2345,20 +2454,40 @@ function submitExam() {
             const searchInput = document.getElementById('searchInput'); if (searchInput) searchInput.value = '';
             const clearSearchBtn = document.getElementById('clearSearchBtn'); if (clearSearchBtn) clearSearchBtn.classList.add('hidden');
             initLazyRender(() => { while (displayedCount < Math.min(50, filteredIndices.length)) renderNextBatch(''); setTimeout(() => resultPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); });
-            const wrongIndices = [], wrongTexts = []; for (let i = 0; i < currentQuestions.length; i++) { if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { wrongIndices.push(i); wrongTexts.push(currentQuestions[i].text); } }
-            if (currentBankId) { await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); }
+            
+            const wrongIndices = [], wrongTexts = []; 
+            for (let i = 0; i < currentQuestions.length; i++) { 
+                if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { 
+                    wrongIndices.push(i); 
+                    wrongTexts.push(currentQuestions[i].text); 
+                } 
+            }
+            
+            if (currentBankId) { 
+                await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); 
+            }
 
             // GIAI ĐOẠN 2: Cập nhật Lộ trình ôn tập (SM-2)
             scoreDetails.forEach((detail, i) => {
-                if (userAnswers[i]?.length > 0) { // Chỉ cập nhật nếu người dùng có làm câu đó
-                    ReviewManager.update(currentQuestions[i].text, detail.correct);
+                if (userAnswers[i]?.length > 0) {
+                    ReviewManager.recordAnswer(currentQuestions[i], detail.correct);
                 }
             });
+            
             const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.add('hidden');
             renderQuestionGrid();
-            showToast("Đã lưu kết quả."); clearProgress();
+            showToast("Đã lưu kết quả."); 
+            ProgressManager.clear();
         } catch (err) { console.error(err); showToast("Lỗi nộp bài!"); }
-    });
+    };
+
+    if (skipConfirm) {
+        doSubmit();
+    } else {
+        showConfirm("Bạn có chắc muốn nộp bài?", async (yes) => {
+            if (yes) await doSubmit();
+        });
+    }
 }
 
 function cancelExam() {
@@ -2368,7 +2497,7 @@ function cancelExam() {
         stopTimer();
         examActive = false;
         submitted = false;
-        clearProgress();
+        ProgressManager.clear();
         
         document.getElementById('progressArea')?.classList.add('hidden');
         document.getElementById('setupArea')?.classList.remove('hidden');
@@ -2457,16 +2586,19 @@ function attachGlobalEvents() { const container = document.getElementById('quest
 
 async function restoreProgress() {
     try {
-        const saved = loadProgress(); if (!saved || !saved.bankId) return false;
+        const savedRaw = localStorage.getItem(PROGRESS_KEY);
+        if (!savedRaw) return false;
+        const saved = JSON.parse(savedRaw);
+        if (!saved || !saved.bankId) return false;
         
         // Hiển thị thông báo hỏi người dùng
         showConfirm(`♻️ Phát hiện bài tập đang làm dở từ phiên trước. Bạn có muốn tiếp tục làm bài "${saved.bankName}" không?`, async (yes) => {
             if (!yes) {
-                clearProgress();
+                ProgressManager.clear();
                 return;
             }
 
-            const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return; }
+            const bank = await getBankById(saved.bankId); if (!bank) { ProgressManager.clear(); return; }
             masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
             const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
             
@@ -2512,15 +2644,13 @@ async function restoreProgress() {
             }
         });
         return true;
-    } catch (e) { clearProgress(); return false; }
+    } catch (e) { ProgressManager.clear(); return false; }
 }
 
 async function initGIA() {
     try {
         await openDB(); await refreshBankDropdown(); initDarkMode(); updateApiKeyBadge();
-        FontSizeManager.init();
         discoverModels(); // Khởi chạy ngầm khám phá model mới
-        const restored = await restoreProgress(); if (!restored) { const banks = await getAllBanks(); if (banks.length) await loadBankById(banks[0].id); }
         const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn');
         searchInput?.addEventListener('input', () => { if (searchInput.value.length > 0) clearSearchBtn?.classList.remove('hidden'); else clearSearchBtn?.classList.add('hidden'); if (searchDebounceTimer) clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => { initLazyRender(); }, 300); });
         clearSearchBtn?.addEventListener('click', () => { if (searchInput) searchInput.value = ''; clearSearchBtn.classList.add('hidden'); initLazyRender(); });
@@ -2589,7 +2719,7 @@ async function initGIA() {
                 if (!yes) return;
                 await clearAllBanks();
                 await clearAllHistory();
-                clearProgress();
+                ProgressManager.clear();
                 location.reload();
             });
         });
@@ -3291,9 +3421,7 @@ Tiếng Việt.`;
             } catch (error) { showLoading(false); showToast("❌ Lỗi tạo đề: " + error.message, 7000); aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); }
         });
 
-        // Nút nộp bài Header
-        const submitBtnHeader = document.getElementById('submitBtnHeader');
-        if (submitBtnHeader) submitBtnHeader.onclick = submitExam;
+        // Nút nộp bài Header (Đã gán trong initGIA phần trên)
 
         // Đóng gợi ý AI và Thông báo (Toast) khi chạm vào vùng trống
         document.addEventListener('pointerdown', (e) => {
@@ -3410,7 +3538,6 @@ window.addEventListener('DOMContentLoaded', () => {
     FontSizeManager.init();
     ReviewManager.init();
     AuthManager.init(); // Kích hoạt hệ thống đăng nhập
-    ProgressManager.load();
     
     // Khởi tạo các sự kiện Global và UI
     initGIA();
