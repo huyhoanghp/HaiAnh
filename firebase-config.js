@@ -15,5 +15,5 @@ if (!firebase.apps.length) {
 }
 
 // Global references
-const db = firebase.firestore();
-const auth = firebase.auth();
+window.db = firebase.firestore();
+window.auth = firebase.auth();
