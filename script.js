@@ -62,12 +62,13 @@ const AuthManager = {
         document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
         document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
         
-        // Sử dụng tham chiếu toàn cục từ firebase-config.js
-        this.db = typeof db !== 'undefined' ? db : null;
+        // Sử dụng tham chiếu toàn cục từ window (khởi tạo trong firebase-config.js)
+        this.db = window.db || null;
 
         // Lắng nghe trạng thái đăng nhập
-        if (typeof auth !== 'undefined') {
-            auth.onAuthStateChanged((user) => {
+        const authInstance = window.auth || null;
+        if (authInstance) {
+            authInstance.onAuthStateChanged((user) => {
                 if (user) {
                     this.user = user;
                     this.onLoginSuccess();
@@ -89,7 +90,7 @@ const AuthManager = {
         
         try {
             showLoading(true, "Đang tạo tài khoản...");
-            await firebase.auth().createUserWithEmailAndPassword(email, pass);
+            await window.auth.createUserWithEmailAndPassword(email, pass);
             showLoading(false);
             showToast("Đăng ký thành công!");
         } catch (err) {
@@ -105,7 +106,7 @@ const AuthManager = {
         
         try {
             showLoading(true, "Đang xác thực...");
-            await firebase.auth().signInWithEmailAndPassword(email, pass);
+            await window.auth.signInWithEmailAndPassword(email, pass);
             showLoading(false);
         } catch (err) {
             showLoading(false);
@@ -116,7 +117,7 @@ const AuthManager = {
     async loginWithGoogle() {
         try {
             const provider = new firebase.auth.GoogleAuthProvider();
-            await firebase.auth().signInWithPopup(provider);
+            await window.auth.signInWithPopup(provider);
         } catch (err) {
             showToast("Lỗi Google Auth: " + err.message);
         }
@@ -136,7 +137,10 @@ const AuthManager = {
     },
 
     async syncFromCloud() {
-        if (!this.user) return;
+        if (!this.user || !this.db) {
+            if (!this.db) console.warn("AuthManager: Firestore DB not initialized. Skipping cloud sync.");
+            return;
+        }
         try {
             console.log("AuthManager: Starting Cloud Sync...");
             
@@ -206,7 +210,7 @@ const AuthManager = {
 
     async logout() {
         try {
-            await firebase.auth().signOut();
+            await window.auth.signOut();
             location.reload(); // Reload để xóa sạch state
         } catch (err) {
             showToast("Lỗi đăng xuất: " + err.message);
