@@ -90,9 +90,6 @@
                     <i class="fas fa-cog text-lg"></i>
                 </button>
 
-                <button id="logoutBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition shadow-sm" title="Đăng xuất">
-                    <i class="fas fa-sign-out-alt text-lg"></i>
-                </button>
                 
                 <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">
@@ -122,6 +119,55 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <!-- User Profile Card (Modern Glass Design) -->
+            <div id="userProfileCard" class="bg-white/5 dark:bg-slate-900/50 border border-white/10 rounded-[2rem] p-6 text-white mb-6 shadow-2xl relative group overflow-hidden backdrop-blur-xl">
+                <!-- Gradient Glow Background -->
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-700"></div>
+                
+                <div class="flex flex-col items-center gap-4 relative z-10">
+                    <!-- Avatar Section with Customization -->
+                    <div class="relative group/avatar cursor-pointer" id="changeAvatarBtn">
+                        <div class="absolute inset-0 bg-indigo-500 rounded-full blur-md opacity-20 group-hover/avatar:opacity-40 transition-opacity"></div>
+                        <img id="userAvatar" src="https://ui-avatars.com/api/?name=User&background=random" class="w-20 h-20 rounded-full border-2 border-white/20 shadow-xl relative z-10 object-cover bg-slate-800">
+                        <div class="absolute bottom-0 right-0 w-7 h-7 bg-indigo-600 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] z-20 shadow-lg group-hover/avatar:scale-110 transition-transform">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <h4 id="userName" class="font-black text-xl tracking-tight leading-tight mb-0.5">Đang tải...</h4>
+                        <p id="userEmail" class="text-[11px] text-gray-400 font-medium">email@example.com</p>
+                    </div>
+
+                    <!-- Dashboard Stats Grid -->
+                    <div class="w-full grid grid-cols-2 gap-3 mt-2">
+                        <div class="bg-white/5 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
+                            <span class="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-1">Tiến độ</span>
+                            <div class="flex items-baseline gap-1">
+                                <span id="statTotalDone" class="text-xl font-black text-indigo-400">0</span>
+                                <span class="text-[10px] text-gray-500">câu</span>
+                            </div>
+                        </div>
+                        <div class="bg-white/5 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
+                            <span class="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-1">Chính xác</span>
+                            <div class="flex items-baseline gap-1">
+                                <span id="statAccuracy" class="text-xl font-black text-emerald-400">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="w-full flex items-center justify-between mt-2 pt-4 border-t border-white/5">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Cloud Active</span>
+                        </div>
+                        <button id="logoutBtnModal" class="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[10px] font-bold transition-all border border-red-500/20">
+                            <i class="fas fa-sign-out-alt"></i> Đăng xuất
+                        </button>
+                    </div>
+                </div>
+            </div>
             <!-- Mục AI Configuration -->
             <div class="space-y-4">
                 <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-widest">

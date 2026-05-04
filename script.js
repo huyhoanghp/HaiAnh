@@ -60,7 +60,24 @@ const AuthManager = {
             else this.registerWithEmail();
         });
         document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
-        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
+        document.getElementById('logoutBtnModal')?.addEventListener('click', () => this.logout());
+        document.getElementById('changeAvatarBtn')?.addEventListener('click', () => {
+            if (!this.user) return;
+            showPrompt("Nhập URL ảnh đại diện mới:", this.user.photoURL || "", async (url) => {
+                if (url !== null && url !== this.user.photoURL) {
+                    try {
+                        showLoading(true, "Đang cập nhật hồ sơ...");
+                        await this.user.updateProfile({ photoURL: url });
+                        showLoading(false);
+                        showToast("✅ Đã cập nhật ảnh đại diện!");
+                        this.updateUserProfileUI();
+                    } catch (e) {
+                        showLoading(false);
+                        showToast("❌ Lỗi: " + e.message);
+                    }
+                }
+            });
+        });
         
         // Sử dụng tham chiếu toàn cục từ window (khởi tạo trong firebase-config.js)
         this.db = window.db || null;
@@ -134,6 +151,27 @@ const AuthManager = {
         
         // Khôi phục tiến độ cục bộ sau khi login
         restoreProgress();
+
+        // Cập nhật giao diện người dùng
+        this.updateUserProfileUI();
+    },
+
+    updateUserProfileUI() {
+        if (!this.user) return;
+        const nameEl = document.getElementById('userName');
+        const emailEl = document.getElementById('userEmail');
+        const avatarEl = document.getElementById('userAvatar');
+        
+        if (nameEl) nameEl.innerText = this.user.displayName || "Học viên Hải Anh";
+        if (emailEl) emailEl.innerText = this.user.email;
+        if (avatarEl && this.user.photoURL) avatarEl.src = this.user.photoURL;
+
+        // Cập nhật Dashboard stats
+        const stats = ReviewManager.getGlobalStats();
+        const totalEl = document.getElementById('statTotalDone');
+        const accuracyEl = document.getElementById('statAccuracy');
+        if (totalEl) totalEl.innerText = stats.total;
+        if (accuracyEl) accuracyEl.innerText = stats.accuracy + "%";
     },
 
     async syncFromCloud() {
@@ -427,6 +465,10 @@ const ReviewManager = {
         const saved = localStorage.getItem('haianh_review_stats');
         if (saved) {
             this.stats = JSON.parse(saved);
+            // Fix nếu thiếu _global
+            if (!this.stats._global) this.stats._global = { totalDone: 0, totalCorrect: 0 };
+        } else {
+            this.stats = { _global: { totalDone: 0, totalCorrect: 0 } };
         }
         this.updateDashboardUI();
     },
@@ -453,6 +495,19 @@ const ReviewManager = {
             hash |= 0;
         }
         return "q_" + Math.abs(hash).toString(16);
+    },
+
+    recordAnswer(q, isCorrect) {
+        if (!this.stats._global) this.stats._global = { totalDone: 0, totalCorrect: 0 };
+        this.stats._global.totalDone++;
+        if (isCorrect) this.stats._global.totalCorrect++;
+        this.update(q.text, isCorrect);
+    },
+
+    getGlobalStats() {
+        const g = this.stats._global || { totalDone: 0, totalCorrect: 0 };
+        const accuracy = g.totalDone > 0 ? Math.round((g.totalCorrect / g.totalDone) * 100) : 0;
+        return { total: g.totalDone, accuracy: accuracy };
     },
 
     // quality: 0 (sai) hoặc 5 (đúng) - Đơn giản hóa cho trắc nghiệm
@@ -2749,6 +2804,9 @@ async function initGIA() {
                 overlay?.classList.remove('hidden');
                 showSettingsBadge(false);
                 
+                // 0. Cập nhật Profile & Dashboard
+                AuthManager.updateUserProfileUI();
+
                 // 1. Nạp Cấu hình AI
                 if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
                 if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('last_working_model') || 'gemini-1.5-flash';
