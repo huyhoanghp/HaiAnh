@@ -102,8 +102,8 @@
         </div>
     </div>
 
-    <!-- Cài đặt hệ thống (Side-Panel / Cánh gà bên trái) -->
-    <div id="settingsSidePanel" class="fixed top-0 left-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-r border-indigo-100 dark:border-slate-800">
+    <!-- Cài đặt hệ thống (Side-Panel / Cánh gà bên trái - Dạng Floating) -->
+    <div id="settingsSidePanel" class="fixed top-4 bottom-4 left-4 w-[calc(100%-2rem)] max-w-[320px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl z-[70] transform -translate-x-[110%] transition-transform duration-500 ease-in-out flex flex-col border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] overflow-hidden">
         <!-- Header -->
         <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div>
@@ -289,8 +289,6 @@
             <div class="space-y-4">
                 <div class="flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-widest">
                     <i class="fas fa-database"></i> Quản lý dữ liệu
-                </div>
-                <div class="grid grid-cols-2 gap-3">
                     <button id="sideDataCenterBtn" class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-100 dark:border-blue-800/30">
                         TRUNG TÂM DATA
                     </button>
@@ -303,10 +301,10 @@
     </div>
 
     <!-- Lớp phủ mờ (Overlay) cho Side Panel -->
-    <div id="sidePanelOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] hidden transition-opacity duration-300"></div>
+    <div id="sidePanelOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-500"></div>
 
-    <!-- Lộ trình học tập (Side-Panel / Cánh gà) -->
-    <div id="reviewDashboardCard" class="fixed top-0 right-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-l border-indigo-100 dark:border-indigo-900/50">
+    <!-- Lộ trình học tập (Side-Panel / Cánh gà bên phải - Dạng Floating) -->
+    <div id="reviewDashboardCard" class="fixed top-4 bottom-4 right-4 w-[calc(100%-2rem)] max-w-[360px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl z-[70] transform translate-x-[110%] transition-transform duration-500 ease-in-out flex flex-col border border-white/20 dark:border-slate-800/50 rounded-[2.5rem] overflow-hidden">
         <!-- Header Panel -->
         <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div>

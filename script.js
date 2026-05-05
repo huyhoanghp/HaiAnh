@@ -486,16 +486,32 @@ const FontSizeManager = {
     }
 };
 
+function toggleOverlay(show) {
+    const overlay = document.getElementById('sidePanelOverlay');
+    if (!overlay) return;
+    if (show) {
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.add('opacity-100', 'pointer-events-auto');
+    } else {
+        overlay.classList.remove('opacity-100', 'pointer-events-auto');
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+    }
+}
+
 function toggleReviewPanel(show) {
     const card = document.getElementById('reviewDashboardCard');
-    const overlay = document.getElementById('sidePanelOverlay');
-    if (card && overlay) {
+    const settingsPanel = document.getElementById('settingsSidePanel');
+    if (card) {
         if (show) {
-            card.classList.remove('translate-x-full');
-            overlay.classList.remove('hidden');
+            card.classList.remove('translate-x-[110%]');
+            toggleOverlay(true);
+            // Cập nhật dữ liệu Dashboard khi mở
+            ReviewManager.updateDashboardUI();
         } else {
-            card.classList.add('translate-x-full');
-            overlay.classList.add('hidden');
+            card.classList.add('translate-x-[110%]');
+            if (settingsPanel?.classList.contains('-translate-x-[110%]')) {
+                toggleOverlay(false);
+            }
         }
     }
 }
@@ -2842,8 +2858,8 @@ async function initGIA() {
 
         const toggleSettings = (show) => {
             if (show) {
-                settingsSidePanel?.classList.remove('-translate-x-full');
-                overlay?.classList.remove('hidden');
+                settingsSidePanel?.classList.remove('-translate-x-[110%]');
+                toggleOverlay(true);
                 showSettingsBadge(false);
                 
                 // 0. Cập nhật Profile & Dashboard
@@ -2881,27 +2897,19 @@ async function initGIA() {
                 if (sizeVal) sizeVal.innerText = savedScale + '%';
 
             } else {
-                settingsSidePanel?.classList.add('-translate-x-full');
-                if (reviewSidePanel?.classList.contains('translate-x-full')) overlay?.classList.add('hidden');
-            }
-        };
-
-        const toggleReview = (show) => {
-            if (show) {
-                reviewSidePanel?.classList.remove('translate-x-full');
-                overlay?.classList.remove('hidden');
-                ReviewManager.updateDashboardUI();
-            } else {
-                reviewSidePanel?.classList.add('translate-x-full');
-                if (settingsSidePanel?.classList.contains('-translate-x-full')) overlay?.classList.add('hidden');
+                settingsSidePanel?.classList.add('-translate-x-[110%]');
+                // Chỉ đóng overlay nếu panel review cũng đang đóng
+                if (reviewSidePanel?.classList.contains('translate-x-[110%]')) {
+                    toggleOverlay(false);
+                }
             }
         };
 
         document.getElementById('settingsToggleBtn')?.addEventListener('click', () => toggleSettings(true));
         document.getElementById('closeSettingsPanel')?.addEventListener('click', () => toggleSettings(false));
-        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReview(true));
-        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReview(false));
-        overlay?.addEventListener('click', () => { toggleSettings(false); toggleReview(false); });
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
+        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
+        overlay?.addEventListener('click', () => { toggleSettings(false); toggleReviewPanel(false); });
 
         // Logic Lưu toàn bộ cài đặt
         document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => {
@@ -3618,9 +3626,6 @@ Tiếng Việt.`;
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
 
 
-        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
-        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
-        document.getElementById('sidePanelOverlay')?.addEventListener('click', () => toggleReviewPanel(false));
 
         document.getElementById('startReviewBtn')?.addEventListener('click', startReviewSession);
 
