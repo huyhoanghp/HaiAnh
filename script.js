@@ -60,7 +60,19 @@ const AuthManager = {
             else this.registerWithEmail();
         });
         document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
+        document.getElementById('btnGuestLogin')?.addEventListener('click', () => this.loginAsGuest());
+        document.getElementById('btnForgotPassword')?.addEventListener('click', () => this.sendPasswordReset());
+        document.getElementById('changePasswordBtn')?.addEventListener('click', () => this.changePassword());
         document.getElementById('logoutBtnModal')?.addEventListener('click', () => this.logout());
+
+        // Toggle Password Visibility
+        const togglePassBtn = document.getElementById('togglePasswordBtn');
+        const passInput = document.getElementById('loginPassword');
+        togglePassBtn?.addEventListener('click', () => {
+            const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passInput.setAttribute('type', type);
+            togglePassBtn.innerHTML = type === 'password' ? '<i class="fas fa-eye-slash text-xs"></i>' : '<i class="fas fa-eye text-xs"></i>';
+        });
         const avatarInput = document.getElementById('avatarFileInput');
         document.getElementById('changeAvatarBtn')?.addEventListener('click', () => {
             if (!this.user) return;
@@ -115,10 +127,10 @@ const AuthManager = {
             showLoading(true, "Đang tạo tài khoản...");
             await window.auth.createUserWithEmailAndPassword(email, pass);
             showLoading(false);
-            showToast("Đăng ký thành công!");
+            showToast("✅ Đăng ký thành công!");
         } catch (err) {
             showLoading(false);
-            showToast("Lỗi đăng ký: " + err.message);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
         }
     },
 
@@ -133,17 +145,98 @@ const AuthManager = {
             showLoading(false);
         } catch (err) {
             showLoading(false);
-            showToast("Lỗi đăng nhập: " + err.message);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
         }
     },
 
     async loginWithGoogle() {
         try {
+            showLoading(true, "Đang mở Google...");
             const provider = new firebase.auth.GoogleAuthProvider();
             await window.auth.signInWithPopup(provider);
+            showLoading(false);
         } catch (err) {
-            showToast("Lỗi Google Auth: " + err.message);
+            showLoading(false);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
         }
+    },
+
+    async loginAsGuest() {
+        try {
+            showLoading(true, "Đang khởi tạo chế độ khách...");
+            await window.auth.signInAnonymously();
+            showLoading(false);
+            showToast("⚡ Bạn đang sử dụng chế độ Khách.");
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ Không thể khởi tạo chế độ khách: " + err.message);
+        }
+    },
+
+    async sendPasswordReset() {
+        const email = document.getElementById('loginEmail').value;
+        if (!email) { showToast("Vui lòng nhập Email để nhận liên kết khôi phục!"); return; }
+        
+        try {
+            showLoading(true, "Đang gửi email...");
+            await window.auth.sendPasswordResetEmail(email);
+            showLoading(false);
+            showToast(`✅ Đã gửi liên kết khôi phục vào Email: ${email}`);
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
+        }
+    },
+
+    async changePassword() {
+        if (!this.user || this.user.isAnonymous) {
+            showToast("⚠️ Vui lòng đăng ký tài khoản chính thức để sử dụng tính năng này.");
+            return;
+        }
+        showConfirm("Gửi yêu cầu đổi mật khẩu vào Email của bạn?", async (yes) => {
+            if (!yes) return;
+            try {
+                showLoading(true, "Đang gửi...");
+                await window.auth.sendPasswordResetEmail(this.user.email);
+                showLoading(false);
+                showToast(`✅ Liên kết đổi mật khẩu đã được gửi đến: ${this.user.email}`);
+            } catch (err) {
+                showLoading(false);
+                showToast("❌ " + this.getFriendlyErrorMessage(err));
+            }
+        });
+    },
+
+    getFriendlyErrorMessage(err) {
+        const code = err.code || "";
+        const message = err.message || "";
+        
+        if (code === 'auth/user-not-found' || message.includes('INVALID_LOGIN_CREDENTIALS')) {
+            return "Email hoặc mật khẩu không chính xác.";
+        }
+        if (code === 'auth/wrong-password') {
+            return "Mật khẩu không chính xác.";
+        }
+        if (code === 'auth/email-already-in-use') {
+            return "Email này đã được sử dụng bởi một tài khoản khác.";
+        }
+        if (code === 'auth/invalid-email') {
+            return "Định dạng email không hợp lệ.";
+        }
+        if (code === 'auth/weak-password') {
+            return "Mật khẩu quá yếu (cần tối thiểu 6 ký tự).";
+        }
+        if (code === 'auth/network-request-failed') {
+            return "Lỗi kết nối mạng. Vui lòng kiểm tra lại.";
+        }
+        if (code === 'auth/too-many-requests') {
+            return "Quá nhiều lần thử thất bại. Vui lòng quay lại sau.";
+        }
+        if (code === 'auth/popup-closed-by-user') {
+            return "Cửa sổ đăng nhập đã bị đóng.";
+        }
+        
+        return message.length > 60 ? "Thông tin không hợp lệ, vui lòng thử lại." : message;
     },
 
     onLoginSuccess() {
@@ -168,9 +261,17 @@ const AuthManager = {
         const emailEl = document.getElementById('userEmail');
         const avatarEl = document.getElementById('userAvatar');
         
-        if (nameEl) nameEl.innerText = this.user.displayName || "Học viên Hải Anh";
-        if (emailEl) emailEl.innerText = this.user.email;
-        if (avatarEl && this.user.photoURL) avatarEl.src = this.user.photoURL;
+        if (this.user.isAnonymous) {
+            if (nameEl) nameEl.innerText = "Khách hàng (Guest)";
+            if (emailEl) emailEl.innerText = "Chế độ trải nghiệm ẩn danh";
+            if (avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=Guest&background=64748b&color=fff`;
+            document.getElementById('changeAvatarBtn')?.classList.add('hidden');
+        } else {
+            if (nameEl) nameEl.innerText = this.user.displayName || "Học viên Hải Anh";
+            if (emailEl) emailEl.innerText = this.user.email;
+            if (avatarEl) avatarEl.src = this.user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(this.user.email)}&background=random`;
+            document.getElementById('changeAvatarBtn')?.classList.remove('hidden');
+        }
 
         // Cập nhật Dashboard stats
         const stats = ReviewManager.getGlobalStats();

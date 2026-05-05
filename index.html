@@ -48,18 +48,31 @@
         </div>
 
         <div id="loginForm" class="space-y-4">
-            <input type="email" id="loginEmail" placeholder="Email" class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-indigo-400">
-            <input type="password" id="loginPassword" placeholder="Mật khẩu" class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-indigo-400">
-            <button id="btnSubmitLogin" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-all">Đăng nhập</button>
+            <input type="email" id="loginEmail" placeholder="Email" class="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl py-3.5 px-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+            <div class="relative group">
+                <input type="password" id="loginPassword" placeholder="Mật khẩu" class="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl py-3.5 px-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 pr-24 transition-all">
+                <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <button id="togglePasswordBtn" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><i class="fas fa-eye-slash text-sm"></i></button>
+                    <div class="w-[1px] h-3 bg-gray-200 dark:bg-slate-800"></div>
+                    <button id="btnForgotPassword" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-white transition-colors px-1">QUÊN?</button>
+                </div>
+            </div>
+            <button id="btnSubmitLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2">
+                <span>Đăng nhập</span>
+                <i class="fas fa-arrow-right text-xs"></i>
+            </button>
         </div>
 
-        <div class="mt-8">
+        <div class="mt-8 space-y-3">
             <div class="relative flex items-center justify-center mb-6">
                 <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/10"></div></div>
                 <span class="relative px-4 bg-transparent text-[10px] font-black text-white/30 uppercase tracking-widest">Hoặc</span>
             </div>
-            <button id="btnGoogleLogin" class="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-white font-bold text-xs">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Google
+            <button id="btnGoogleLogin" class="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-white font-bold text-xs transition-all">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Tiếp tục với Google
+            </button>
+            <button id="btnGuestLogin" class="w-full flex items-center justify-center gap-3 bg-slate-800/50 hover:bg-slate-800 border border-white/5 py-3 rounded-xl text-white/60 hover:text-white font-bold text-xs transition-all">
+                <i class="fas fa-user-secret"></i> Trải nghiệm chế độ Khách
             </button>
         </div>
     </div>
@@ -278,9 +291,12 @@
                 </div>
             </div>
 
-            <div class="pt-4">
+            <div class="pt-4 space-y-3">
                 <button id="saveAiSettingsBtn" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition active:scale-95">
                     LƯU TOÀN BỘ CÀI ĐẶT
+                </button>
+                <button id="changePasswordBtn" class="w-full py-3 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 rounded-xl font-bold text-xs border border-gray-200 dark:border-slate-700 hover:bg-gray-200 dark:hover:bg-slate-700 transition">
+                    <i class="fas fa-key mr-2"></i> ĐỔI MẬT KHẨU
                 </button>
             </div>
 
