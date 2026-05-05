@@ -1348,6 +1348,7 @@ const VoiceTutor = {
         this.currentAiSpeechText = greeting;
         
         setTimeout(() => {
+            if (!this.isCalling) return;
             SpeechManager.speak(greeting, 'voice-tutor', () => {
                 if (this.isCalling) this.startListening();
             });
