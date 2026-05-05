@@ -25,6 +25,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="./firebase-config.js"></script>
 </head>
 <body class="font-sans antialiased bg-gray-100">
 <div id="loadingOverlay"><div class="spinner"></div><div id="loadingText">Đang xử lý, vui lòng chờ...</div></div>
@@ -41,19 +42,37 @@
             <p class="text-indigo-200/60 text-sm font-medium mt-1">Nâng tầm trí tuệ của bạn</p>
         </div>
 
-        <div id="loginForm" class="space-y-4">
-            <input type="email" id="loginEmail" placeholder="Email" class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-indigo-400">
-            <input type="password" id="loginPassword" placeholder="Mật khẩu" class="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-indigo-400">
-            <button id="btnSubmitLogin" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-all">Đăng nhập</button>
+        <div class="flex p-1 bg-white/5 rounded-2xl mb-6">
+            <button id="tabLogin" class="flex-1 py-2 text-sm font-bold text-white rounded-lg bg-white/10 transition-all">Đăng nhập</button>
+            <button id="tabRegister" class="flex-1 py-2 text-sm font-bold text-white/40 rounded-lg hover:text-white transition-all">Đăng ký</button>
         </div>
 
-        <div class="mt-8">
+        <div id="loginForm" class="space-y-4">
+            <input type="email" id="loginEmail" placeholder="Email" class="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl py-3.5 px-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+            <div class="relative group">
+                <input type="password" id="loginPassword" placeholder="Mật khẩu" class="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl py-3.5 px-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 pr-24 transition-all">
+                <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <button id="togglePasswordBtn" class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"><i class="fas fa-eye-slash text-sm"></i></button>
+                    <div class="w-[1px] h-3 bg-gray-200 dark:bg-slate-800"></div>
+                    <button id="btnForgotPassword" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-white transition-colors px-1">QUÊN?</button>
+                </div>
+            </div>
+            <button id="btnSubmitLogin" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 flex items-center justify-center gap-2">
+                <span>Đăng nhập</span>
+                <i class="fas fa-arrow-right text-xs"></i>
+            </button>
+        </div>
+
+        <div class="mt-8 space-y-3">
             <div class="relative flex items-center justify-center mb-6">
                 <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/10"></div></div>
                 <span class="relative px-4 bg-transparent text-[10px] font-black text-white/30 uppercase tracking-widest">Hoặc</span>
             </div>
-            <button id="btnGoogleLogin" class="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-white font-bold text-xs">
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/action/google.svg" class="w-5 h-5"> Google
+            <button id="btnGoogleLogin" class="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-white font-bold text-xs transition-all">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"> Tiếp tục với Google
+            </button>
+            <button id="btnGuestLogin" class="w-full flex items-center justify-center gap-3 bg-slate-800/50 hover:bg-slate-800 border border-white/5 py-3 rounded-xl text-white/60 hover:text-white font-bold text-xs transition-all">
+                <i class="fas fa-user-secret"></i> Trải nghiệm chế độ Khách
             </button>
         </div>
     </div>
@@ -84,9 +103,6 @@
                     <i class="fas fa-cog text-lg"></i>
                 </button>
 
-                <button id="logoutBtn" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition shadow-sm" title="Đăng xuất">
-                    <i class="fas fa-sign-out-alt text-lg"></i>
-                </button>
                 
                 <!-- Nhóm Điều khiển Desktop (Ẩn hoàn toàn trên di động) -->
                 <div class="header-actions-desktop gap-2 ml-2 hidden md:flex">
@@ -99,8 +115,8 @@
         </div>
     </div>
 
-    <!-- Cài đặt hệ thống (Side-Panel / Cánh gà bên trái) -->
-    <div id="settingsSidePanel" class="fixed top-0 left-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-r border-indigo-100 dark:border-slate-800">
+    <!-- Cài đặt hệ thống (Side-Panel / Cánh gà bên trái - Dạng Floating) -->
+    <div id="settingsSidePanel" class="fixed top-4 bottom-4 left-4 w-[calc(100%-2rem)] max-w-[340px] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-2xl z-[70] transform -translate-x-[110%] transition-transform duration-500 ease-in-out flex flex-col border border-indigo-100/50 dark:border-white/5 rounded-[2rem] overflow-hidden">
         <!-- Header -->
         <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div>
@@ -116,6 +132,49 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+            <div id="userProfileCard" class="bg-indigo-50/50 dark:bg-slate-900/50 border border-indigo-100 dark:border-white/10 rounded-2xl p-4 text-gray-800 dark:text-white mb-6 shadow-xl relative group overflow-hidden backdrop-blur-xl">
+                <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+                
+                <div class="flex items-center gap-4 relative z-10">
+                    <!-- Avatar Section -->
+                    <div class="relative group/avatar cursor-pointer flex-shrink-0" id="changeAvatarBtn">
+                        <img id="userAvatar" src="https://ui-avatars.com/api/?name=User&background=random" class="w-14 h-14 rounded-full border-2 border-white/20 shadow-lg object-cover bg-slate-800">
+                        <div class="absolute bottom-0 right-0 w-5 h-5 bg-indigo-600 rounded-full border border-slate-900 flex items-center justify-center text-[8px] z-20 shadow-md">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <!-- Hidden input for file upload -->
+                        <input type="file" id="avatarFileInput" class="hidden" accept="image/*">
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <h4 id="userName" class="font-bold text-base tracking-tight leading-tight mb-0.5 truncate text-indigo-600 dark:text-indigo-100">Đang tải...</h4>
+                        <p id="userEmail" class="text-[10px] text-gray-500 dark:text-gray-400 font-medium truncate mb-2">email@example.com</p>
+                        
+                        <!-- Dashboard Stats Inline -->
+                        <div class="flex gap-2">
+                            <div class="flex-1 bg-white/40 dark:bg-white/5 rounded-lg py-1 px-2 border border-indigo-100/30 dark:border-white/5 text-center">
+                                <p class="text-[8px] font-black uppercase text-gray-400 dark:text-gray-500 mb-0.5">Tiến độ</p>
+                                <p id="statTotalDone" class="text-xs font-black text-indigo-600 dark:text-indigo-400">0</p>
+                            </div>
+                            <div class="flex-1 bg-white/40 dark:bg-white/5 rounded-lg py-1 px-2 border border-indigo-100/30 dark:border-white/5 text-center">
+                                <p class="text-[8px] font-black uppercase text-gray-400 dark:text-gray-500 mb-0.5">Đúng</p>
+                                <p id="statAccuracy" class="text-xs font-black text-emerald-600 dark:text-emerald-400">0%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer with Sync & Logout -->
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/5 relative z-10">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                        <span class="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Cloud Active</span>
+                    </div>
+                    <button id="logoutBtnModal" class="px-2 py-1 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg text-[9px] font-bold transition-all border border-red-500/20">
+                        <i class="fas fa-sign-out-alt"></i> Đăng xuất
+                    </button>
+                </div>
+            </div>
             <!-- Mục AI Configuration -->
             <div class="space-y-4">
                 <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs uppercase tracking-widest">
@@ -127,26 +186,26 @@
                         <input type="password" id="apiKeyInput" placeholder="Nhập API Key..." class="w-full border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 focus:ring-2 focus:ring-indigo-400 outline-none transition-all">
                     </div>
                     <div>
-                        <label class="block text-[11px] font-bold text-gray-500 mb-1 ml-1 uppercase">Mô hình xử lý (Ưu tiên)</label>
-                        <div class="flex gap-2">
-                            <select id="aiModelSelect" class="flex-1 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-indigo-400">
-                                <optgroup label="Thế hệ 1.5">
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Mặc định)</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                </optgroup>
-                                <optgroup label="Thế hệ 2.5 (Thử nghiệm)">
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
-                                </optgroup>
-                                <optgroup label="Thế hệ 3.1 (Mới nhất)">
-                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
-                                    <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Preview</option>
-                                </optgroup>
-                            </select>
-                            <button id="sideCheckModelsBtn" class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800" title="Quét model khả dụng">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
+                        <label class="block text-[11px] font-bold text-gray-400 mb-1 ml-1 uppercase tracking-widest">Mô hình xử lý (Ưu tiên)</label>
+                    <div class="flex gap-2 items-center min-w-0">
+                        <select id="aiModelSelect" class="flex-1 min-w-0">
+                            <optgroup label="Thế hệ 1.5">
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Mặc định)</option>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                            </optgroup>
+                            <optgroup label="Thế hệ 2.5 (Thử nghiệm)">
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                            </optgroup>
+                            <optgroup label="Thế hệ 3.1 (Mới nhất)">
+                                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+                                <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Preview</option>
+                            </optgroup>
+                        </select>
+                        <button id="sideCheckModelsBtn" class="flex-shrink-0 w-11 h-11 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800" title="Quét model khả dụng">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -232,9 +291,12 @@
                 </div>
             </div>
 
-            <div class="pt-4">
+            <div class="pt-4 space-y-3">
                 <button id="saveAiSettingsBtn" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition active:scale-95">
                     LƯU TOÀN BỘ CÀI ĐẶT
+                </button>
+                <button id="changePasswordBtn" class="w-full py-3 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 rounded-xl font-bold text-xs border border-gray-200 dark:border-slate-700 hover:bg-gray-200 dark:hover:bg-slate-700 transition">
+                    <i class="fas fa-key mr-2"></i> ĐỔI MẬT KHẨU
                 </button>
             </div>
 
@@ -242,8 +304,6 @@
             <div class="space-y-4">
                 <div class="flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-widest">
                     <i class="fas fa-database"></i> Quản lý dữ liệu
-                </div>
-                <div class="grid grid-cols-2 gap-3">
                     <button id="sideDataCenterBtn" class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-100 dark:border-blue-800/30">
                         TRUNG TÂM DATA
                     </button>
@@ -256,10 +316,25 @@
     </div>
 
     <!-- Lớp phủ mờ (Overlay) cho Side Panel -->
-    <div id="sidePanelOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] hidden transition-opacity duration-300"></div>
+    <div id="sidePanelOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-500"></div>
 
-    <!-- Lộ trình học tập (Side-Panel / Cánh gà) -->
-    <div id="reviewDashboardCard" class="fixed top-0 right-0 h-full w-80 bg-white dark:bg-slate-900 shadow-2xl z-[70] transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-l border-indigo-100 dark:border-indigo-900/50">
+    <!-- Premium Bottom Sheet Select -->
+    <div id="bottomSheet" class="bottom-sheet">
+        <div class="bottom-sheet-content">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+                <h3 id="sheetTitle" class="sheet-title">Chọn mục</h3>
+                <button id="closeSheetBtn" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <input type="text" id="sheetSearch" class="sheet-search" placeholder="Tìm kiếm...">
+            <div id="sheetList" class="sheet-list custom-scrollbar">
+                <!-- Danh sách sẽ được chèn bằng JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Lộ trình học tập (Side-Panel / Cánh gà bên phải - Dạng Floating) -->
+    <div id="reviewDashboardCard" class="fixed top-4 bottom-4 right-4 w-[calc(100%-2rem)] max-w-[340px] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-2xl z-[70] transform translate-x-[110%] transition-transform duration-500 ease-in-out flex flex-col border border-indigo-100/50 dark:border-white/5 rounded-[2rem] overflow-hidden">
         <!-- Header Panel -->
         <div class="p-6 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div>
@@ -286,13 +361,13 @@
                 </div>
                 
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                    <div class="p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-white/5">
                         <span id="reviewLearningCount" class="text-2xl font-black text-amber-500 block">0</span>
-                        <span class="text-[9px] font-bold text-amber-600/70 uppercase">Đang học</span>
+                        <span class="text-[9px] font-bold text-gray-400 uppercase">Đang học</span>
                     </div>
-                    <div class="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                    <div class="p-4 bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-white/5">
                         <span id="reviewMasteredCount" class="text-2xl font-black text-emerald-500 block">0</span>
-                        <span class="text-[9px] font-bold text-emerald-600/70 uppercase">Đã nhớ</span>
+                        <span class="text-[9px] font-bold text-gray-400 uppercase">Đã nhớ</span>
                     </div>
                 </div>
             </div>
@@ -329,7 +404,12 @@
     <div id="setupArea" class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-gray-200">
         <div class="bg-gray-50 p-4 rounded-xl mb-4">
             <div class="flex flex-wrap gap-3 items-end">
-                <div class="flex-1 min-w-[200px]"><label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 ml-1">📚 Bộ câu hỏi đã lưu</label><select id="bankSelect" class="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none"><option value="">-- Chọn bộ câu hỏi --</option></select></div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">📚 Bộ câu hỏi đã lưu</label>
+                    <select id="bankSelect" class="w-full">
+                        <option value="">-- Chọn bộ câu hỏi --</option>
+                    </select>
+                </div>
                 <div class="flex gap-2 w-full md:w-auto">
                     <button id="loadSelectedBankBtn" class="flex-1 md:flex-none bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm"><i class="fas fa-cloud-arrow-down"></i> Tải</button>
                     <button id="deleteBankBtn" class="md:flex-none bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold border border-red-100" title="Xóa bộ đề"><i class="fas fa-trash-can"></i></button>

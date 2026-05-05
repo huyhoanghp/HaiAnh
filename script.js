@@ -60,34 +60,59 @@ const AuthManager = {
             else this.registerWithEmail();
         });
         document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
-        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
-        
-        // Khởi tạo Firebase với Config của người dùng
-        const firebaseConfig = {
-            apiKey: "AIzaSyCkLNCdbRWpWXV9vms9wmSyBT5WS3VdLdM",
-            authDomain: "haianhstudy-99611.firebaseapp.com",
-            projectId: "haianhstudy-99611",
-            storageBucket: "haianhstudy-99611.firebasestorage.app",
-            messagingSenderId: "278856696620",
-            appId: "1:278856696620:web:7e8aa3fb21f952122fe289",
-            measurementId: "G-7TWPWZ58R5"
-        };
-        
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        this.db = firebase.firestore();
+        document.getElementById('btnGuestLogin')?.addEventListener('click', () => this.loginAsGuest());
+        document.getElementById('btnForgotPassword')?.addEventListener('click', () => this.sendPasswordReset());
+        document.getElementById('changePasswordBtn')?.addEventListener('click', () => this.changePassword());
+        document.getElementById('logoutBtnModal')?.addEventListener('click', () => this.logout());
 
-        // Lắng nghe trạng thái đăng nhập
-        firebase.auth().onAuthStateChanged((user) => {
-            if (user) {
-                this.user = user;
-                this.onLoginSuccess();
-            } else {
-                this.user = null;
-                document.getElementById('authOverlay').classList.remove('hidden');
+        // Toggle Password Visibility
+        const togglePassBtn = document.getElementById('togglePasswordBtn');
+        const passInput = document.getElementById('loginPassword');
+        togglePassBtn?.addEventListener('click', () => {
+            const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passInput.setAttribute('type', type);
+            togglePassBtn.innerHTML = type === 'password' ? '<i class="fas fa-eye-slash text-xs"></i>' : '<i class="fas fa-eye text-xs"></i>';
+        });
+        const avatarInput = document.getElementById('avatarFileInput');
+        document.getElementById('changeAvatarBtn')?.addEventListener('click', () => {
+            if (!this.user) return;
+            avatarInput?.click();
+        });
+
+        avatarInput?.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                showLoading(true, "Đang xử lý ảnh...");
+                const base64 = await this.resizeImage(file, 128, 128);
+                await this.user.updateProfile({ photoURL: base64 });
+                showLoading(false);
+                showToast("✅ Đã cập nhật ảnh đại diện!");
+                this.updateUserProfileUI();
+            } catch (err) {
+                showLoading(false);
+                showToast("❌ Lỗi: " + err.message);
+                console.error(err);
             }
         });
+        
+        // Sử dụng tham chiếu toàn cục từ window (khởi tạo trong firebase-config.js)
+        this.db = window.db || null;
+
+        // Lắng nghe trạng thái đăng nhập
+        const authInstance = window.auth || null;
+        if (authInstance) {
+            authInstance.onAuthStateChanged((user) => {
+                if (user) {
+                    this.user = user;
+                    this.onLoginSuccess();
+                } else {
+                    this.user = null;
+                    document.getElementById('authOverlay').classList.remove('hidden');
+                }
+            });
+        }
     },
 
     mode: 'login',
@@ -100,12 +125,12 @@ const AuthManager = {
         
         try {
             showLoading(true, "Đang tạo tài khoản...");
-            await firebase.auth().createUserWithEmailAndPassword(email, pass);
+            await window.auth.createUserWithEmailAndPassword(email, pass);
             showLoading(false);
-            showToast("Đăng ký thành công!");
+            showToast("✅ Đăng ký thành công!");
         } catch (err) {
             showLoading(false);
-            showToast("Lỗi đăng ký: " + err.message);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
         }
     },
 
@@ -116,21 +141,102 @@ const AuthManager = {
         
         try {
             showLoading(true, "Đang xác thực...");
-            await firebase.auth().signInWithEmailAndPassword(email, pass);
+            await window.auth.signInWithEmailAndPassword(email, pass);
             showLoading(false);
         } catch (err) {
             showLoading(false);
-            showToast("Lỗi đăng nhập: " + err.message);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
         }
     },
 
     async loginWithGoogle() {
         try {
+            showLoading(true, "Đang mở Google...");
             const provider = new firebase.auth.GoogleAuthProvider();
-            await firebase.auth().signInWithPopup(provider);
+            await window.auth.signInWithPopup(provider);
+            showLoading(false);
         } catch (err) {
-            showToast("Lỗi Google Auth: " + err.message);
+            showLoading(false);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
         }
+    },
+
+    async loginAsGuest() {
+        try {
+            showLoading(true, "Đang khởi tạo chế độ khách...");
+            await window.auth.signInAnonymously();
+            showLoading(false);
+            showToast("⚡ Bạn đang sử dụng chế độ Khách.");
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ Không thể khởi tạo chế độ khách: " + err.message);
+        }
+    },
+
+    async sendPasswordReset() {
+        const email = document.getElementById('loginEmail').value;
+        if (!email) { showToast("Vui lòng nhập Email để nhận liên kết khôi phục!"); return; }
+        
+        try {
+            showLoading(true, "Đang gửi email...");
+            await window.auth.sendPasswordResetEmail(email);
+            showLoading(false);
+            showToast(`✅ Đã gửi liên kết khôi phục vào Email: ${email}`);
+        } catch (err) {
+            showLoading(false);
+            showToast("❌ " + this.getFriendlyErrorMessage(err));
+        }
+    },
+
+    async changePassword() {
+        if (!this.user || this.user.isAnonymous) {
+            showToast("⚠️ Vui lòng đăng ký tài khoản chính thức để sử dụng tính năng này.");
+            return;
+        }
+        showConfirm("Gửi yêu cầu đổi mật khẩu vào Email của bạn?", async (yes) => {
+            if (!yes) return;
+            try {
+                showLoading(true, "Đang gửi...");
+                await window.auth.sendPasswordResetEmail(this.user.email);
+                showLoading(false);
+                showToast(`✅ Liên kết đổi mật khẩu đã được gửi đến: ${this.user.email}`);
+            } catch (err) {
+                showLoading(false);
+                showToast("❌ " + this.getFriendlyErrorMessage(err));
+            }
+        });
+    },
+
+    getFriendlyErrorMessage(err) {
+        const code = err.code || "";
+        const message = err.message || "";
+        
+        if (code === 'auth/user-not-found' || message.includes('INVALID_LOGIN_CREDENTIALS')) {
+            return "Email hoặc mật khẩu không chính xác.";
+        }
+        if (code === 'auth/wrong-password') {
+            return "Mật khẩu không chính xác.";
+        }
+        if (code === 'auth/email-already-in-use') {
+            return "Email này đã được sử dụng bởi một tài khoản khác.";
+        }
+        if (code === 'auth/invalid-email') {
+            return "Định dạng email không hợp lệ.";
+        }
+        if (code === 'auth/weak-password') {
+            return "Mật khẩu quá yếu (cần tối thiểu 6 ký tự).";
+        }
+        if (code === 'auth/network-request-failed') {
+            return "Lỗi kết nối mạng. Vui lòng kiểm tra lại.";
+        }
+        if (code === 'auth/too-many-requests') {
+            return "Quá nhiều lần thử thất bại. Vui lòng quay lại sau.";
+        }
+        if (code === 'auth/popup-closed-by-user') {
+            return "Cửa sổ đăng nhập đã bị đóng.";
+        }
+        
+        return message.length > 60 ? "Thông tin không hợp lệ, vui lòng thử lại." : message;
     },
 
     onLoginSuccess() {
@@ -141,10 +247,81 @@ const AuthManager = {
         
         // Bắt đầu nạp dữ liệu từ Cloud
         this.syncFromCloud();
+        
+        // Khôi phục tiến độ cục bộ sau khi login
+        restoreProgress();
+
+        // Cập nhật giao diện người dùng
+        this.updateUserProfileUI();
+    },
+
+    updateUserProfileUI() {
+        if (!this.user) return;
+        const nameEl = document.getElementById('userName');
+        const emailEl = document.getElementById('userEmail');
+        const avatarEl = document.getElementById('userAvatar');
+        
+        if (this.user.isAnonymous) {
+            if (nameEl) nameEl.innerText = "Khách hàng (Guest)";
+            if (emailEl) emailEl.innerText = "Chế độ trải nghiệm ẩn danh";
+            if (avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=Guest&background=64748b&color=fff`;
+            document.getElementById('changeAvatarBtn')?.classList.add('hidden');
+        } else {
+            if (nameEl) nameEl.innerText = this.user.displayName || "Học viên Hải Anh";
+            if (emailEl) emailEl.innerText = this.user.email;
+            if (avatarEl) avatarEl.src = this.user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(this.user.email)}&background=random`;
+            document.getElementById('changeAvatarBtn')?.classList.remove('hidden');
+        }
+
+        // Cập nhật Dashboard stats
+        const stats = ReviewManager.getGlobalStats();
+        const totalEl = document.getElementById('statTotalDone');
+        const accuracyEl = document.getElementById('statAccuracy');
+        if (totalEl) totalEl.innerText = stats.total;
+        if (accuracyEl) accuracyEl.innerText = stats.accuracy + "%";
+    },
+
+    resizeImage(file, maxWidth, maxHeight) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7)); // Nén 70%
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     },
 
     async syncFromCloud() {
-        if (!this.user) return;
+        if (!this.user || !this.db) {
+            if (!this.db) console.warn("AuthManager: Firestore DB not initialized. Skipping cloud sync.");
+            return;
+        }
         try {
             console.log("AuthManager: Starting Cloud Sync...");
             
@@ -164,20 +341,57 @@ const AuthManager = {
             // 2. Đồng bộ Progress
             const progressDoc = await this.db.collection('users').doc(this.user.uid).collection('data').doc('exam_progress').get();
             if (progressDoc.exists) {
-                const cloudProgress = progressDoc.data();
-                ProgressManager.applyProgress(cloudProgress);
+                const cloudData = progressDoc.data();
+                if (cloudData && cloudData.data) {
+                    const cloudProgress = JSON.parse(cloudData.data);
+                    ProgressManager.applyProgress(cloudProgress);
+                }
             }
+
+            // 3. Đồng bộ Question Banks
+            const localBanks = await getAllBanks();
+            const banksSnapshot = await this.db.collection('users').doc(this.user.uid).collection('banks').get();
+            const cloudBanksMap = new Map();
             
+            if (!banksSnapshot.empty) {
+                banksSnapshot.docs.forEach(doc => cloudBanksMap.set(doc.id, doc.data()));
+            }
+
+            // A. Pull từ Cloud về Local
+            for (const [id, cloudBank] of cloudBanksMap) {
+                const localBank = await getBankById(cloudBank.id);
+                if (!localBank) {
+                    console.log(`Sync: Pulling bank "${cloudBank.name}" from cloud.`);
+                    await saveBankToLocal(cloudBank);
+                }
+            }
+
+            // B. Push từ Local lên Cloud (nếu Cloud chưa có)
+            for (const localBank of localBanks) {
+                if (!cloudBanksMap.has(String(localBank.id))) {
+                    console.log(`Sync: Pushing bank "${localBank.name}" to cloud.`);
+                    await this.db.collection('users').doc(this.user.uid)
+                        .collection('banks').doc(String(localBank.id)).set(localBank)
+                        .catch(e => console.error("Push Bank Error:", e));
+                }
+            }
+
+            await refreshBankDropdown();
             showToast("✅ Đồng bộ dữ liệu đám mây hoàn tất!");
         } catch (err) {
             console.error("Sync Error:", err);
-            showToast("❌ Lỗi đồng bộ: " + err.message);
+            // Nếu lỗi phân quyền, ta vẫn cho phép dùng bản Local
+            if (err.code === 'permission-denied') {
+                showToast("⚠️ Cloud Sync bị chặn (Lỗi phân quyền). Vui lòng cập nhật Firebase Rules.");
+            } else {
+                showToast("❌ Lỗi đồng bộ: " + err.message);
+            }
         }
     },
 
     async logout() {
         try {
-            await firebase.auth().signOut();
+            await window.auth.signOut();
             location.reload(); // Reload để xóa sạch state
         } catch (err) {
             showToast("Lỗi đăng xuất: " + err.message);
@@ -224,17 +438,32 @@ const ProgressManager = {
             flagged: flagged,
             timeRemaining: timeRemainingSeconds,
             examActive: examActive,
-            timestamp: Date.now()
+            submitted: submitted,
+            lastUpdate: Date.now()
         };
-        
-        // Lưu Local
+
+        // 1. Lưu Local (vẫn dùng JSON string)
         localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-        
-        // Lưu Cloud nếu đã đăng nhập
+
+        // 2. Lưu Cloud nếu đã đăng nhập
+        if (AuthManager.user && AuthManager.db) {
+            // Firestore KHÔNG hỗ trợ mảng lồng nhau (Nested Arrays) trong userAnswers.
+            // Giải pháp: Chuyển toàn bộ progress thành JSON string khi lưu lên Cloud.
+            AuthManager.db.collection('users').doc(AuthManager.user.uid)
+                .collection('data').doc('exam_progress').set({
+                    data: JSON.stringify(progress),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                })
+                .catch(e => console.error("Cloud Progress Save Error:", e));
+        }
+    },
+
+    clear() {
+        localStorage.removeItem(PROGRESS_KEY);
         if (AuthManager.user && AuthManager.db) {
             AuthManager.db.collection('users').doc(AuthManager.user.uid)
-                .collection('data').doc('exam_progress').set(progress)
-                .catch(e => console.error("Cloud Save Error:", e));
+                .collection('data').doc('exam_progress').delete()
+                .catch(e => console.error("Cloud Clear Error:", e));
         }
     }
 };
@@ -358,16 +587,32 @@ const FontSizeManager = {
     }
 };
 
+function toggleOverlay(show) {
+    const overlay = document.getElementById('sidePanelOverlay');
+    if (!overlay) return;
+    if (show) {
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+        overlay.classList.add('opacity-100', 'pointer-events-auto');
+    } else {
+        overlay.classList.remove('opacity-100', 'pointer-events-auto');
+        overlay.classList.add('opacity-0', 'pointer-events-none');
+    }
+}
+
 function toggleReviewPanel(show) {
     const card = document.getElementById('reviewDashboardCard');
-    const overlay = document.getElementById('sidePanelOverlay');
-    if (card && overlay) {
+    const settingsPanel = document.getElementById('settingsSidePanel');
+    if (card) {
         if (show) {
-            card.classList.remove('translate-x-full');
-            overlay.classList.remove('hidden');
+            card.classList.remove('translate-x-[110%]');
+            toggleOverlay(true);
+            // Cập nhật dữ liệu Dashboard khi mở
+            ReviewManager.updateDashboardUI();
         } else {
-            card.classList.add('translate-x-full');
-            overlay.classList.add('hidden');
+            card.classList.add('translate-x-[110%]');
+            if (settingsPanel?.classList.contains('-translate-x-[110%]')) {
+                toggleOverlay(false);
+            }
         }
     }
 }
@@ -379,6 +624,10 @@ const ReviewManager = {
         const saved = localStorage.getItem('haianh_review_stats');
         if (saved) {
             this.stats = JSON.parse(saved);
+            // Fix nếu thiếu _global
+            if (!this.stats._global) this.stats._global = { totalDone: 0, totalCorrect: 0 };
+        } else {
+            this.stats = { _global: { totalDone: 0, totalCorrect: 0 } };
         }
         this.updateDashboardUI();
     },
@@ -405,6 +654,19 @@ const ReviewManager = {
             hash |= 0;
         }
         return "q_" + Math.abs(hash).toString(16);
+    },
+
+    recordAnswer(q, isCorrect) {
+        if (!this.stats._global) this.stats._global = { totalDone: 0, totalCorrect: 0 };
+        this.stats._global.totalDone++;
+        if (isCorrect) this.stats._global.totalCorrect++;
+        this.update(q.text, isCorrect);
+    },
+
+    getGlobalStats() {
+        const g = this.stats._global || { totalDone: 0, totalCorrect: 0 };
+        const accuracy = g.totalDone > 0 ? Math.round((g.totalCorrect / g.totalDone) * 100) : 0;
+        return { total: g.totalDone, accuracy: accuracy };
     },
 
     // quality: 0 (sai) hoặc 5 (đúng) - Đơn giản hóa cho trắc nghiệm
@@ -791,11 +1053,11 @@ function getHighlightedText(text, rawSearch) {
         if (acrIdx !== -1) {
             const startToken = tokens[acrIdx]; const endToken = tokens[acrIdx + acronymTarget.length - 1]; const start = startToken.index; const end = endToken.end;
             const before = escapeHtml(text.substring(0, start)); const matchStr = escapeHtml(text.substring(start, end)); const after = escapeHtml(text.substring(end));
-            return `${before}<mark class="bg-yellow-300 text-black px-0.5 rounded">${matchStr}</mark>${after}`;
+            return `${before}<mark class="bg-yellow-300 text-black px-1 rounded">${matchStr}</mark>${after}`;
         }
     }
     let resultHtml = escapeHtml(text); const rawOriginalTerms = rawSearchTrimmed.split(/\s+/).filter(t => t);
-    if (rawOriginalTerms.length > 0) { const safeTerms = rawOriginalTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); const regex = new RegExp(`(${safeTerms.join('|')})`, 'gi'); resultHtml = resultHtml.replace(regex, '<mark class="bg-yellow-300 text-black px-0.5 rounded">$1</mark>'); }
+    if (rawOriginalTerms.length > 0) { const safeTerms = rawOriginalTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); const regex = new RegExp(`(${safeTerms.join('|')})`, 'gi'); resultHtml = resultHtml.replace(regex, '<mark class="bg-yellow-300 text-black px-1 rounded">$1</mark>'); }
     return resultHtml;
 }
 
@@ -876,6 +1138,236 @@ function generateQuestionHTML(idx, rawSearch = "") {
 }
 
 // ======================== VOICE TUTOR (STT + TTS + GEMINI) ========================
+
+// ---- [1/3] NLMS ECHO CANCELLER ----
+class EchoCanceller {
+    constructor(sampleRate = 16000, filterLength = 512) {
+        this.L = filterLength;
+        this.mu = 0.01;       // step size
+        this.alpha = 1e-8;    // regularization
+        this.lambda = 0.9999; // leakage
+        this.w = new Float32Array(this.L);   // filter weights
+        this.xBuf = new Float32Array(this.L); // reference circular buffer
+        this.xPtr = 0;
+        this._dPow = 0; this._ePow = 0; // for ERLE
+    }
+    processFrame(refSamples, micSamples) {
+        const out = new Float32Array(micSamples.length);
+        for (let n = 0; n < micSamples.length; n++) {
+            this.xBuf[this.xPtr] = refSamples[n] || 0;
+            // Estimate echo: y = w^T * x
+            let y = 0, xPow = 0;
+            for (let k = 0; k < this.L; k++) {
+                const idx = (this.xPtr - k + this.L) % this.L;
+                y += this.w[k] * this.xBuf[idx];
+                xPow += this.xBuf[idx] * this.xBuf[idx];
+            }
+            const e = micSamples[n] - y; // error = clean signal
+            const norm = this.alpha + xPow;
+            const step = this.mu * e / norm;
+            for (let k = 0; k < this.L; k++) {
+                const idx = (this.xPtr - k + this.L) % this.L;
+                this.w[k] = this.lambda * this.w[k] + step * this.xBuf[idx];
+            }
+            this._dPow = 0.99 * this._dPow + 0.01 * micSamples[n] ** 2;
+            this._ePow = 0.99 * this._ePow + 0.01 * e * e;
+            this.xPtr = (this.xPtr + 1) % this.L;
+            out[n] = e;
+        }
+        return out;
+    }
+    getERLE() {
+        if (this._ePow < 1e-12) return 0;
+        return 10 * Math.log10(Math.max(this._dPow, 1e-12) / this._ePow);
+    }
+    reset() { this.w.fill(0); this.xBuf.fill(0); this._dPow = 0; this._ePow = 0; }
+}
+
+// ---- [2/3] VAD MODULE (Energy + Spectral Entropy + Hysteresis) ----
+class VADModule {
+    constructor(audioContext) {
+        this.energyThreshold = -40;   // dB
+        this.entropyThreshold = 3.5;  // bits
+        this.minSpeechMs = 300;
+        this.minSilenceMs = 500;
+        this.smoothFactor = 0.2;
+        this._smoothE = -60;
+        this._noiseHistory = new Array(10).fill(-60);
+        this._isSpeaking = false;
+        this._speechStart = 0;
+        this._silenceStart = 0;
+        // Analyser node
+        this.analyser = null;
+        if (audioContext) {
+            this.analyser = audioContext.createAnalyser();
+            this.analyser.fftSize = 2048;
+            this._freqData = new Uint8Array(this.analyser.frequencyBinCount);
+            this._timeData = new Float32Array(this.analyser.fftSize);
+        }
+    }
+    _calcEnergy(timeData) {
+        let sum = 0;
+        for (let i = 0; i < timeData.length; i++) sum += timeData[i] ** 2;
+        const rms = Math.sqrt(sum / timeData.length);
+        return rms < 1e-10 ? -100 : 20 * Math.log10(rms);
+    }
+    _calcEntropy(freqData) {
+        let total = 0;
+        for (let i = 0; i < freqData.length; i++) total += freqData[i];
+        if (total === 0) return 0;
+        let H = 0;
+        for (let i = 0; i < freqData.length; i++) {
+            const p = freqData[i] / total;
+            if (p > 0) H -= p * Math.log2(p);
+        }
+        return H;
+    }
+    analyzeFrame() {
+        if (!this.analyser) return { isSpeech: false, confidence: 0, energy: -100, entropy: 0 };
+        this.analyser.getByteFrequencyData(this._freqData);
+        this.analyser.getFloatTimeDomainData(this._timeData);
+        const energy = this._calcEnergy(this._timeData);
+        const entropy = this._calcEntropy(this._freqData);
+        // Exponential smoothing
+        this._smoothE = (1 - this.smoothFactor) * this._smoothE + this.smoothFactor * energy;
+        // Adaptive noise floor
+        this._noiseHistory.shift(); this._noiseHistory.push(this._smoothE);
+        const noiseFloor = Math.min(...this._noiseHistory);
+        const adaptThreshold = noiseFloor + 8;
+        const threshold = Math.max(this.energyThreshold, adaptThreshold);
+        const isSpeech = (energy > threshold) && (entropy > this.entropyThreshold);
+        const confidence = isSpeech ? Math.min(1, (energy - threshold) / 20) : 0;
+        return { isSpeech, confidence, energy, entropy };
+    }
+    updateSpeechState(frameResult, now) {
+        if (frameResult.isSpeech) {
+            if (!this._isSpeaking) {
+                if (this._speechStart === 0) this._speechStart = now;
+                if (now - this._speechStart >= this.minSpeechMs) {
+                    this._isSpeaking = true; this._silenceStart = 0;
+                }
+            } else { this._silenceStart = 0; }
+        } else {
+            if (this._isSpeaking) {
+                if (this._silenceStart === 0) this._silenceStart = now;
+                if (now - this._silenceStart >= this.minSilenceMs) {
+                    this._isSpeaking = false; this._speechStart = 0;
+                }
+            } else { this._speechStart = 0; }
+        }
+        return { isSpeaking: this._isSpeaking, isValidSpeech: frameResult.isSpeech && this._isSpeaking };
+    }
+    reset() { this._isSpeaking = false; this._speechStart = 0; this._silenceStart = 0; this._smoothE = -60; }
+}
+
+// ---- [3/3] CONVERSATION MANAGER (Interrupt Handler) ----
+class ConversationManager {
+    constructor() {
+        this.audioContext = null;
+        this.echoCanceller = null;
+        this.vad = null;
+        this.micStream = null;
+        this.processor = null;
+        this.refSignal = new Float32Array(512); // ring buffer for AI audio reference
+        this.refPtr = 0;
+        this.isAISpeaking = false;
+        this.isUserSpeaking = false;
+        this.lastInterruptTime = 0;
+        this.minInterruptInterval = 1200; // ms
+        this._vadTimer = null;
+        this._interruptCb = null;
+        this._userSpeechCb = null;
+        this._active = false;
+    }
+
+    onInterrupt(cb) { this._interruptCb = cb; }
+    onUserSpeech(cb) { this._userSpeechCb = cb; }
+
+    // Gọi khi AI bắt đầu phát âm
+    startAISpeaking() { this.isAISpeaking = true; }
+    // Gọi khi AI xong / bị dừng
+    stopAISpeaking() { this.isAISpeaking = false; }
+
+    // Cung cấp mẫu âm thanh AI để NLMS làm reference
+    feedReference(samples) {
+        for (let i = 0; i < samples.length; i++) {
+            this.refSignal[this.refPtr] = samples[i];
+            this.refPtr = (this.refPtr + 1) % this.refSignal.length;
+        }
+    }
+
+    async init() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            this.echoCanceller = new EchoCanceller(16000, 512);
+            this.vad = new VADModule(this.audioContext);
+
+            const constraints = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
+            this.micStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const source = this.audioContext.createMediaStreamSource(this.micStream);
+
+            // Kết nối analyser cho VAD
+            source.connect(this.vad.analyser);
+
+            // Bắt đầu vòng lặp VAD polling
+            this._active = true;
+            this._runVADLoop();
+            console.log('[ConvManager] NLMS+VAD+Interrupt system initialized.');
+            return true;
+        } catch (err) {
+            console.error('[ConvManager] Init failed:', err);
+            return false;
+        }
+    }
+
+    _runVADLoop() {
+        if (!this._active) return;
+        const now = performance.now();
+        const frameResult = this.vad.analyzeFrame();
+        const stateResult = this.vad.updateSpeechState(frameResult, now);
+        const wasUserSpeaking = this.isUserSpeaking;
+        this.isUserSpeaking = stateResult.isSpeaking;
+
+        // Callback trạng thái giọng nói người dùng
+        if (this._userSpeechCb) {
+            if (!wasUserSpeaking && this.isUserSpeaking) this._userSpeechCb({ type: 'speech_started', confidence: frameResult.confidence });
+            else if (wasUserSpeaking && !this.isUserSpeaking) this._userSpeechCb({ type: 'speech_ended' });
+        }
+
+        // Interrupt Handler: AI đang nói + User đang nói + đủ khoảng cách thời gian
+        if (this.isAISpeaking && this.isUserSpeaking) {
+            const timeSinceLast = now - this.lastInterruptTime;
+            if (timeSinceLast > this.minInterruptInterval && frameResult.confidence > 0.25) {
+                this.lastInterruptTime = now;
+                const erle = this.echoCanceller ? this.echoCanceller.getERLE() : 0;
+                console.log(`[ConvManager] Interrupt! ERLE=${erle.toFixed(1)}dB conf=${frameResult.confidence.toFixed(2)}`);
+                if (this._interruptCb) this._interruptCb({ type: 'user_interrupt', confidence: frameResult.confidence, echoReduction: erle, timestamp: now });
+            }
+        }
+        // Poll mỗi 80ms (~12.5fps, đủ nhạy mà không nặng CPU)
+        this._vadTimer = setTimeout(() => this._runVADLoop(), 80);
+    }
+
+    getStats() {
+        return {
+            echoReduction: this.echoCanceller ? this.echoCanceller.getERLE() : 0,
+            isAISpeaking: this.isAISpeaking,
+            isUserSpeaking: this.isUserSpeaking
+        };
+    }
+
+    async stop() {
+        this._active = false;
+        if (this._vadTimer) clearTimeout(this._vadTimer);
+        if (this.micStream) { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; }
+        if (this.audioContext) { try { await this.audioContext.close(); } catch(e){} this.audioContext = null; }
+        if (this.echoCanceller) { this.echoCanceller.reset(); }
+        if (this.vad) { this.vad.reset(); }
+        console.log('[ConvManager] Stopped.');
+    }
+}
+
+
 class SpeechToTextManager {
     constructor() {
         this.recognition = null;
@@ -919,11 +1411,6 @@ class SpeechToTextManager {
             this.isListening = false; 
             this.isStarting = false;
             if (this.onEnd) this.onEnd();
-            
-            // Tự động khởi động lại bền bỉ trong chế độ LIVE
-            if (window.VoiceTutor && VoiceTutor.isLiveMode && VoiceTutor.isCalling) {
-                this.safeStart();
-            }
         };
 
         recognition.onerror = (e) => {
@@ -979,6 +1466,7 @@ class SpeechToTextManager {
 
 const VoiceTutor = {
     stt: new SpeechToTextManager(),
+    convManager: null,
     activeQIdx: null,
     isCalling: false,
     isLiveMode: false,
@@ -988,13 +1476,36 @@ const VoiceTutor = {
     isProcessing: false,
     chatHistory: [],
     currentRequestId: 0,
+    currentAiSpeechText: '',
+    manualStop: false,
 
     init() {
         this.stt.onEnd = () => {
-            if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking && !this.isProcessing) {
+            if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking && !this.isProcessing && !this.manualStop) {
                 this.stt.start();
             }
         };
+    },
+
+    async _initConvManager() {
+        if (this.convManager) { await this.convManager.stop(); }
+        this.convManager = new ConversationManager();
+        this.convManager.onInterrupt((data) => {
+            if (!this.isCalling || !this.isLiveMode) return;
+            console.log('[VoiceTutor] NLMS Interrupt triggered, conf=', data.confidence.toFixed(2));
+            // Ngắt AI ngay lập tức
+            SpeechManager.stop();
+            this.convManager.stopAISpeaking();
+            this.isProcessing = false;
+            this.updateUI('listening', 'Tôi đang nghe bạn...');
+        });
+        this.convManager.onUserSpeech((data) => {
+            if (data.type === 'speech_started' && !this.isProcessing && !window.speechSynthesis.speaking) {
+                console.log('[VoiceTutor] VAD: user speech detected');
+            }
+        });
+        const ok = await this.convManager.init();
+        if (!ok) console.warn('[VoiceTutor] ConvManager init failed, falling back to text-based mode.');
     },
 
     async startCall(qIdx) {
@@ -1004,21 +1515,23 @@ const VoiceTutor = {
         this.isCalling = true;
         this.activeQIdx = qIdx;
         this.lastTranscript = '';
-        this.chatHistory = []; // Reset lịch sử khi bắt đầu cuộc gọi mới
+        this.chatHistory = [];
+        this.currentAiSpeechText = '';
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         
-        SpeechManager.stop(); // Ngắt các âm thanh đang phát khác
-        this.stt.stop();      // Ngắt Microphone cũ nếu có
+        SpeechManager.stop();
+        this.stt.stop();
+
+        // Khởi tạo NLMS+VAD+Interrupt pipeline (chạy ngầm song song STT)
+        this._initConvManager().catch(err => console.warn('[VoiceTutor] ConvManager init error:', err));
         
         const modal = document.getElementById('voiceCallModal');
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
-        // Cưỡng bức hiện khung chat ngay lập tức
         const chatInput = document.getElementById('voiceInputContainer');
         if (chatInput) chatInput.classList.remove('hidden');
         
-        // 2. Gán sự kiện nút Copy & Chat Text
         const copyBtn = document.getElementById('copyVoiceTranscriptBtn');
         if (copyBtn) {
             copyBtn.onclick = () => {
@@ -1034,20 +1547,20 @@ const VoiceTutor = {
             textInput.onkeypress = (e) => { if (e.key === 'Enter') this.handleTextSubmit(); };
         }
 
-        // Luôn xóa nội dung cũ
         document.getElementById('voiceTranscript').innerText = "Đang kết nối...";
         document.getElementById('voiceTextInput').value = "";
         
-        // Hiện ô nhập liệu văn bản ngay khi bắt đầu cuộc gọi
         const inputContainer = document.getElementById('voiceInputContainer');
         inputContainer?.classList.remove('hidden');
 
         const greeting = 'Tôi đang nghe đây. Bạn cần tôi hỗ trợ gì về câu hỏi số ' + (qIdx + 1) + '?';
         this.updateUI('speaking', greeting);
+        this.currentAiSpeechText = greeting;
         
-        // Chờ 1 chút để UI modal hiện ra mượt mà rồi mới nói
         setTimeout(() => {
+            if (this.convManager) this.convManager.startAISpeaking();
             SpeechManager.speak(greeting, 'voice-tutor', () => {
+                if (this.convManager) this.convManager.stopAISpeaking();
                 if (this.isCalling) this.startListening();
             });
         }, 300);
@@ -1060,6 +1573,7 @@ const VoiceTutor = {
         const avatar = document.getElementById('aiAvatar');
         const wave = document.getElementById('aiWaveform');
         const pulse = document.getElementById('userMicPulse');
+        const micBtn = document.getElementById('toggleMicBtn');
 
         if (text) {
             transcript.innerText = text;
@@ -1080,14 +1594,26 @@ const VoiceTutor = {
             badge.innerText = 'Đang lắng nghe...';
             badge.classList.add('text-indigo-500');
             if (pulse) pulse.classList.remove('hidden');
-        } else if (state === 'speaking') {
-            badge.innerText = 'Gia sư đang nói...';
-            badge.classList.add('voice-status-speaking');
-            if (wave) wave.classList.remove('hidden');
-            if (avatar) avatar.classList.add('speaking');
-        } else if (state === 'thinking') {
-            badge.innerText = 'Đang suy nghĩ...';
-            badge.classList.add('voice-status-thinking');
+            if (micBtn && !this.isLiveMode) {
+                micBtn.innerHTML = '<i class="fas fa-stop"></i>';
+                micBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-500/30');
+                micBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30');
+            }
+        } else {
+            if (state === 'speaking') {
+                badge.innerText = 'Gia sư đang nói...';
+                badge.classList.add('voice-status-speaking');
+                if (wave) wave.classList.remove('hidden');
+                if (avatar) avatar.classList.add('speaking');
+            } else if (state === 'thinking') {
+                badge.innerText = 'Đang suy nghĩ...';
+                badge.classList.add('voice-status-thinking');
+            }
+            if (micBtn && !this.isLiveMode) {
+                micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                micBtn.classList.remove('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30');
+                micBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-500/30');
+            }
         }
     },
 
@@ -1128,36 +1654,33 @@ const VoiceTutor = {
     startListening() {
         if (!this.isCalling) return;
         
-        console.log("VoiceTutor: startListening() called.");
         if (!SpeechToTextManager.isSupported()) {
             this.updateUI('speaking', 'Trình duyệt không hỗ trợ nhận diện giọng nói.');
             return;
         }
 
-        // Hiện khung chat khi người dùng tương tác với mic
         const chatInput = document.getElementById('voiceInputContainer');
         if (chatInput) chatInput.classList.remove('hidden');
 
         this.updateUI('listening', this.isLiveMode ? 'Đang lắng nghe rảnh tay...' : 'Hãy nói đi, tôi đang nghe...');
         
+        this.manualStop = false;
         this.stt.onResult = (text, isFinal) => {
-            if (!text || this.isProcessing) return; // Bỏ qua nếu đang xử lý câu trả lời cũ
+            if (!text || this.isProcessing) return;
+
+            // Nếu NLMS+VAD ConvManager đang hoạt động và AI đang nói:
+            // chỉ chấp nhận transcript nếu đây là barge-in hợp lệ
+            // (convManager.onInterrupt đã xử lý việc dừng AI — STT chỉ lấy nội dung)
+            if (this.isLiveMode && window.speechSynthesis.speaking) {
+                // Kiểm tra nhanh: nếu convManager chưa báo interrupt thì bỏ qua interim
+                // để tránh xử lý kép. Chỉ chấp nhận khi isFinal (người dùng dứt câu)
+                if (!isFinal) return;
+            }
+
             this.updateUI('listening', text); 
             this.lastTranscript = text;
 
-            if (this.isLiveMode) {
-                // BARGE-IN: Nếu AI đang nói, cho phép ngắt lời
-                if (window.speechSynthesis.speaking) {
-                    const timeSpeaking = Date.now() - this.aiSpeakStartTime;
-                    if (timeSpeaking > 500 && text.trim().split(/\s+/).length >= 2) {
-                        console.log("Barge-in: Interrupting AI...");
-                        SpeechManager.stop();
-                        this.aiSpeakStartTime = 0; 
-                        this.updateUI('listening', text);
-                    }
-                    return; 
-                }
-
+            if (this.isLiveMode && !window.speechSynthesis.speaking) {
                 if (this.silenceTimer) clearTimeout(this.silenceTimer);
                 this.silenceTimer = setTimeout(() => {
                     if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking && !this.isProcessing) {
@@ -1171,8 +1694,9 @@ const VoiceTutor = {
     },
 
     stopListeningAndSubmit() {
-        if (!this.isCalling || this.isLiveMode) return;
+        if (!this.isCalling) return;
         
+        this.manualStop = true;
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         const finalContent = this.lastTranscript;
         
@@ -1181,6 +1705,8 @@ const VoiceTutor = {
             this.askGemini(finalContent);
         } else {
             this.updateUI('listening', 'Bạn chưa nói gì cả...');
+            // Tự động quay lại UI chờ
+            setTimeout(() => { if (!this.isProcessing) this.updateUI('thinking', ''); }, 1000);
         }
         this.lastTranscript = '';
     },
@@ -1261,6 +1787,9 @@ const VoiceTutor = {
             const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
             const response = data.candidates[0].content.parts[0].text;
             
+            // LƯU LẠI LỜI AI ĐANG NÓI ĐỂ KHỬ TIẾNG VỌNG
+            this.currentAiSpeechText = response;
+            
             // KIỂM TRA: Nếu có yêu cầu mới hơn (Barge-in), bỏ qua kết quả này
             if (requestId !== this.currentRequestId || !this.isCalling) {
                 return;
@@ -1276,13 +1805,13 @@ const VoiceTutor = {
 
             this.updateUI('speaking', response);
             this.aiSpeakStartTime = Date.now();
+            if (this.convManager) this.convManager.startAISpeaking();
             
             SpeechManager.speak(response, 'voice-tutor', () => {
-                // Chỉ giải phóng và restart nếu đây vẫn là yêu cầu cuối cùng
                 if (requestId === this.currentRequestId) {
                     if (this.safetyTimer) clearTimeout(this.safetyTimer);
+                    if (this.convManager) this.convManager.stopAISpeaking();
                     this.isProcessing = false;
-                    console.log("VoiceTutor: AI finished speaking.");
                     if (this.isCalling && this.isLiveMode) {
                         this.lastTranscript = '';
                         this.startListening();
@@ -1298,7 +1827,6 @@ const VoiceTutor = {
     },
 
     endCall() {
-        console.log("VoiceTutor: Ending call and performing hard reset...");
         this.isCalling = false;
         
         // 1. Dọn dẹp STT
@@ -1308,10 +1836,14 @@ const VoiceTutor = {
         // 2. Dọn dẹp TTS
         SpeechManager.stop();
         
-        // 3. Dọn dẹp các bộ đệm nội bộ
-        if (this.silenceTimer) {
-            clearTimeout(this.silenceTimer);
-            this.silenceTimer = null;
+        // 3. Dọn dẹp timers
+        if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
+        if (this.safetyTimer) { clearTimeout(this.safetyTimer); this.safetyTimer = null; }
+        
+        // 4. Dọn dẹp NLMS+VAD ConversationManager
+        if (this.convManager) {
+            this.convManager.stop().catch(e => console.warn('[VoiceTutor] ConvManager stop error:', e));
+            this.convManager = null;
         }
         
         // 5. UI Reset
@@ -1323,6 +1855,7 @@ const VoiceTutor = {
         this.lastTranscript = '';
         this.aiSpeakStartTime = 0;
         this.isProcessing = false;
+        this.currentAiSpeechText = '';
     }
 };
 
@@ -1361,9 +1894,74 @@ async function openDB() {
     });
 }
 async function getAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
-async function saveBank(name, questions) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).add({ name, questions, createdAt: new Date().toISOString() }); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); }); }
-async function deleteBank(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).delete(id); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
-async function clearAllBanks() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readwrite'); const req = tx.objectStore(STORE_BANKS).clear(); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
+
+// Hàm lưu cục bộ (dùng khi sync từ cloud)
+async function saveBankToLocal(bank) {
+    await openDB();
+    return new Promise((res, rej) => {
+        const tx = db.transaction(STORE_BANKS, 'readwrite');
+        const req = tx.objectStore(STORE_BANKS).put(bank);
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => rej(req.error);
+    });
+}
+
+async function saveBank(name, questions) {
+    const bank = { 
+        name, 
+        questions, 
+        createdAt: new Date().toISOString(),
+        id: Date.now() // Dùng timestamp làm ID thủ công để đồng bộ dễ hơn
+    };
+    
+    // 1. Lưu Local
+    await saveBankToLocal(bank);
+
+    // 2. Lưu Cloud nếu đã login
+    if (AuthManager.user && AuthManager.db) {
+        AuthManager.db.collection('users').doc(AuthManager.user.uid)
+            .collection('banks').doc(String(bank.id)).set(bank)
+            .catch(e => console.error("Bank Cloud Sync Error:", e));
+    }
+    return bank.id;
+}
+
+async function deleteBank(id) {
+    await openDB();
+    // 1. Xóa Local
+    const p1 = new Promise((res, rej) => {
+        const tx = db.transaction(STORE_BANKS, 'readwrite');
+        const req = tx.objectStore(STORE_BANKS).delete(id);
+        req.onsuccess = () => res();
+        req.onerror = () => rej(req.error);
+    });
+
+    // 2. Xóa Cloud
+    if (AuthManager.user && AuthManager.db) {
+        AuthManager.db.collection('users').doc(AuthManager.user.uid)
+            .collection('banks').doc(String(id)).delete()
+            .catch(e => console.error("Bank Cloud Delete Error:", e));
+    }
+    return p1;
+}
+
+async function clearAllBanks() { 
+    await openDB(); 
+    if (AuthManager.user && AuthManager.db) {
+        // Xóa toàn bộ collection banks trên cloud (cẩn thận)
+        const snapshot = await AuthManager.db.collection('users').doc(AuthManager.user.uid).collection('banks').get();
+        const batch = AuthManager.db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit().catch(e => console.error("Clear Cloud Banks Error:", e));
+    }
+
+    return new Promise((res, rej) => { 
+        const tx = db.transaction(STORE_BANKS, 'readwrite'); 
+        const req = tx.objectStore(STORE_BANKS).clear(); 
+        req.onsuccess = () => res(); 
+        req.onerror = () => rej(req.error); 
+    }); 
+}
 async function getBankById(id) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_BANKS, 'readonly'); const req = tx.objectStore(STORE_BANKS).get(id); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
 async function saveHistory(bankId, bankName, totalQuestions, correctCount, wrongDetails, wrongQuestionsText) { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readwrite'); const req = tx.objectStore(STORE_HISTORY).add({ bankId, bankName, totalQuestions, correctCount, wrongCount: totalQuestions - correctCount, wrongDetails, wrongQuestionsText, date: new Date().toISOString(), timestamp: Date.now() }); req.onsuccess = () => res(); req.onerror = () => rej(req.error); }); }
 async function getAllHistory() { await openDB(); return new Promise((res, rej) => { const tx = db.transaction(STORE_HISTORY, 'readonly'); const req = tx.objectStore(STORE_HISTORY).getAll(); req.onsuccess = e => res(e.target.result); req.onerror = () => rej(req.error); }); }
@@ -2148,7 +2746,7 @@ function startTimer(seconds) {
         if (!examActive || isPaused || submitted) return; // Kiểm tra isPaused cực kỳ nghiêm ngặt
         if (timeRemainingSeconds <= 1) { 
             stopTimer(); 
-            if (!submitted && currentQuestions.length) submitExam(); 
+            if (!submitted && currentQuestions.length) submitExam(true); // true = skip confirm
         } else { 
             timeRemainingSeconds--; 
             updateTimerDisplay(); 
@@ -2333,10 +2931,10 @@ async function startReviewSession() {
 }
 function resetCurrentExam() { if (!currentQuestions.length) showToast("Chưa có bài."); else if (!examActive) showToast("Bài đã nộp."); else { showToast("Đang làm mới bài thi..."); stopTimer(); userAnswers = Array(currentQuestions.length).fill().map(() => []); flagged = Array(currentQuestions.length).fill(false); submitted = false; examActive = true; isPaused = false; const btn = document.getElementById('pauseResumeBtn'); if (btn) btn.innerHTML = '<i class="fas fa-pause"></i> Tạm dừng'; updateProgress(); initLazyRender(); if (document.getElementById('resultPanel')) document.getElementById('resultPanel').classList.add('hidden'); startTimer((parseInt(document.getElementById('timeMinutes')?.value) || 30) * 60); saveProgressToLocal(); } }
 
-function submitExam() {
+function submitExam(skipConfirm = false) {
     if (!currentQuestions.length || submitted) return;
-    showConfirm("Bạn có chắc muốn nộp bài?", async (yes) => {
-        if (!yes) return;
+    
+    const doSubmit = async () => {
         try {
             stopTimer(); examActive = false; submitted = true; const evalRes = evaluateAll(); scoreDetails = evalRes.details; const percent = (evalRes.correctCount / evalRes.total * 100).toFixed(1);
             const resultContent = document.getElementById('resultContent'); if (resultContent) resultContent.innerHTML = `<div class="bg-gray-50 p-4 rounded-lg"><p class="text-lg font-semibold text-gray-800">✅ Điểm số: ${evalRes.correctCount}/${evalRes.total} (${percent}%)</p><p class="text-sm text-gray-700 mt-1">Đúng: ${evalRes.correctCount} | Sai: ${evalRes.total - evalRes.correctCount}</p><div class="w-full bg-gray-200 rounded-full h-2 mt-3"><div class="bg-green-500 h-2 rounded-full" style="width:${percent}%"></div></div></div><div class="mt-3 text-sm italic text-gray-600">💡 Kết quả chi tiết bên dưới. Tận dụng "Gia sư AI" để phân tích lỗi sai nhé!</div>`;
@@ -2345,20 +2943,40 @@ function submitExam() {
             const searchInput = document.getElementById('searchInput'); if (searchInput) searchInput.value = '';
             const clearSearchBtn = document.getElementById('clearSearchBtn'); if (clearSearchBtn) clearSearchBtn.classList.add('hidden');
             initLazyRender(() => { while (displayedCount < Math.min(50, filteredIndices.length)) renderNextBatch(''); setTimeout(() => resultPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); });
-            const wrongIndices = [], wrongTexts = []; for (let i = 0; i < currentQuestions.length; i++) { if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { wrongIndices.push(i); wrongTexts.push(currentQuestions[i].text); } }
-            if (currentBankId) { await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); }
+            
+            const wrongIndices = [], wrongTexts = []; 
+            for (let i = 0; i < currentQuestions.length; i++) { 
+                if (userAnswers[i]?.length > 0 && !scoreDetails[i].correct) { 
+                    wrongIndices.push(i); 
+                    wrongTexts.push(currentQuestions[i].text); 
+                } 
+            }
+            
+            if (currentBankId) { 
+                await saveHistory(currentBankId, currentBankName, currentQuestions.length, evalRes.correctCount, wrongIndices, wrongTexts); 
+            }
 
             // GIAI ĐOẠN 2: Cập nhật Lộ trình ôn tập (SM-2)
             scoreDetails.forEach((detail, i) => {
-                if (userAnswers[i]?.length > 0) { // Chỉ cập nhật nếu người dùng có làm câu đó
-                    ReviewManager.update(currentQuestions[i].text, detail.correct);
+                if (userAnswers[i]?.length > 0) {
+                    ReviewManager.recordAnswer(currentQuestions[i], detail.correct);
                 }
             });
+            
             const bottomActions = document.getElementById('bottomActions'); if (bottomActions) bottomActions.classList.add('hidden');
             renderQuestionGrid();
-            showToast("Đã lưu kết quả."); clearProgress();
+            showToast("Đã lưu kết quả."); 
+            ProgressManager.clear();
         } catch (err) { console.error(err); showToast("Lỗi nộp bài!"); }
-    });
+    };
+
+    if (skipConfirm) {
+        doSubmit();
+    } else {
+        showConfirm("Bạn có chắc muốn nộp bài?", async (yes) => {
+            if (yes) await doSubmit();
+        });
+    }
 }
 
 function cancelExam() {
@@ -2368,7 +2986,7 @@ function cancelExam() {
         stopTimer();
         examActive = false;
         submitted = false;
-        clearProgress();
+        ProgressManager.clear();
         
         document.getElementById('progressArea')?.classList.add('hidden');
         document.getElementById('setupArea')?.classList.remove('hidden');
@@ -2457,16 +3075,19 @@ function attachGlobalEvents() { const container = document.getElementById('quest
 
 async function restoreProgress() {
     try {
-        const saved = loadProgress(); if (!saved || !saved.bankId) return false;
+        const savedRaw = localStorage.getItem(PROGRESS_KEY);
+        if (!savedRaw) return false;
+        const saved = JSON.parse(savedRaw);
+        if (!saved || !saved.bankId) return false;
         
         // Hiển thị thông báo hỏi người dùng
         showConfirm(`♻️ Phát hiện bài tập đang làm dở từ phiên trước. Bạn có muốn tiếp tục làm bài "${saved.bankName}" không?`, async (yes) => {
             if (!yes) {
-                clearProgress();
+                ProgressManager.clear();
                 return;
             }
 
-            const bank = await getBankById(saved.bankId); if (!bank) { clearProgress(); return; }
+            const bank = await getBankById(saved.bankId); if (!bank) { ProgressManager.clear(); return; }
             masterQuestions = bank.questions; currentBankId = bank.id; currentBankName = bank.name;
             const currentBankInfo = document.getElementById('currentBankInfo'); if (currentBankInfo) currentBankInfo.innerText = `Đã tải: ${bank.name} (${bank.questions.length} câu)`;
             
@@ -2512,15 +3133,13 @@ async function restoreProgress() {
             }
         });
         return true;
-    } catch (e) { clearProgress(); return false; }
+    } catch (e) { ProgressManager.clear(); return false; }
 }
 
 async function initGIA() {
     try {
         await openDB(); await refreshBankDropdown(); initDarkMode(); updateApiKeyBadge();
-        FontSizeManager.init();
         discoverModels(); // Khởi chạy ngầm khám phá model mới
-        const restored = await restoreProgress(); if (!restored) { const banks = await getAllBanks(); if (banks.length) await loadBankById(banks[0].id); }
         const searchInput = document.getElementById('searchInput'); const clearSearchBtn = document.getElementById('clearSearchBtn');
         searchInput?.addEventListener('input', () => { if (searchInput.value.length > 0) clearSearchBtn?.classList.remove('hidden'); else clearSearchBtn?.classList.add('hidden'); if (searchDebounceTimer) clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => { initLazyRender(); }, 300); });
         clearSearchBtn?.addEventListener('click', () => { if (searchInput) searchInput.value = ''; clearSearchBtn.classList.add('hidden'); initLazyRender(); });
@@ -2589,7 +3208,7 @@ async function initGIA() {
                 if (!yes) return;
                 await clearAllBanks();
                 await clearAllHistory();
-                clearProgress();
+                ProgressManager.clear();
                 location.reload();
             });
         });
@@ -2611,10 +3230,13 @@ async function initGIA() {
 
         const toggleSettings = (show) => {
             if (show) {
-                settingsSidePanel?.classList.remove('-translate-x-full');
-                overlay?.classList.remove('hidden');
+                settingsSidePanel?.classList.remove('-translate-x-[110%]');
+                toggleOverlay(true);
                 showSettingsBadge(false);
                 
+                // 0. Cập nhật Profile & Dashboard
+                AuthManager.updateUserProfileUI();
+
                 // 1. Nạp Cấu hình AI
                 if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
                 if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('last_working_model') || 'gemini-1.5-flash';
@@ -2647,27 +3269,19 @@ async function initGIA() {
                 if (sizeVal) sizeVal.innerText = savedScale + '%';
 
             } else {
-                settingsSidePanel?.classList.add('-translate-x-full');
-                if (reviewSidePanel?.classList.contains('translate-x-full')) overlay?.classList.add('hidden');
-            }
-        };
-
-        const toggleReview = (show) => {
-            if (show) {
-                reviewSidePanel?.classList.remove('translate-x-full');
-                overlay?.classList.remove('hidden');
-                ReviewManager.updateDashboardUI();
-            } else {
-                reviewSidePanel?.classList.add('translate-x-full');
-                if (settingsSidePanel?.classList.contains('-translate-x-full')) overlay?.classList.add('hidden');
+                settingsSidePanel?.classList.add('-translate-x-[110%]');
+                // Chỉ đóng overlay nếu panel review cũng đang đóng
+                if (reviewSidePanel?.classList.contains('translate-x-[110%]')) {
+                    toggleOverlay(false);
+                }
             }
         };
 
         document.getElementById('settingsToggleBtn')?.addEventListener('click', () => toggleSettings(true));
         document.getElementById('closeSettingsPanel')?.addEventListener('click', () => toggleSettings(false));
-        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReview(true));
-        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReview(false));
-        overlay?.addEventListener('click', () => { toggleSettings(false); toggleReview(false); });
+        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
+        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
+        overlay?.addEventListener('click', () => { toggleSettings(false); toggleReviewPanel(false); });
 
         // Logic Lưu toàn bộ cài đặt
         document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => {
@@ -3291,9 +3905,7 @@ Tiếng Việt.`;
             } catch (error) { showLoading(false); showToast("❌ Lỗi tạo đề: " + error.message, 7000); aiGenModal?.classList.remove('hidden'); aiGenModal?.classList.add('flex'); }
         });
 
-        // Nút nộp bài Header
-        const submitBtnHeader = document.getElementById('submitBtnHeader');
-        if (submitBtnHeader) submitBtnHeader.onclick = submitExam;
+        // Nút nộp bài Header (Đã gán trong initGIA phần trên)
 
         // Đóng gợi ý AI và Thông báo (Toast) khi chạm vào vùng trống
         document.addEventListener('pointerdown', (e) => {
@@ -3341,27 +3953,18 @@ Tiếng Việt.`;
         
         const micBtn = document.getElementById('toggleMicBtn');
         if (micBtn) {
-            // Nhấn xuống: Bắt đầu nghe
-            micBtn.addEventListener('pointerdown', (e) => {
+            // Tap-to-Talk / Tap-to-Stop
+            micBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (VoiceTutor.isCalling) {
-                    micBtn.classList.add('mic-active-pulse');
-                    SpeechManager.stop();
-                    VoiceTutor.startListening();
+                    if (VoiceTutor.stt.isListening) {
+                        VoiceTutor.stopListeningAndSubmit();
+                    } else {
+                        SpeechManager.stop();
+                        VoiceTutor.startListening();
+                    }
                 }
             });
-
-            // Nhả ra: Dừng và Gửi (PTT)
-            const stopMic = (e) => {
-                e.preventDefault();
-                if (VoiceTutor.isCalling) {
-                    micBtn.classList.remove('mic-active-pulse');
-                    VoiceTutor.stopListeningAndSubmit();
-                }
-            };
-            micBtn.addEventListener('pointerup', stopMic);
-            micBtn.addEventListener('pointerleave', stopMic);
-            micBtn.addEventListener('pointercancel', stopMic);
         }
 
         document.getElementById('liveModeToggle')?.addEventListener('click', () => VoiceTutor.toggleLiveMode());
@@ -3386,9 +3989,6 @@ Tiếng Việt.`;
         document.getElementById('unlockMicBtn')?.addEventListener('click', () => VoiceTutor.unlockMicrophone());
 
 
-        document.getElementById('toggleReviewCardBtn')?.addEventListener('click', () => toggleReviewPanel(true));
-        document.getElementById('closeReviewPanel')?.addEventListener('click', () => toggleReviewPanel(false));
-        document.getElementById('sidePanelOverlay')?.addEventListener('click', () => toggleReviewPanel(false));
 
         document.getElementById('startReviewBtn')?.addEventListener('click', startReviewSession);
 
@@ -3410,11 +4010,113 @@ window.addEventListener('DOMContentLoaded', () => {
     FontSizeManager.init();
     ReviewManager.init();
     AuthManager.init(); // Kích hoạt hệ thống đăng nhập
-    ProgressManager.load();
     
     // Khởi tạo các sự kiện Global và UI
     initGIA();
+    BottomSheetManager.init(); // Kích hoạt UI chọn cao cấp
 });
+
+// ======================== PREMIUM BOTTOM SHEET MANAGER ========================
+const BottomSheetManager = {
+    currentSelect: null,
+    options: [],
+    init() {
+        const sheet = document.getElementById('bottomSheet');
+        const searchInput = document.getElementById('sheetSearch');
+        const closeBtn = document.getElementById('closeSheetBtn');
+
+        sheet?.addEventListener('click', (e) => {
+            if (e.target === sheet) this.close();
+        });
+        closeBtn?.addEventListener('click', () => this.close());
+
+        searchInput?.addEventListener('input', (e) => {
+            this.renderList(e.target.value);
+        });
+
+        // Tự động gán cho các select quan trọng
+        this.bindSelect('bankSelect', 'Bộ câu hỏi');
+        this.bindSelect('aiModelSelect', 'Mô hình AI');
+    },
+    bindSelect(id, title) {
+        const select = document.getElementById(id);
+        if (!select) return;
+
+        const handleOpen = (e) => {
+            if (window.innerWidth < 768) {
+                e.preventDefault();
+                this.open(select, title);
+                select.blur();
+            }
+        };
+        
+        select.addEventListener('mousedown', handleOpen);
+        select.addEventListener('touchstart', (e) => {
+            if (window.innerWidth < 768) {
+                e.preventDefault();
+                handleOpen(e);
+            }
+        }, {passive: false});
+    },
+    open(select, title) {
+        this.currentSelect = select;
+        const sheet = document.getElementById('bottomSheet');
+        const titleEl = document.getElementById('sheetTitle');
+        const searchInput = document.getElementById('sheetSearch');
+        
+        if (titleEl) titleEl.innerText = title;
+        if (searchInput) {
+            searchInput.value = '';
+            // Ẩn search nếu options ít (vd: model selection ban đầu)
+            searchInput.style.display = select.options.length > 8 ? 'block' : 'none';
+        }
+        
+        this.options = Array.from(select.options).map(opt => ({
+            value: opt.value,
+            text: opt.innerText,
+            selected: opt.value === select.value
+        })).filter(opt => opt.value !== "");
+
+        this.renderList();
+        sheet?.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        if (searchInput.style.display !== 'none') setTimeout(() => searchInput.focus(), 300);
+    },
+    close() {
+        const sheet = document.getElementById('bottomSheet');
+        sheet?.classList.remove('active');
+        document.body.style.overflow = '';
+    },
+    renderList(filter = '') {
+        const listEl = document.getElementById('sheetList');
+        if (!listEl) return;
+        
+        listEl.innerHTML = '';
+        const filtered = this.options.filter(opt => 
+            opt.text.toLowerCase().includes(filter.toLowerCase())
+        );
+        
+        if (filtered.length === 0) {
+            listEl.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm italic">Không tìm thấy kết quả...</div>';
+            return;
+        }
+
+        filtered.forEach(opt => {
+            const div = document.createElement('div');
+            div.className = `sheet-item ${opt.selected ? 'selected' : ''}`;
+            div.innerHTML = `
+                <span class="flex-1">${opt.text}</span>
+                ${opt.selected ? '<i class="fas fa-check"></i>' : ''}
+            `;
+            div.onclick = () => {
+                this.currentSelect.value = opt.value;
+                this.currentSelect.dispatchEvent(new Event('change'));
+                this.close();
+            };
+            listEl.appendChild(div);
+        });
+    }
+};
 
 // ======================== PWA SERVICE WORKER REGISTRATION ========================
 if ('serviceWorker' in navigator) {
