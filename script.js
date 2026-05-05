@@ -61,22 +61,28 @@ const AuthManager = {
         });
         document.getElementById('btnGoogleLogin')?.addEventListener('click', () => this.loginWithGoogle());
         document.getElementById('logoutBtnModal')?.addEventListener('click', () => this.logout());
+        const avatarInput = document.getElementById('avatarFileInput');
         document.getElementById('changeAvatarBtn')?.addEventListener('click', () => {
             if (!this.user) return;
-            showPrompt("Nhập URL ảnh đại diện mới:", this.user.photoURL || "", async (url) => {
-                if (url !== null && url !== this.user.photoURL) {
-                    try {
-                        showLoading(true, "Đang cập nhật hồ sơ...");
-                        await this.user.updateProfile({ photoURL: url });
-                        showLoading(false);
-                        showToast("✅ Đã cập nhật ảnh đại diện!");
-                        this.updateUserProfileUI();
-                    } catch (e) {
-                        showLoading(false);
-                        showToast("❌ Lỗi: " + e.message);
-                    }
-                }
-            });
+            avatarInput?.click();
+        });
+
+        avatarInput?.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                showLoading(true, "Đang xử lý ảnh...");
+                const base64 = await this.resizeImage(file, 128, 128);
+                await this.user.updateProfile({ photoURL: base64 });
+                showLoading(false);
+                showToast("✅ Đã cập nhật ảnh đại diện!");
+                this.updateUserProfileUI();
+            } catch (err) {
+                showLoading(false);
+                showToast("❌ Lỗi: " + err.message);
+                console.error(err);
+            }
         });
         
         // Sử dụng tham chiếu toàn cục từ window (khởi tạo trong firebase-config.js)
@@ -172,6 +178,42 @@ const AuthManager = {
         const accuracyEl = document.getElementById('statAccuracy');
         if (totalEl) totalEl.innerText = stats.total;
         if (accuracyEl) accuracyEl.innerText = stats.accuracy + "%";
+    },
+
+    resizeImage(file, maxWidth, maxHeight) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7)); // Nén 70%
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     },
 
     async syncFromCloud() {

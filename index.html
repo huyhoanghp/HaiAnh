@@ -119,53 +119,48 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-            <!-- User Profile Card (Modern Glass Design) -->
-            <div id="userProfileCard" class="bg-white/5 dark:bg-slate-900/50 border border-white/10 rounded-[2rem] p-6 text-white mb-6 shadow-2xl relative group overflow-hidden backdrop-blur-xl">
-                <!-- Gradient Glow Background -->
-                <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-700"></div>
+            <!-- User Profile Card (Horizontal Modern Design) -->
+            <div id="userProfileCard" class="bg-white/5 dark:bg-slate-900/50 border border-white/10 rounded-2xl p-4 text-white mb-6 shadow-xl relative group overflow-hidden backdrop-blur-xl">
+                <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700"></div>
                 
-                <div class="flex flex-col items-center gap-4 relative z-10">
-                    <!-- Avatar Section with Customization -->
-                    <div class="relative group/avatar cursor-pointer" id="changeAvatarBtn">
-                        <div class="absolute inset-0 bg-indigo-500 rounded-full blur-md opacity-20 group-hover/avatar:opacity-40 transition-opacity"></div>
-                        <img id="userAvatar" src="https://ui-avatars.com/api/?name=User&background=random" class="w-20 h-20 rounded-full border-2 border-white/20 shadow-xl relative z-10 object-cover bg-slate-800">
-                        <div class="absolute bottom-0 right-0 w-7 h-7 bg-indigo-600 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] z-20 shadow-lg group-hover/avatar:scale-110 transition-transform">
+                <div class="flex items-center gap-4 relative z-10">
+                    <!-- Avatar Section -->
+                    <div class="relative group/avatar cursor-pointer flex-shrink-0" id="changeAvatarBtn">
+                        <img id="userAvatar" src="https://ui-avatars.com/api/?name=User&background=random" class="w-14 h-14 rounded-full border-2 border-white/20 shadow-lg object-cover bg-slate-800">
+                        <div class="absolute bottom-0 right-0 w-5 h-5 bg-indigo-600 rounded-full border border-slate-900 flex items-center justify-center text-[8px] z-20 shadow-md">
                             <i class="fas fa-camera"></i>
                         </div>
+                        <!-- Hidden input for file upload -->
+                        <input type="file" id="avatarFileInput" class="hidden" accept="image/*">
                     </div>
 
-                    <div class="text-center">
-                        <h4 id="userName" class="font-black text-xl tracking-tight leading-tight mb-0.5">Đang tải...</h4>
-                        <p id="userEmail" class="text-[11px] text-gray-400 font-medium">email@example.com</p>
-                    </div>
-
-                    <!-- Dashboard Stats Grid -->
-                    <div class="w-full grid grid-cols-2 gap-3 mt-2">
-                        <div class="bg-white/5 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
-                            <span class="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-1">Tiến độ</span>
-                            <div class="flex items-baseline gap-1">
-                                <span id="statTotalDone" class="text-xl font-black text-indigo-400">0</span>
-                                <span class="text-[10px] text-gray-500">câu</span>
+                    <div class="flex-1 min-w-0">
+                        <h4 id="userName" class="font-bold text-base tracking-tight leading-tight mb-0.5 truncate text-indigo-100">Đang tải...</h4>
+                        <p id="userEmail" class="text-[10px] text-gray-400 font-medium truncate mb-2">email@example.com</p>
+                        
+                        <!-- Dashboard Stats Inline -->
+                        <div class="flex gap-2">
+                            <div class="flex-1 bg-white/5 rounded-lg py-1 px-2 border border-white/5 text-center">
+                                <p class="text-[8px] font-black uppercase text-gray-500 mb-0.5">Tiến độ</p>
+                                <p id="statTotalDone" class="text-xs font-black text-indigo-400">0</p>
                             </div>
-                        </div>
-                        <div class="bg-white/5 rounded-2xl p-3 border border-white/5 flex flex-col items-center justify-center text-center">
-                            <span class="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-1">Chính xác</span>
-                            <div class="flex items-baseline gap-1">
-                                <span id="statAccuracy" class="text-xl font-black text-emerald-400">0%</span>
+                            <div class="flex-1 bg-white/5 rounded-lg py-1 px-2 border border-white/5 text-center">
+                                <p class="text-[8px] font-black uppercase text-gray-500 mb-0.5">Đúng</p>
+                                <p id="statAccuracy" class="text-xs font-black text-emerald-400">0%</p>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Footer Actions -->
-                    <div class="w-full flex items-center justify-between mt-2 pt-4 border-t border-white/5">
-                        <div class="flex items-center gap-2">
-                            <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
-                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Cloud Active</span>
-                        </div>
-                        <button id="logoutBtnModal" class="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[10px] font-bold transition-all border border-red-500/20">
-                            <i class="fas fa-sign-out-alt"></i> Đăng xuất
-                        </button>
+                <!-- Footer with Sync & Logout -->
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/5 relative z-10">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                        <span class="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Cloud Active</span>
                     </div>
+                    <button id="logoutBtnModal" class="px-2 py-1 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg text-[9px] font-bold transition-all border border-red-500/20">
+                        <i class="fas fa-sign-out-alt"></i> Đăng xuất
+                    </button>
                 </div>
             </div>
             <!-- Mục AI Configuration -->
@@ -180,25 +175,25 @@
                     </div>
                     <div>
                         <label class="block text-[11px] font-bold text-gray-500 mb-1 ml-1 uppercase">Mô hình xử lý (Ưu tiên)</label>
-                        <div class="flex gap-2">
-                            <select id="aiModelSelect" class="flex-1 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-indigo-400">
-                                <optgroup label="Thế hệ 1.5">
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Mặc định)</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                </optgroup>
-                                <optgroup label="Thế hệ 2.5 (Thử nghiệm)">
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
-                                </optgroup>
-                                <optgroup label="Thế hệ 3.1 (Mới nhất)">
-                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
-                                    <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Preview</option>
-                                </optgroup>
-                            </select>
-                            <button id="sideCheckModelsBtn" class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800" title="Quét model khả dụng">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
+                    <div class="flex gap-2 items-center min-w-0">
+                        <select id="aiModelSelect" class="flex-1 min-w-0 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm bg-gray-50 dark:bg-slate-950 outline-none focus:ring-2 focus:ring-indigo-400">
+                            <optgroup label="Thế hệ 1.5">
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Mặc định)</option>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                            </optgroup>
+                            <optgroup label="Thế hệ 2.5 (Thử nghiệm)">
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                            </optgroup>
+                            <optgroup label="Thế hệ 3.1 (Mới nhất)">
+                                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+                                <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Preview</option>
+                            </optgroup>
+                        </select>
+                        <button id="sideCheckModelsBtn" class="flex-shrink-0 w-11 h-11 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800" title="Quét model khả dụng">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
                     </div>
                 </div>
             </div>
