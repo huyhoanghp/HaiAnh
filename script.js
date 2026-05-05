@@ -1139,243 +1139,41 @@ function generateQuestionHTML(idx, rawSearch = "") {
 
 // ======================== VOICE TUTOR (STT + TTS + GEMINI) ========================
 
-// ---- [1/3] NLMS ECHO CANCELLER ----
-class EchoCanceller {
-    constructor(sampleRate = 16000, filterLength = 512) {
-        this.L = filterLength;
-        this.mu = 0.01;       // step size
-        this.alpha = 1e-8;    // regularization
-        this.lambda = 0.9999; // leakage
-        this.w = new Float32Array(this.L);   // filter weights
-        this.xBuf = new Float32Array(this.L); // reference circular buffer
-        this.xPtr = 0;
-        this._dPow = 0; this._ePow = 0; // for ERLE
-    }
-    processFrame(refSamples, micSamples) {
-        const out = new Float32Array(micSamples.length);
-        for (let n = 0; n < micSamples.length; n++) {
-            this.xBuf[this.xPtr] = refSamples[n] || 0;
-            // Estimate echo: y = w^T * x
-            let y = 0, xPow = 0;
-            for (let k = 0; k < this.L; k++) {
-                const idx = (this.xPtr - k + this.L) % this.L;
-                y += this.w[k] * this.xBuf[idx];
-                xPow += this.xBuf[idx] * this.xBuf[idx];
-            }
-            const e = micSamples[n] - y; // error = clean signal
-            const norm = this.alpha + xPow;
-            const step = this.mu * e / norm;
-            for (let k = 0; k < this.L; k++) {
-                const idx = (this.xPtr - k + this.L) % this.L;
-                this.w[k] = this.lambda * this.w[k] + step * this.xBuf[idx];
-            }
-            this._dPow = 0.99 * this._dPow + 0.01 * micSamples[n] ** 2;
-            this._ePow = 0.99 * this._ePow + 0.01 * e * e;
-            this.xPtr = (this.xPtr + 1) % this.L;
-            out[n] = e;
+// ---- [1/2] SEMANTIC ECHO CANCELLER V2 ----
+// Giải pháp STT-based an toàn cho Mobile, tránh xung đột phần cứng khi dùng getUserMedia song song SpeechRecognition
+const SemanticEchoCanceller = {
+    normalize(text) {
+        if (!text) return "";
+        return text.toLowerCase()
+            .replace(/[.,!?;"']/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+    },
+
+    isEcho(transcript, aiText) {
+        const transNorm = this.normalize(transcript);
+        const aiNorm = this.normalize(aiText);
+        
+        if (transNorm.length < 3) return true; // Quá ngắn, xem như nhiễu
+        
+        if (aiNorm.includes(transNorm)) return true; // Nằm gọn trong lời AI -> Echo
+
+        const transWords = transNorm.split(" ");
+        const aiWords = aiNorm.split(" ");
+        
+        let matchCount = 0;
+        for (let word of transWords) {
+            if (aiWords.includes(word)) matchCount++;
         }
-        return out;
+        
+        // Trùng lặp trên 50% từ -> Khả năng cao là tiếng vọng
+        const overlap = matchCount / transWords.length;
+        if (overlap > 0.5) return true;
+
+        return false;
     }
-    getERLE() {
-        if (this._ePow < 1e-12) return 0;
-        return 10 * Math.log10(Math.max(this._dPow, 1e-12) / this._ePow);
-    }
-    reset() { this.w.fill(0); this.xBuf.fill(0); this._dPow = 0; this._ePow = 0; }
-}
+};
 
-// ---- [2/3] VAD MODULE (Energy + Spectral Entropy + Hysteresis) ----
-class VADModule {
-    constructor(audioContext) {
-        this.energyThreshold = -40;   // dB
-        this.entropyThreshold = 3.5;  // bits
-        this.minSpeechMs = 300;
-        this.minSilenceMs = 500;
-        this.smoothFactor = 0.2;
-        this._smoothE = -60;
-        this._noiseHistory = new Array(10).fill(-60);
-        this._isSpeaking = false;
-        this._speechStart = 0;
-        this._silenceStart = 0;
-        // Analyser node
-        this.analyser = null;
-        if (audioContext) {
-            this.analyser = audioContext.createAnalyser();
-            this.analyser.fftSize = 2048;
-            this._freqData = new Uint8Array(this.analyser.frequencyBinCount);
-            this._timeData = new Float32Array(this.analyser.fftSize);
-        }
-    }
-    _calcEnergy(timeData) {
-        let sum = 0;
-        for (let i = 0; i < timeData.length; i++) sum += timeData[i] ** 2;
-        const rms = Math.sqrt(sum / timeData.length);
-        return rms < 1e-10 ? -100 : 20 * Math.log10(rms);
-    }
-    _calcEntropy(freqData) {
-        let total = 0;
-        for (let i = 0; i < freqData.length; i++) total += freqData[i];
-        if (total === 0) return 0;
-        let H = 0;
-        for (let i = 0; i < freqData.length; i++) {
-            const p = freqData[i] / total;
-            if (p > 0) H -= p * Math.log2(p);
-        }
-        return H;
-    }
-    analyzeFrame() {
-        if (!this.analyser) return { isSpeech: false, confidence: 0, energy: -100, entropy: 0 };
-        this.analyser.getByteFrequencyData(this._freqData);
-        this.analyser.getFloatTimeDomainData(this._timeData);
-        const energy = this._calcEnergy(this._timeData);
-        const entropy = this._calcEntropy(this._freqData);
-        // Exponential smoothing
-        this._smoothE = (1 - this.smoothFactor) * this._smoothE + this.smoothFactor * energy;
-        // Adaptive noise floor
-        this._noiseHistory.shift(); this._noiseHistory.push(this._smoothE);
-        const noiseFloor = Math.min(...this._noiseHistory);
-        const adaptThreshold = noiseFloor + 8;
-        const threshold = Math.max(this.energyThreshold, adaptThreshold);
-        const isSpeech = (energy > threshold) && (entropy > this.entropyThreshold);
-        const confidence = isSpeech ? Math.min(1, (energy - threshold) / 20) : 0;
-        return { isSpeech, confidence, energy, entropy };
-    }
-    updateSpeechState(frameResult, now) {
-        if (frameResult.isSpeech) {
-            if (!this._isSpeaking) {
-                if (this._speechStart === 0) this._speechStart = now;
-                if (now - this._speechStart >= this.minSpeechMs) {
-                    this._isSpeaking = true; this._silenceStart = 0;
-                }
-            } else { this._silenceStart = 0; }
-        } else {
-            if (this._isSpeaking) {
-                if (this._silenceStart === 0) this._silenceStart = now;
-                if (now - this._silenceStart >= this.minSilenceMs) {
-                    this._isSpeaking = false; this._speechStart = 0;
-                }
-            } else { this._speechStart = 0; }
-        }
-        return { isSpeaking: this._isSpeaking, isValidSpeech: frameResult.isSpeech && this._isSpeaking };
-    }
-    reset() { this._isSpeaking = false; this._speechStart = 0; this._silenceStart = 0; this._smoothE = -60; }
-}
-
-// ---- [3/3] CONVERSATION MANAGER (Interrupt Handler) ----
-class ConversationManager {
-    constructor() {
-        this.audioContext = null;
-        this.echoCanceller = null;
-        this.vad = null;
-        this.micStream = null;
-        this.processor = null;
-        this.refSignal = new Float32Array(512); // ring buffer for AI audio reference
-        this.refPtr = 0;
-        this.isAISpeaking = false;
-        this.isUserSpeaking = false;
-        this.lastInterruptTime = 0;
-        this.minInterruptInterval = 1200; // ms
-        this._vadTimer = null;
-        this._interruptCb = null;
-        this._userSpeechCb = null;
-        this._active = false;
-    }
-
-    onInterrupt(cb) { this._interruptCb = cb; }
-    onUserSpeech(cb) { this._userSpeechCb = cb; }
-
-    // Gọi khi AI bắt đầu phát âm
-    startAISpeaking() { this.isAISpeaking = true; }
-    // Gọi khi AI xong / bị dừng
-    stopAISpeaking() { this.isAISpeaking = false; }
-
-    // Cung cấp mẫu âm thanh AI để NLMS làm reference
-    feedReference(samples) {
-        for (let i = 0; i < samples.length; i++) {
-            this.refSignal[this.refPtr] = samples[i];
-            this.refPtr = (this.refPtr + 1) % this.refSignal.length;
-        }
-    }
-
-    async init(sharedStream) {
-        try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            this.echoCanceller = new EchoCanceller(16000, 512);
-            this.vad = new VADModule(this.audioContext);
-
-            // Dùng stream được chia sẻ, không tự mở getUserMedia() tránh xung đột mic
-            if (sharedStream) {
-                this.micStream = sharedStream; 
-                this._ownsStream = true; // SỬA: Bắt buộc sở hữu để tự giải phóng
-            } else {
-                // Fallback: chỉ dùng khi không có stream sẵn
-                const constraints = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
-                this.micStream = await navigator.mediaDevices.getUserMedia(constraints);
-                this._ownsStream = true;
-            }
-
-            const source = this.audioContext.createMediaStreamSource(this.micStream);
-            source.connect(this.vad.analyser);
-
-            this._active = true;
-            this._runVADLoop();
-            console.log('[ConvManager] NLMS+VAD+Interrupt system initialized.');
-            return true;
-        } catch (err) {
-            console.error('[ConvManager] Init failed:', err);
-            return false;
-        }
-    }
-
-    _runVADLoop() {
-        if (!this._active) return;
-        const now = performance.now();
-        const frameResult = this.vad.analyzeFrame();
-        const stateResult = this.vad.updateSpeechState(frameResult, now);
-        const wasUserSpeaking = this.isUserSpeaking;
-        this.isUserSpeaking = stateResult.isSpeaking;
-
-        // Callback trạng thái giọng nói người dùng
-        if (this._userSpeechCb) {
-            if (!wasUserSpeaking && this.isUserSpeaking) this._userSpeechCb({ type: 'speech_started', confidence: frameResult.confidence });
-            else if (wasUserSpeaking && !this.isUserSpeaking) this._userSpeechCb({ type: 'speech_ended' });
-        }
-
-        // Interrupt Handler: AI đang nói + User đang nói + đủ khoảng cách thời gian
-        if (this.isAISpeaking && this.isUserSpeaking) {
-            const timeSinceLast = now - this.lastInterruptTime;
-            if (timeSinceLast > this.minInterruptInterval && frameResult.confidence > 0.25) {
-                this.lastInterruptTime = now;
-                const erle = this.echoCanceller ? this.echoCanceller.getERLE() : 0;
-                console.log(`[ConvManager] Interrupt! ERLE=${erle.toFixed(1)}dB conf=${frameResult.confidence.toFixed(2)}`);
-                if (this._interruptCb) this._interruptCb({ type: 'user_interrupt', confidence: frameResult.confidence, echoReduction: erle, timestamp: now });
-            }
-        }
-        // Poll mỗi 80ms (~12.5fps, đủ nhạy mà không nặng CPU)
-        this._vadTimer = setTimeout(() => this._runVADLoop(), 80);
-    }
-
-    getStats() {
-        return {
-            echoReduction: this.echoCanceller ? this.echoCanceller.getERLE() : 0,
-            isAISpeaking: this.isAISpeaking,
-            isUserSpeaking: this.isUserSpeaking
-        };
-    }
-
-    async stop() {
-        this._active = false;
-        if (this._vadTimer) clearTimeout(this._vadTimer);
-        // Chỉ stop stream nếu chúng ta sở hữu nó
-        if (this.micStream && this._ownsStream) {
-            this.micStream.getTracks().forEach(t => t.stop());
-        }
-        this.micStream = null;
-        if (this.audioContext) { try { await this.audioContext.close(); } catch(e){} this.audioContext = null; }
-        if (this.echoCanceller) { this.echoCanceller.reset(); }
-        if (this.vad) { this.vad.reset(); }
-        console.log('[ConvManager] Stopped.');
-    }
-}
 
 
 class SpeechToTextManager {
@@ -1480,7 +1278,6 @@ class SpeechToTextManager {
 
 const VoiceTutor = {
     stt: new SpeechToTextManager(),
-    convManager: null,
     activeQIdx: null,
     isCalling: false,
     isLiveMode: false,
@@ -1495,55 +1292,12 @@ const VoiceTutor = {
 
     init() {
         this.stt.onEnd = () => {
-            if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking && !this.isProcessing && !this.manualStop) {
+            if (this.isCalling && this.isLiveMode && !this.isProcessing && !this.manualStop) {
                 this.stt.start();
             }
         };
     },
 
-    async _initConvManager() {
-        if (this.convManager) { await this.convManager.stop(); }
-        const newManager = new ConversationManager();
-        this.convManager = newManager;
-        
-        newManager.onInterrupt((data) => {
-            if (!this.isCalling || !this.isLiveMode) return;
-            console.log('[VoiceTutor] NLMS Interrupt triggered, conf=', data.confidence.toFixed(2));
-            SpeechManager.stop();
-            newManager.stopAISpeaking();
-            this.isProcessing = false;
-            this.updateUI('listening', 'Tôi đang nghe bạn...');
-            
-            // QUAN TRỌNG: Khởi động lại STT để bắt ngay lời người dùng
-            this.lastTranscript = '';
-            this.startListening();
-        });
-
-        // Lấy mic stream từ getUserMedia() dùng chung.
-        let sharedStream = null;
-        try {
-            sharedStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-            });
-        } catch(e) {
-            console.warn('[VoiceTutor] Could not get shared stream for VAD, running without NLMS.');
-        }
-        
-        // RACE CONDITION FIX: Nếu người dùng đã tắt Live Mode trong lúc đang await getUserMedia
-        if (this.convManager !== newManager || !this.isLiveMode || !this.isCalling) {
-            if (sharedStream) {
-                sharedStream.getTracks().forEach(t => t.stop());
-            }
-            console.log('[VoiceTutor] Init aborted due to state change.');
-            return;
-        }
-        
-        const ok = await newManager.init(sharedStream);
-        if (!ok) {
-            console.warn('[VoiceTutor] ConvManager init failed, STT still works normally.');
-            if (this.convManager === newManager) this.convManager = null;
-        }
-    },
 
     async startCall(qIdx) {
         if (!localStorage.getItem('gemini_api_key')) { showToast("Vui lòng cài đặt API Key để dùng tính năng này."); return; }
@@ -1594,9 +1348,7 @@ const VoiceTutor = {
         this.currentAiSpeechText = greeting;
         
         setTimeout(() => {
-            if (this.convManager) this.convManager.startAISpeaking();
             SpeechManager.speak(greeting, 'voice-tutor', () => {
-                if (this.convManager) this.convManager.stopAISpeaking();
                 if (this.isCalling) this.startListening();
             });
         }, 300);
@@ -1704,26 +1456,37 @@ const VoiceTutor = {
         this.stt.onResult = (text, isFinal) => {
             if (!text) return;
 
-            // Luôn cập nhật transcript để người dùng thấy ngay (cả interim)
             this.updateUI('listening', text);
             this.lastTranscript = text;
 
             if (this.isLiveMode) {
-                // Live Mode: nếu AI đang nói, chỉ cho phép final transcript qua
-                // (ConvManager xử lý interrupt qua VAD; STT chỉ thu nội dung)
                 if (window.speechSynthesis.speaking) {
-                    if (!isFinal) return; // Bỏ qua interim khi AI đang nói
+                    // AI ĐANG NÓI: Lọc tiếng vọng bằng Semantic V2
+                    const isEcho = SemanticEchoCanceller.isEcho(text, this.currentAiSpeechText);
+                    if (!isEcho) {
+                        console.log("[VoiceTutor] Barge-in detected (Semantic):", text);
+                        // Ngắt lời AI
+                        SpeechManager.stop();
+                        this.isProcessing = false;
+                        this.lastTranscript = ''; // Reset để thu âm lại lời người dùng thật sự
+                        this.stt.stop();
+                        
+                        // Khởi động lại ngay để bắt phần tiếp theo của người dùng
+                        setTimeout(() => { if (this.isCalling && this.isLiveMode) this.stt.start(); }, 100);
+                    }
+                    return;
                 }
-                if (!this.isProcessing && !window.speechSynthesis.speaking) {
+                
+                // AI KHÔNG NÓI
+                if (!this.isProcessing) {
                     if (this.silenceTimer) clearTimeout(this.silenceTimer);
                     this.silenceTimer = setTimeout(() => {
                         if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking && !this.isProcessing) {
                             this.askGemini(this.lastTranscript);
                         }
-                    }, 1100);
+                    }, 1200);
                 }
             }
-            // Tap-to-Talk (không phải Live): transcript được lưu, stopListeningAndSubmit sẽ gửi
         };
         
         this.stt.start();
@@ -1757,29 +1520,14 @@ const VoiceTutor = {
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-indigo-500 status-dot"></div> LIVE MODE: ON';
             showToast("🚀 Đã bật Chế độ Live (Tự động đàm thoại)");
             
-            // Khởi tạo NLMS+VAD (getUserMedia) TRƯỚC để chiếm quyền phần cứng
-            this._initConvManager().then(() => {
-                // Đợi 500ms cho getUserMedia hoàn tất khởi động thiết bị, rồi bật STT
-                setTimeout(() => {
-                    if (this.isCalling && this.isLiveMode) {
-                        this.startListening();
-                    }
-                }, 500);
-            }).catch(err => {
-                console.warn('[VoiceTutor] ConvManager init error:', err);
-                this.startListening(); // Vẫn bật STT làm fallback
-            });
+            // Bật luôn STT với độc quyền phần cứng
+            this.startListening();
             
         } else {
             btn.classList.remove('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF';
             showToast("✋ Đã tắt Chế độ Live. Chạm Mic để nói.");
             this.stt.stop();
-            // Dọn dẹp ConvManager giải phóng mic
-            if (this.convManager) {
-                this.convManager.stop().catch(e => {});
-                this.convManager = null;
-            }
         }
     },
 
@@ -1859,12 +1607,10 @@ const VoiceTutor = {
 
             this.updateUI('speaking', response);
             this.aiSpeakStartTime = Date.now();
-            if (this.convManager) this.convManager.startAISpeaking();
             
             SpeechManager.speak(response, 'voice-tutor', () => {
                 if (requestId === this.currentRequestId) {
                     if (this.safetyTimer) clearTimeout(this.safetyTimer);
-                    if (this.convManager) this.convManager.stopAISpeaking();
                     this.isProcessing = false;
                     if (this.isCalling && this.isLiveMode) {
                         this.lastTranscript = '';
@@ -1894,13 +1640,7 @@ const VoiceTutor = {
         if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
         if (this.safetyTimer) { clearTimeout(this.safetyTimer); this.safetyTimer = null; }
         
-        // 4. Dọn dẹp NLMS+VAD ConversationManager
-        if (this.convManager) {
-            this.convManager.stop().catch(e => console.warn('[VoiceTutor] ConvManager stop error:', e));
-            this.convManager = null;
-        }
-        
-        // 5. UI Reset
+        // 4. UI Reset
         const modal = document.getElementById('voiceCallModal');
         modal.classList.add('hidden');
         modal.classList.remove('flex');
