@@ -1537,8 +1537,7 @@ const VoiceTutor = {
         SpeechManager.stop();
         this.stt.stop();
 
-        // Khởi tạo NLMS+VAD+Interrupt pipeline (chạy ngầm song song STT)
-        this._initConvManager().catch(err => console.warn('[VoiceTutor] ConvManager init error:', err));
+        // NLMS+VAD sẽ chỉ được khởi tạo khi bật Live Mode (tránh xung đột mic)
         
         const modal = document.getElementById('voiceCallModal');
         modal.classList.remove('hidden');
@@ -1735,12 +1734,24 @@ const VoiceTutor = {
             btn.classList.add('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-indigo-500 status-dot"></div> LIVE MODE: ON';
             showToast("🚀 Đã bật Chế độ Live (Tự động đàm thoại)");
+            // Bật STT trước để SpeechRecognition chiếm mic ưu tiên
             this.startListening();
+            // Khởi tạo NLMS+VAD sau 1.5 giây (chờ STT ổn định, tránh xung đột mic)
+            setTimeout(() => {
+                if (this.isCalling && this.isLiveMode) {
+                    this._initConvManager().catch(err => console.warn('[VoiceTutor] ConvManager init error:', err));
+                }
+            }, 1500);
         } else {
             btn.classList.remove('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF';
-            showToast("✋ Đã tắt Chế độ Live. Hãy nhấn giữ Mic để nói.");
+            showToast("✋ Đã tắt Chế độ Live. Chạm Mic để nói.");
             this.stt.stop();
+            // Dọn dẹp ConvManager giải phóng mic
+            if (this.convManager) {
+                this.convManager.stop().catch(e => {});
+                this.convManager = null;
+            }
         }
     },
 
