@@ -1507,18 +1507,23 @@ const VoiceTutor = {
             this.convManager.stopAISpeaking();
             this.isProcessing = false;
             this.updateUI('listening', 'Tôi đang nghe bạn...');
+            
+            // QUAN TRỌNG: Khởi động lại STT để bắt ngay lời người dùng
+            this.lastTranscript = '';
+            this.startListening();
         });
-        // Lấy mic stream từ getUserMedia() dùng chung — đối với một số trình duyệt,
-        // SpeechRecognition và AudioContext có thể cùng tồn tại nếu cùng stream.
-        // Nếu getUserMedia() lần này thất bại, fallback vào null (VAD sẽ không hoạt động nhưng STT vẫn ok).
+
+        // Lấy mic stream từ getUserMedia() dùng chung.
+        // Tắt echoCancellation mặc định của trình duyệt để VAD và NLMS hoạt động chính xác
         let sharedStream = null;
         try {
             sharedStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
             });
         } catch(e) {
             console.warn('[VoiceTutor] Could not get shared stream for VAD, running without NLMS.');
         }
+        
         const ok = await this.convManager.init(sharedStream);
         if (!ok) console.warn('[VoiceTutor] ConvManager init failed, STT still works normally.');
     },
@@ -1734,14 +1739,20 @@ const VoiceTutor = {
             btn.classList.add('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-indigo-500 status-dot"></div> LIVE MODE: ON';
             showToast("🚀 Đã bật Chế độ Live (Tự động đàm thoại)");
-            // Bật STT trước để SpeechRecognition chiếm mic ưu tiên
-            this.startListening();
-            // Khởi tạo NLMS+VAD sau 1.5 giây (chờ STT ổn định, tránh xung đột mic)
-            setTimeout(() => {
-                if (this.isCalling && this.isLiveMode) {
-                    this._initConvManager().catch(err => console.warn('[VoiceTutor] ConvManager init error:', err));
-                }
-            }, 1500);
+            
+            // Khởi tạo NLMS+VAD (getUserMedia) TRƯỚC để chiếm quyền phần cứng
+            this._initConvManager().then(() => {
+                // Đợi 500ms cho getUserMedia hoàn tất khởi động thiết bị, rồi bật STT
+                setTimeout(() => {
+                    if (this.isCalling && this.isLiveMode) {
+                        this.startListening();
+                    }
+                }, 500);
+            }).catch(err => {
+                console.warn('[VoiceTutor] ConvManager init error:', err);
+                this.startListening(); // Vẫn bật STT làm fallback
+            });
+            
         } else {
             btn.classList.remove('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF';
