@@ -1181,11 +1181,6 @@ class SpeechToTextManager {
             this.isListening = false; 
             this.isStarting = false;
             if (this.onEnd) this.onEnd();
-            
-            // Tự động khởi động lại bền bỉ trong chế độ LIVE
-            if (window.VoiceTutor && VoiceTutor.isLiveMode && VoiceTutor.isCalling) {
-                this.safeStart();
-            }
         };
 
         recognition.onerror = (e) => {
@@ -1253,7 +1248,9 @@ const VoiceTutor = {
 
     init() {
         this.stt.onEnd = () => {
-            if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking && !this.isProcessing) {
+            // Chỉ tự động bật lại mic nếu không phải do người dùng chủ động tắt
+            // và đang ở chế độ LiveMode
+            if (this.isCalling && this.isLiveMode && !window.speechSynthesis.speaking && !this.isProcessing && !this.manualStop) {
                 this.stt.start();
             }
         };
@@ -1322,6 +1319,7 @@ const VoiceTutor = {
         const avatar = document.getElementById('aiAvatar');
         const wave = document.getElementById('aiWaveform');
         const pulse = document.getElementById('userMicPulse');
+        const micBtn = document.getElementById('toggleMicBtn');
 
         if (text) {
             transcript.innerText = text;
@@ -1342,14 +1340,26 @@ const VoiceTutor = {
             badge.innerText = 'Đang lắng nghe...';
             badge.classList.add('text-indigo-500');
             if (pulse) pulse.classList.remove('hidden');
-        } else if (state === 'speaking') {
-            badge.innerText = 'Gia sư đang nói...';
-            badge.classList.add('voice-status-speaking');
-            if (wave) wave.classList.remove('hidden');
-            if (avatar) avatar.classList.add('speaking');
-        } else if (state === 'thinking') {
-            badge.innerText = 'Đang suy nghĩ...';
-            badge.classList.add('voice-status-thinking');
+            if (micBtn && !this.isLiveMode) {
+                micBtn.innerHTML = '<i class="fas fa-stop"></i>';
+                micBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-500/30');
+                micBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30');
+            }
+        } else {
+            if (state === 'speaking') {
+                badge.innerText = 'Gia sư đang nói...';
+                badge.classList.add('voice-status-speaking');
+                if (wave) wave.classList.remove('hidden');
+                if (avatar) avatar.classList.add('speaking');
+            } else if (state === 'thinking') {
+                badge.innerText = 'Đang suy nghĩ...';
+                badge.classList.add('voice-status-thinking');
+            }
+            if (micBtn && !this.isLiveMode) {
+                micBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                micBtn.classList.remove('bg-red-500', 'hover:bg-red-600', 'shadow-red-500/30');
+                micBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-500/30');
+            }
         }
     },
 
@@ -1402,24 +1412,44 @@ const VoiceTutor = {
 
         this.updateUI('listening', this.isLiveMode ? 'Đang lắng nghe rảnh tay...' : 'Hãy nói đi, tôi đang nghe...');
         
+        this.manualStop = false;
         this.stt.onResult = (text, isFinal) => {
             if (!text || this.isProcessing) return; // Bỏ qua nếu đang xử lý câu trả lời cũ
+
+            // SEMANTIC ECHO CANCELLATION (Lọc tiếng vọng theo ngữ nghĩa)
+            if (this.isLiveMode && window.speechSynthesis.speaking) {
+                const cleanHeard = text.toLowerCase().replace(/[.,!?]/g, "");
+                const cleanAi = (this.currentAiSpeechText || "").toLowerCase().replace(/[.,!?]/g, "");
+                
+                const heardWords = cleanHeard.split(/\s+/).filter(w => w.length > 0);
+                const aiWords = cleanAi.split(/\s+/).filter(w => w.length > 0);
+                
+                if (heardWords.length < 2) return; // Bỏ qua tiếng ồn ngắn
+                
+                let matchCount = 0;
+                for (let w of heardWords) {
+                    if (aiWords.includes(w)) matchCount++;
+                }
+                
+                const overlapRatio = matchCount / heardWords.length;
+                
+                // Nếu trùng khớp trên 30% thì chắc chắn là AI đang tự nghe giọng mình
+                if (overlapRatio > 0.3) {
+                    console.log(`Echo Cancelled: ${overlapRatio.toFixed(2)}`);
+                    return; 
+                }
+                
+                // Trùng khớp thấp -> Người dùng đang ngắt lời (Barge-in)
+                console.log(`Barge-in Accepted: ${overlapRatio.toFixed(2)}`);
+                SpeechManager.stop();
+                this.aiSpeakStartTime = 0; 
+                this.updateUI('listening', text);
+            }
+
             this.updateUI('listening', text); 
             this.lastTranscript = text;
 
-            if (this.isLiveMode) {
-                // BARGE-IN: Nếu AI đang nói, cho phép ngắt lời
-                if (window.speechSynthesis.speaking) {
-                    const timeSpeaking = Date.now() - this.aiSpeakStartTime;
-                    if (timeSpeaking > 500 && text.trim().split(/\s+/).length >= 2) {
-                        console.log("Barge-in: Interrupting AI...");
-                        SpeechManager.stop();
-                        this.aiSpeakStartTime = 0; 
-                        this.updateUI('listening', text);
-                    }
-                    return; 
-                }
-
+            if (this.isLiveMode && !window.speechSynthesis.speaking) {
                 if (this.silenceTimer) clearTimeout(this.silenceTimer);
                 this.silenceTimer = setTimeout(() => {
                     if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking && !this.isProcessing) {
@@ -1433,8 +1463,9 @@ const VoiceTutor = {
     },
 
     stopListeningAndSubmit() {
-        if (!this.isCalling || this.isLiveMode) return;
+        if (!this.isCalling) return;
         
+        this.manualStop = true;
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         const finalContent = this.lastTranscript;
         
@@ -1443,6 +1474,8 @@ const VoiceTutor = {
             this.askGemini(finalContent);
         } else {
             this.updateUI('listening', 'Bạn chưa nói gì cả...');
+            // Tự động quay lại UI chờ
+            setTimeout(() => { if (!this.isProcessing) this.updateUI('thinking', ''); }, 1000);
         }
         this.lastTranscript = '';
     },
@@ -1522,6 +1555,9 @@ const VoiceTutor = {
             
             const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
             const response = data.candidates[0].content.parts[0].text;
+            
+            // LƯU LẠI LỜI AI ĐANG NÓI ĐỂ KHỬ TIẾNG VỌNG
+            this.currentAiSpeechText = response;
             
             // KIỂM TRA: Nếu có yêu cầu mới hơn (Barge-in), bỏ qua kết quả này
             if (requestId !== this.currentRequestId || !this.isCalling) {
@@ -3682,27 +3718,18 @@ Tiếng Việt.`;
         
         const micBtn = document.getElementById('toggleMicBtn');
         if (micBtn) {
-            // Nhấn xuống: Bắt đầu nghe
-            micBtn.addEventListener('pointerdown', (e) => {
+            // Tap-to-Talk / Tap-to-Stop
+            micBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 if (VoiceTutor.isCalling) {
-                    micBtn.classList.add('mic-active-pulse');
-                    SpeechManager.stop();
-                    VoiceTutor.startListening();
+                    if (VoiceTutor.stt.isListening) {
+                        VoiceTutor.stopListeningAndSubmit();
+                    } else {
+                        SpeechManager.stop();
+                        VoiceTutor.startListening();
+                    }
                 }
             });
-
-            // Nhả ra: Dừng và Gửi (PTT)
-            const stopMic = (e) => {
-                e.preventDefault();
-                if (VoiceTutor.isCalling) {
-                    micBtn.classList.remove('mic-active-pulse');
-                    VoiceTutor.stopListeningAndSubmit();
-                }
-            };
-            micBtn.addEventListener('pointerup', stopMic);
-            micBtn.addEventListener('pointerleave', stopMic);
-            micBtn.addEventListener('pointercancel', stopMic);
         }
 
         document.getElementById('liveModeToggle')?.addEventListener('click', () => VoiceTutor.toggleLiveMode());
