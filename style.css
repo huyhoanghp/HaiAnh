@@ -60,7 +60,8 @@ body.dark #resultContent .bg-gray-50 { background-color: #1e293b !important; bor
 body.dark #resultContent .text-gray-800 { color: #f8fafc !important; }
 body.dark #resultContent .text-gray-700 { color: #cbd5e1 !important; }
 body.dark #resultContent .bg-gray-200 { background-color: #334155 !important; }
-body.dark mark { background-color: #b45309 !important; color: #fff !important; }
+body.dark mark { background-color: #b45309 !important; color: #fff !important; display: inline !important; }
+mark { display: inline !important; }
 
 body.dark #customModalContent, body.dark #aiSettingsModalContent, body.dark #aiGenModalContent { background-color: #1e293b; border-color: #475569; }
 body.dark #customModalText { color: #cbd5e1; }
@@ -79,14 +80,18 @@ body.dark .ai-explanation-box .ai-text-content { color: #e2e8f0 !important; }
 .card-question { transition: all 0.2s ease; overflow: visible !important; }
 .card-question .q-text-focus, 
 .card-question h3.q-text-focus,
-.card-question .q-text-focus *,
 [id^="q-text-"] { 
     font-size: calc(1.125rem * var(--font-scale)) !important; 
     line-height: 1.6 !important;
     font-weight: 600 !important; 
     color: #1e293b; 
     transition: none !important; 
-    display: block;
+    display: block !important;
+}
+.card-question .q-text-focus mark, [id^="q-text-"] mark {
+    display: inline !important;
+    padding: 0 4px !important;
+    border-radius: 4px !important;
 }
 body.dark .q-text-focus, body.dark [id^="q-text-"] { color: #f1f5f9 !important; }
 

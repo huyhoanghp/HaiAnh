@@ -952,11 +952,11 @@ function getHighlightedText(text, rawSearch) {
         if (acrIdx !== -1) {
             const startToken = tokens[acrIdx]; const endToken = tokens[acrIdx + acronymTarget.length - 1]; const start = startToken.index; const end = endToken.end;
             const before = escapeHtml(text.substring(0, start)); const matchStr = escapeHtml(text.substring(start, end)); const after = escapeHtml(text.substring(end));
-            return `${before}<mark class="bg-yellow-300 text-black px-0.5 rounded">${matchStr}</mark>${after}`;
+            return `${before}<mark class="bg-yellow-300 text-black px-1 rounded">${matchStr}</mark>${after}`;
         }
     }
     let resultHtml = escapeHtml(text); const rawOriginalTerms = rawSearchTrimmed.split(/\s+/).filter(t => t);
-    if (rawOriginalTerms.length > 0) { const safeTerms = rawOriginalTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); const regex = new RegExp(`(${safeTerms.join('|')})`, 'gi'); resultHtml = resultHtml.replace(regex, '<mark class="bg-yellow-300 text-black px-0.5 rounded">$1</mark>'); }
+    if (rawOriginalTerms.length > 0) { const safeTerms = rawOriginalTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); const regex = new RegExp(`(${safeTerms.join('|')})`, 'gi'); resultHtml = resultHtml.replace(regex, '<mark class="bg-yellow-300 text-black px-1 rounded">$1</mark>'); }
     return resultHtml;
 }
 
