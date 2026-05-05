@@ -1564,30 +1564,31 @@ const VoiceTutor = {
             if (this.chatHistory.length > 10) this.chatHistory = this.chatHistory.slice(-10);
 
             // 3. Xây dựng System Instruction kèm ngữ cảnh câu hỏi
-            const contextPrompt = `Bạn là gia sư AI Hai Anh. Hãy hỗ trợ học sinh học tập.
+            const contextPrompt = `Bạn là gia sư AI "Hải Anh Study" cực kỳ thông minh, uyên bác và tận tâm.
             Bối cảnh câu hỏi hiện tại:
             - Nội dung: ${q.text}
+            - Các đáp án: ${q.options ? q.options.join(" | ") : "Không có"}
             - Đáp án đúng: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
             
-            Yêu cầu quan trọng: 
-            1. PHẢN HỒI THEO YÊU CẦU: Nếu người dùng yêu cầu giải thích chi tiết, chuyên sâu hoặc dài, hãy đáp ứng chính xác. Nếu không yêu cầu gì đặc biệt, hãy giải thích đầy đủ nhưng súc tích.
-            2. Xưng hô là "tôi" và "bạn". 
-            3. ĐI THẲNG VÀO VẤN ĐỀ: Không chào hỏi lặp lại, không rườm rà.
-            4. CHỐNG ẢO GIÁC: Tuyệt đối không bịa đặt thông tin.`;
+            QUY TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
+            1. CHỐNG ẢO GIÁC 100%: Tuyệt đối KHÔNG bịa đặt thông tin, KHÔNG cung cấp nội dung không có thật. Chỉ trả lời dựa trên sự thật, logic và kiến thức chuẩn xác.
+            2. MẶC ĐỊNH NGẮN GỌN & CHÍNH XÁC: Trả lời đi thẳng vào trọng tâm, cực kỳ súc tích, đúng thông tin câu hỏi. Không rườm rà.
+            3. PHÂN TÍCH SÂU (Lên đến 3000 từ): NẾU người dùng yêu cầu giải thích "chi tiết", "cụ thể", hoặc "phân tích sâu", bạn PHẢI cung cấp một bài phân tích chuyên môn cực kỳ toàn diện, có thể mở rộng tối đa để đáp ứng trọn vẹn yêu cầu.
+            4. ĐỊNH DẠNG: Xưng hô "tôi" và "bạn". KHÔNG lặp lại lời chào ở các lượt chat sau.`;
 
             const payload = { 
                 contents: [
                     { role: "user", parts: [{ text: contextPrompt }] },
-                    { role: "model", parts: [{ text: "Tôi đã hiểu. Tôi sẽ giải thích dựa trên độ dài mà bạn yêu cầu." }] },
+                    { role: "model", parts: [{ text: "Tôi đã khắc cốt ghi tâm các quy tắc này. Tôi sẽ trả lời ngắn gọn, chính xác tuyệt đối, không ảo giác, và sẵn sàng mở rộng siêu chi tiết nếu bạn yêu cầu." }] },
                     ...this.chatHistory 
                 ], 
                 generationConfig: { 
-                    temperature: 0.7,
-                    maxOutputTokens: 4096 // Tăng giới hạn để hỗ trợ bài viết dài
+                    temperature: 0.2, // Hạ cực thấp để AI bám sát sự thật, chống ảo giác
+                    maxOutputTokens: 8192 // Mở rộng kịch trần (tương đương hơn 5000 từ)
                 } 
             };
             
-            const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+            const data = await callAiProxy({ provider: 'google', model: 'gemini-2.5-flash', payload });
             const response = data.candidates[0].content.parts[0].text;
             
             // LƯU LẠI LỜI AI ĐANG NÓI ĐỂ KHỬ TIẾNG VỌNG
@@ -1980,10 +1981,12 @@ async function callAiProxy({ provider, model, payload }) {
     const otherDiscovered = discovered.filter(m => !baseModels.includes(m));
     const allAvailable = [...baseModels, ...otherDiscovered];
 
-    // Ưu tiên cao nhất: 1. Model người dùng chọn -> 2. Danh sách đã sắp xếp
-    const userSelectedModel = localStorage.getItem('last_working_model');
-    const modelsToTry = userSelectedModel && allAvailable.includes(userSelectedModel) 
-        ? [userSelectedModel, ...allAvailable.filter(m => m !== userSelectedModel)]
+    // Ưu tiên cao nhất: 1. Model được truyền vào hàm -> 2. Model chạy thành công gần nhất -> 3. Danh sách mặc định
+    const savedModel = localStorage.getItem('last_working_model');
+    const primaryModel = model || savedModel;
+    
+    const modelsToTry = primaryModel && allAvailable.includes(primaryModel) 
+        ? [primaryModel, ...allAvailable.filter(m => m !== primaryModel)]
         : allAvailable;
     let lastError = "Không có phản hồi từ AI";
     for (const currentModel of modelsToTry) {
