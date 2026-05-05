@@ -1296,20 +1296,26 @@ class ConversationManager {
         }
     }
 
-    async init() {
+    async init(sharedStream) {
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             this.echoCanceller = new EchoCanceller(16000, 512);
             this.vad = new VADModule(this.audioContext);
 
-            const constraints = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
-            this.micStream = await navigator.mediaDevices.getUserMedia(constraints);
-            const source = this.audioContext.createMediaStreamSource(this.micStream);
+            // Dùng stream được chia sẻ, không tự mở getUserMedia() tránh xung đột mic
+            if (sharedStream) {
+                this.micStream = sharedStream; 
+                this._ownsStream = true; // SỬA: Bắt buộc sở hữu để tự giải phóng
+            } else {
+                // Fallback: chỉ dùng khi không có stream sẵn
+                const constraints = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
+                this.micStream = await navigator.mediaDevices.getUserMedia(constraints);
+                this._ownsStream = true;
+            }
 
-            // Kết nối analyser cho VAD
+            const source = this.audioContext.createMediaStreamSource(this.micStream);
             source.connect(this.vad.analyser);
 
-            // Bắt đầu vòng lặp VAD polling
             this._active = true;
             this._runVADLoop();
             console.log('[ConvManager] NLMS+VAD+Interrupt system initialized.');
@@ -1359,7 +1365,11 @@ class ConversationManager {
     async stop() {
         this._active = false;
         if (this._vadTimer) clearTimeout(this._vadTimer);
-        if (this.micStream) { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; }
+        // Chỉ stop stream nếu chúng ta sở hữu nó
+        if (this.micStream && this._ownsStream) {
+            this.micStream.getTracks().forEach(t => t.stop());
+        }
+        this.micStream = null;
         if (this.audioContext) { try { await this.audioContext.close(); } catch(e){} this.audioContext = null; }
         if (this.echoCanceller) { this.echoCanceller.reset(); }
         if (this.vad) { this.vad.reset(); }
@@ -1456,6 +1466,10 @@ class SpeechToTextManager {
 
     stop() {
         this.isStarting = false;
+        if (this.safeStartTimer) {
+            clearTimeout(this.safeStartTimer);
+            this.safeStartTimer = null;
+        }
         if (this.recognition) {
             try { this.recognition.stop(); } catch(e) {}
             this.recognition = null;
@@ -1489,23 +1503,46 @@ const VoiceTutor = {
 
     async _initConvManager() {
         if (this.convManager) { await this.convManager.stop(); }
-        this.convManager = new ConversationManager();
-        this.convManager.onInterrupt((data) => {
+        const newManager = new ConversationManager();
+        this.convManager = newManager;
+        
+        newManager.onInterrupt((data) => {
             if (!this.isCalling || !this.isLiveMode) return;
             console.log('[VoiceTutor] NLMS Interrupt triggered, conf=', data.confidence.toFixed(2));
-            // Ngắt AI ngay lập tức
             SpeechManager.stop();
-            this.convManager.stopAISpeaking();
+            newManager.stopAISpeaking();
             this.isProcessing = false;
             this.updateUI('listening', 'Tôi đang nghe bạn...');
+            
+            // QUAN TRỌNG: Khởi động lại STT để bắt ngay lời người dùng
+            this.lastTranscript = '';
+            this.startListening();
         });
-        this.convManager.onUserSpeech((data) => {
-            if (data.type === 'speech_started' && !this.isProcessing && !window.speechSynthesis.speaking) {
-                console.log('[VoiceTutor] VAD: user speech detected');
+
+        // Lấy mic stream từ getUserMedia() dùng chung.
+        let sharedStream = null;
+        try {
+            sharedStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+            });
+        } catch(e) {
+            console.warn('[VoiceTutor] Could not get shared stream for VAD, running without NLMS.');
+        }
+        
+        // RACE CONDITION FIX: Nếu người dùng đã tắt Live Mode trong lúc đang await getUserMedia
+        if (this.convManager !== newManager || !this.isLiveMode || !this.isCalling) {
+            if (sharedStream) {
+                sharedStream.getTracks().forEach(t => t.stop());
             }
-        });
-        const ok = await this.convManager.init();
-        if (!ok) console.warn('[VoiceTutor] ConvManager init failed, falling back to text-based mode.');
+            console.log('[VoiceTutor] Init aborted due to state change.');
+            return;
+        }
+        
+        const ok = await newManager.init(sharedStream);
+        if (!ok) {
+            console.warn('[VoiceTutor] ConvManager init failed, STT still works normally.');
+            if (this.convManager === newManager) this.convManager = null;
+        }
     },
 
     async startCall(qIdx) {
@@ -1522,8 +1559,7 @@ const VoiceTutor = {
         SpeechManager.stop();
         this.stt.stop();
 
-        // Khởi tạo NLMS+VAD+Interrupt pipeline (chạy ngầm song song STT)
-        this._initConvManager().catch(err => console.warn('[VoiceTutor] ConvManager init error:', err));
+        // NLMS+VAD sẽ chỉ được khởi tạo khi bật Live Mode (tránh xung đột mic)
         
         const modal = document.getElementById('voiceCallModal');
         modal.classList.remove('hidden');
@@ -1666,28 +1702,28 @@ const VoiceTutor = {
         
         this.manualStop = false;
         this.stt.onResult = (text, isFinal) => {
-            if (!text || this.isProcessing) return;
+            if (!text) return;
 
-            // Nếu NLMS+VAD ConvManager đang hoạt động và AI đang nói:
-            // chỉ chấp nhận transcript nếu đây là barge-in hợp lệ
-            // (convManager.onInterrupt đã xử lý việc dừng AI — STT chỉ lấy nội dung)
-            if (this.isLiveMode && window.speechSynthesis.speaking) {
-                // Kiểm tra nhanh: nếu convManager chưa báo interrupt thì bỏ qua interim
-                // để tránh xử lý kép. Chỉ chấp nhận khi isFinal (người dùng dứt câu)
-                if (!isFinal) return;
-            }
-
-            this.updateUI('listening', text); 
+            // Luôn cập nhật transcript để người dùng thấy ngay (cả interim)
+            this.updateUI('listening', text);
             this.lastTranscript = text;
 
-            if (this.isLiveMode && !window.speechSynthesis.speaking) {
-                if (this.silenceTimer) clearTimeout(this.silenceTimer);
-                this.silenceTimer = setTimeout(() => {
-                    if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking && !this.isProcessing) {
-                        this.askGemini(this.lastTranscript);
-                    }
-                }, 1100);
+            if (this.isLiveMode) {
+                // Live Mode: nếu AI đang nói, chỉ cho phép final transcript qua
+                // (ConvManager xử lý interrupt qua VAD; STT chỉ thu nội dung)
+                if (window.speechSynthesis.speaking) {
+                    if (!isFinal) return; // Bỏ qua interim khi AI đang nói
+                }
+                if (!this.isProcessing && !window.speechSynthesis.speaking) {
+                    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+                    this.silenceTimer = setTimeout(() => {
+                        if (this.lastTranscript.trim().length > 1 && !window.speechSynthesis.speaking && !this.isProcessing) {
+                            this.askGemini(this.lastTranscript);
+                        }
+                    }, 1100);
+                }
             }
+            // Tap-to-Talk (không phải Live): transcript được lưu, stopListeningAndSubmit sẽ gửi
         };
         
         this.stt.start();
@@ -1720,12 +1756,30 @@ const VoiceTutor = {
             btn.classList.add('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-indigo-500 status-dot"></div> LIVE MODE: ON';
             showToast("🚀 Đã bật Chế độ Live (Tự động đàm thoại)");
-            this.startListening();
+            
+            // Khởi tạo NLMS+VAD (getUserMedia) TRƯỚC để chiếm quyền phần cứng
+            this._initConvManager().then(() => {
+                // Đợi 500ms cho getUserMedia hoàn tất khởi động thiết bị, rồi bật STT
+                setTimeout(() => {
+                    if (this.isCalling && this.isLiveMode) {
+                        this.startListening();
+                    }
+                }, 500);
+            }).catch(err => {
+                console.warn('[VoiceTutor] ConvManager init error:', err);
+                this.startListening(); // Vẫn bật STT làm fallback
+            });
+            
         } else {
             btn.classList.remove('active');
             btn.innerHTML = '<div class="w-2 h-2 rounded-full bg-gray-300 status-dot"></div> LIVE MODE: OFF';
-            showToast("✋ Đã tắt Chế độ Live. Hãy nhấn giữ Mic để nói.");
+            showToast("✋ Đã tắt Chế độ Live. Chạm Mic để nói.");
             this.stt.stop();
+            // Dọn dẹp ConvManager giải phóng mic
+            if (this.convManager) {
+                this.convManager.stop().catch(e => {});
+                this.convManager = null;
+            }
         }
     },
 
@@ -3154,15 +3208,6 @@ async function initGIA() {
         document.getElementById('pauseResumeBtnHeader')?.addEventListener('click', () => { if (isPaused) resumeExam(); else pauseExam(); });
         document.getElementById('submitBtn')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
         document.getElementById('submitBtnHeader')?.addEventListener('click', () => { if (currentQuestions.length && !submitted) submitExam(); else showToast("Chưa có bài hoặc đã nộp."); });
-        document.getElementById('endCallBtn')?.addEventListener('click', () => VoiceTutor.endCall());
-        document.getElementById('toggleMicBtn')?.addEventListener('click', () => {
-            if (VoiceTutor.isCalling) {
-                SpeechManager.stop();
-                VoiceTutor.startListening();
-                // Hiện ô nhập liệu khi nhấn mic (để người dùng có thêm lựa chọn)
-                document.getElementById('voiceInputContainer')?.classList.remove('hidden');
-            }
-        });
         document.getElementById('sendVoiceTextBtn')?.addEventListener('click', () => VoiceTutor.handleTextSubmit());
         document.getElementById('voiceTextInput')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') VoiceTutor.handleTextSubmit();
