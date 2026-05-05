@@ -20,7 +20,29 @@ body.dark .text-gray-700, body.dark .text-gray-600, body.dark .text-gray-500, bo
 body.dark .btn-primary { background: #2563eb !important; color: #ffffff !important; border: 1px solid #3b82f6 !important; }
 body.dark .btn-secondary { background: #d97706 !important; color: #ffffff !important; border: 1px solid #f59e0b !important; }
 body.dark .btn-ghost { background: #1e293b !important; color: #cbd5e1 !important; border: 1px solid #334155 !important; }
-body.dark input, body.dark select, body.dark textarea, body.dark .border { background-color: #0f172a !important; color: #e2e8f0 !important; border-color: #475569 !important; }
+body.dark input, body.dark select, body.dark textarea, body.dark .border { background-color: #020617 !important; color: #e2e8f0 !important; border-color: #1e293b !important; }
+
+/* Tối ưu hóa Select đẹp mắt */
+select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 1rem center !important;
+    background-size: 1.25rem !important;
+    padding-right: 3rem !important;
+    padding-left: 1rem !important;
+    height: 3.5rem !important;
+    border-radius: 1rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+select:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1) !important;
+}
 
 /* Tăng độ tương phản cho chế độ sáng */
 .text-gray-400 { color: #64748b !important; } /* Sẫm màu hơn từ xám nhạt sang xám đậm */
@@ -750,13 +772,85 @@ body.dark .font-range-input {
     box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
 }
 
-/* Review Dashboard Styles */
+/* Review Dashboard Styles - Đã đồng bộ hóa với Side Panel */
 #reviewDashboardCard {
-    background: linear-gradient(to bottom right, #ffffff, #f8faff);
+    /* Sử dụng màu từ Tailwind trong index.html */
 }
 
+/* ======================== PREMIUM BOTTOM SHEET SELECT ======================== */
+.bottom-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+.bottom-sheet.active { display: flex; }
+.bottom-sheet-content {
+    width: 100%;
+    max-width: 500px;
+    background: white;
+    border-radius: 2rem 2rem 0 0;
+    padding: 1.5rem;
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+.bottom-sheet.active .bottom-sheet-content { transform: translateY(0); }
+.dark .bottom-sheet-content { background: #0f172a; border: 1px solid #1e293b; border-bottom: none; }
+
+.sheet-header { display: flex; items-center; justify-between; margin-bottom: 1.5rem; }
+.sheet-title { font-size: 1.125rem; font-weight: 900; color: #1e293b; }
+.dark .sheet-title { color: #f1f5f9; }
+
+.sheet-list { overflow-y: auto; flex: 1; padding-right: 4px; }
+.sheet-item {
+    padding: 1rem;
+    border-radius: 1rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+    border: 1px solid transparent;
+}
+.sheet-item:hover { background: #eff6ff; border-color: #dbeafe; }
+.sheet-item.selected { background: #6366f1; color: white; border-color: #6366f1; }
+.dark .sheet-item { background: #1e293b; color: #cbd5e1; border-color: #334155; }
+.dark .sheet-item:hover { background: #334155; }
+.dark .sheet-item.selected { background: #6366f1; color: white; border-color: #6366f1; }
+
+.sheet-handle {
+    width: 40px;
+    height: 5px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    margin: 0 auto 1.5rem auto;
+}
+.dark .sheet-handle { background: #334155; }
+
+.sheet-search {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    margin-bottom: 1rem;
+    outline: none;
+    font-size: 0.875rem;
+}
+.dark .sheet-search { background: #020617; border-color: #1e293b; color: white; }
+
 .dark #reviewDashboardCard {
-    background: linear-gradient(to bottom right, #1e293b, #0f172a);
+    /* Sử dụng màu từ Tailwind trong index.html */
 }
 
 @keyframes slideUpFade {

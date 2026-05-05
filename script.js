@@ -3650,7 +3650,110 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Khởi tạo các sự kiện Global và UI
     initGIA();
+    BottomSheetManager.init(); // Kích hoạt UI chọn cao cấp
 });
+
+// ======================== PREMIUM BOTTOM SHEET MANAGER ========================
+const BottomSheetManager = {
+    currentSelect: null,
+    options: [],
+    init() {
+        const sheet = document.getElementById('bottomSheet');
+        const searchInput = document.getElementById('sheetSearch');
+        const closeBtn = document.getElementById('closeSheetBtn');
+
+        sheet?.addEventListener('click', (e) => {
+            if (e.target === sheet) this.close();
+        });
+        closeBtn?.addEventListener('click', () => this.close());
+
+        searchInput?.addEventListener('input', (e) => {
+            this.renderList(e.target.value);
+        });
+
+        // Tự động gán cho các select quan trọng
+        this.bindSelect('bankSelect', 'Bộ câu hỏi');
+        this.bindSelect('aiModelSelect', 'Mô hình AI');
+    },
+    bindSelect(id, title) {
+        const select = document.getElementById(id);
+        if (!select) return;
+
+        const handleOpen = (e) => {
+            if (window.innerWidth < 768) {
+                e.preventDefault();
+                this.open(select, title);
+                select.blur();
+            }
+        };
+        
+        select.addEventListener('mousedown', handleOpen);
+        select.addEventListener('touchstart', (e) => {
+            if (window.innerWidth < 768) {
+                e.preventDefault();
+                handleOpen(e);
+            }
+        }, {passive: false});
+    },
+    open(select, title) {
+        this.currentSelect = select;
+        const sheet = document.getElementById('bottomSheet');
+        const titleEl = document.getElementById('sheetTitle');
+        const searchInput = document.getElementById('sheetSearch');
+        
+        if (titleEl) titleEl.innerText = title;
+        if (searchInput) {
+            searchInput.value = '';
+            // Ẩn search nếu options ít (vd: model selection ban đầu)
+            searchInput.style.display = select.options.length > 8 ? 'block' : 'none';
+        }
+        
+        this.options = Array.from(select.options).map(opt => ({
+            value: opt.value,
+            text: opt.innerText,
+            selected: opt.value === select.value
+        })).filter(opt => opt.value !== "");
+
+        this.renderList();
+        sheet?.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        if (searchInput.style.display !== 'none') setTimeout(() => searchInput.focus(), 300);
+    },
+    close() {
+        const sheet = document.getElementById('bottomSheet');
+        sheet?.classList.remove('active');
+        document.body.style.overflow = '';
+    },
+    renderList(filter = '') {
+        const listEl = document.getElementById('sheetList');
+        if (!listEl) return;
+        
+        listEl.innerHTML = '';
+        const filtered = this.options.filter(opt => 
+            opt.text.toLowerCase().includes(filter.toLowerCase())
+        );
+        
+        if (filtered.length === 0) {
+            listEl.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm italic">Không tìm thấy kết quả...</div>';
+            return;
+        }
+
+        filtered.forEach(opt => {
+            const div = document.createElement('div');
+            div.className = `sheet-item ${opt.selected ? 'selected' : ''}`;
+            div.innerHTML = `
+                <span class="flex-1">${opt.text}</span>
+                ${opt.selected ? '<i class="fas fa-check"></i>' : ''}
+            `;
+            div.onclick = () => {
+                this.currentSelect.value = opt.value;
+                this.currentSelect.dispatchEvent(new Event('change'));
+                this.close();
+            };
+            listEl.appendChild(div);
+        });
+    }
+};
 
 // ======================== PWA SERVICE WORKER REGISTRATION ========================
 if ('serviceWorker' in navigator) {
