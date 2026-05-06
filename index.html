@@ -206,6 +206,19 @@
                             <i class="fas fa-search"></i>
                         </button>
                     </div>
+                    <!-- Vùng trạng thái Model thực tế -->
+                    <div id="aiModelStatusArea" class="mt-2 p-2.5 bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100/50 dark:border-indigo-800/30 rounded-xl hidden">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter text-gray-500/80">Trạng thái vận hành</span>
+                            <span id="activeStatusDot" class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                        </div>
+                        <div id="activeModelLabel" class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 truncate">
+                            Dùng: --
+                        </div>
+                        <div id="fallbackReasonLabel" class="text-[9px] text-amber-600 dark:text-amber-400 italic mt-0.5 leading-tight hidden">
+                            Lý do: Hết hạn mức (Quota)
+                        </div>
+                    </div>
                     </div>
                 </div>
             </div>

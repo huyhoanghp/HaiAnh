@@ -70,6 +70,11 @@ function toggleSettings(show) {
         if (sizeSlider) sizeSlider.value = savedScale;
         if (sizeVal) sizeVal.innerText = savedScale + '%';
 
+        // [UPDATE] Hiển thị trạng thái model thực tế ngay khi mở bảng
+        if (window.lastUsedAiModel) {
+            updateAiStatusUI(window.lastUsedAiModel, window.lastUsedAiModel !== localStorage.getItem('ai_model_preference') ? window.lastAiFallbackReason : "");
+        }
+
     } else {
         settingsSidePanel?.classList.add('-translate-x-[110%]');
         if (!reviewSidePanel || reviewSidePanel.classList.contains('translate-x-[110%]')) {
@@ -2120,6 +2125,8 @@ async function callAiProxy({ provider, model, payload }) {
     const modelsToTry = [primaryModel, ...allAvailable.filter(m => m !== primaryModel)];
     
     let lastError = "Không có phản hồi từ AI";
+    let isFallbackActive = false;
+
     for (const currentModel of modelsToTry) {
         const versions = ['v1beta', 'v1'];
         for (const apiVer of versions) {
@@ -2130,20 +2137,37 @@ async function callAiProxy({ provider, model, payload }) {
                     const currentPayload = JSON.parse(JSON.stringify(payload));
                     if (!currentPayload.generationConfig) currentPayload.generationConfig = {};
                     if (!useMime && currentPayload.generationConfig.responseMimeType) delete currentPayload.generationConfig.responseMimeType;
+                    
                     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentPayload) });
                     const text = await res.text();
+                    
                     if (!res.ok) {
-                        let msg = text; try { const json = JSON.parse(text); msg = json.error?.message || json.error?.status || text; } catch (e) { }
+                        let msg = text; 
+                        let errCode = res.status;
+                        try { const json = JSON.parse(text); msg = json.error?.message || json.error?.status || text; } catch (e) { }
+                        
                         if (useMime && (msg.includes('responseMimeType') || msg.includes('Unknown name'))) { retryWithoutMime = true; return null; }
+                        
+                        // Ghi nhận lý do fallback nếu là lỗi Quota (429)
+                        if (currentModel === primaryModel) {
+                            if (errCode === 429) window.lastAiFallbackReason = "Hết hạn mức (Quota)";
+                            else window.lastAiFallbackReason = "Lỗi kết nối API";
+                        }
+
                         lastError = `[${currentModel}@${apiVer}] ${msg}`;
+                        isFallbackActive = true;
                         return 'FALLBACK';
                     }
-                    // Chỉ ghi nhớ model này nếu nó không phải là model "khờ" (8b) 
-                    // Hoặc nếu đây là model mà tính năng/người dùng chủ động yêu cầu
+
+                    // THÀNH CÔNG
                     if (currentModel !== 'gemini-1.5-flash-8b' || primaryModel === 'gemini-1.5-flash-8b') {
                         cachedWorkingModel = currentModel; 
                         localStorage.setItem('last_working_model', currentModel);
                     }
+                    
+                    window.lastUsedAiModel = currentModel;
+                    updateAiStatusUI(currentModel, currentModel !== primaryModel ? window.lastAiFallbackReason : "");
+                    
                     return JSON.parse(text);
                 } catch (err) { lastError = err.message || String(err); return 'FALLBACK'; }
             };
@@ -2209,7 +2233,9 @@ function updateModelDropdownUI(discoveredModels) {
     AI_CORE_MODELS.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m;
-        opt.text = m.toUpperCase().replace('GEMINI-', 'Gemini ').replace('GEMMA-', 'Gemma ');
+        let text = m.toUpperCase().replace('GEMINI-', 'Gemini ').replace('GEMMA-', 'Gemma ');
+        if (m === window.lastUsedAiModel) text += " (Đang dùng)";
+        opt.text = text;
         groupBase.appendChild(opt);
     });
     select.appendChild(groupBase);
@@ -2223,13 +2249,36 @@ function updateModelDropdownUI(discoveredModels) {
         extraModels.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m;
-            opt.text = m.toUpperCase().replace('GEMINI-', '').replace('MODELS/', '');
+            let text = m.toUpperCase().replace('GEMINI-', '').replace('MODELS/', '');
+            if (m === window.lastUsedAiModel) text += " (Đang dùng)";
+            opt.text = text;
             groupExtra.appendChild(opt);
         });
         select.appendChild(groupExtra);
     }
     
     if (currentVal) select.value = currentVal;
+}
+
+function updateAiStatusUI(activeModel, fallbackReason = "") {
+    const area = document.getElementById('aiModelStatusArea');
+    const label = document.getElementById('activeModelLabel');
+    const reason = document.getElementById('fallbackReasonLabel');
+    const dot = document.getElementById('activeStatusDot');
+
+    if (!area || !label) return;
+
+    area.classList.remove('hidden');
+    label.innerText = `Đang dùng: ${activeModel.toUpperCase()}`;
+    
+    if (fallbackReason) {
+        reason.innerText = `Lý do: ${fallbackReason}`;
+        reason.classList.remove('hidden');
+        dot.classList.replace('bg-green-500', 'bg-amber-500');
+    } else {
+        reason.classList.add('hidden');
+        dot.classList.replace('bg-amber-500', 'bg-green-500');
+    }
 }
 
 async function checkAvailableModels() {
@@ -2327,9 +2376,12 @@ async function explainWithAI(idx, lengthMode = 'normal') {
     let data = null;
     try {
         const payload = { contents: [{ role: "user", parts: [{ text: userQuery }] }], generationConfig: { temperature: 0.2 } };
-        data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+        // [UPDATE] Không truyền model cứng nữa, để callAiProxy tự chọn theo ưu tiên của người dùng
+        data = await callAiProxy({ provider: 'google', payload });
+        const usedModel = window.lastUsedAiModel || "AI Assistant";
         const formattedText = data.candidates[0].content.parts[0].text.replace(/\n/g, '<br>');
         AI_TEXT_CACHE[`ai-${idx}`] = data.candidates[0].content.parts[0].text;
+        AI_TEXT_CACHE[`ai-model-${idx}`] = window.lastUsedAiModel;
 
         const toolbarHtml = `
             <div class="mb-3 pb-2 border-b border-purple-200 dark:border-slate-700 flex items-center justify-between gap-2 w-full relative z-20">
@@ -2363,6 +2415,9 @@ async function explainWithAI(idx, lengthMode = 'normal') {
             <div class="p-4 pt-2 relative overflow-visible">
                 ${toolbarHtml}
                 <div class="ai-text-content leading-relaxed text-gray-800 dark:text-gray-200 text-sm md:text-base relative z-10">${formattedText}</div>
+            </div>
+            <div class="px-4 pb-3 text-[10px] text-gray-400 italic flex items-center gap-1.5 border-t border-gray-100 dark:border-slate-800/50 pt-2 mx-4">
+                <i class="fas fa-microchip"></i> Phản hồi bởi: <span class="font-bold text-purple-500/80">${window.lastUsedAiModel || "AI Engine"}</span>
             </div>`;
         explainDiv.dataset.loaded = 'true';
     } catch (error) {
@@ -3661,7 +3716,8 @@ async function initGIA() {
             
             try {
                 const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, responseMimeType: "application/json" } };
-                const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+                // [UPDATE] Sử dụng model ưu tiên của người dùng thay vì flash cứng
+                const data = await callAiProxy({ provider: 'google', payload });
                 if (!data.candidates || !data.candidates[0].content.parts[0].text) throw new Error("AI không phản hồi");
                 
                 let text = data.candidates[0].content.parts[0].text;
@@ -3806,7 +3862,8 @@ Tiếng Việt.`;
 
             try {
                 const payload = { contents: [{ role: "user", parts: partsArray }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } };
-                const data = await callAiProxy({ provider: 'google', model: 'gemini-1.5-flash', payload });
+                // [UPDATE] Sử dụng model ưu tiên của người dùng
+                const data = await callAiProxy({ provider: 'google', payload });
                 if (!data.candidates?.length || !data.candidates[0].content?.parts?.length) throw new Error("AI không trả về nội dung.");
                 
                 let aiResponseText = data.candidates[0].content.parts[0].text;
