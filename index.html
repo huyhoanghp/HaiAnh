@@ -533,61 +533,7 @@
     </div>
 </div>
 
-<!-- Modal Cài đặt API -->
-<div id="aiSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[9999] p-4">
-    <div id="aiSettingsModalContent" class="bg-white dark:bg-slate-900 rounded-xl shadow-lg max-w-md w-full p-6 border border-transparent max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <h3 class="text-lg font-bold mb-3 text-gray-800 dark:text-white"><i class="fas fa-key text-purple-500"></i> Cài đặt Gemini API</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Cung cấp Gemini API Key để sử dụng tính năng Gia sư AI và Sinh đề tự động.</p>
-        
-        <div class="space-y-3 mb-6">
-            <div>
-                <label class="block text-xs font-bold text-gray-400 uppercase mb-1 ml-1">Gemini API Key</label>
-                <input type="password" id="geminiApiKeyInput" placeholder="Dán API Key tại đây..." class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
-            </div>
 
-            <div class="grid grid-cols-1 gap-2">
-                <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
-                    <span class="text-xs font-bold text-gray-600 dark:text-gray-400">Hiện nút Giải thích AI</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="showAiExplainToggle" class="sr-only peer" checked>
-                        <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                    </label>
-                </div>
-                <div class="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
-                    <span class="text-xs font-bold text-gray-600 dark:text-gray-400">Hiện nút Gọi Gia sư AI</span>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="showAiCallToggle" class="sr-only peer" checked>
-                        <div class="w-8 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                    </label>
-                </div>
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Tốc độ đọc mặc định</label>
-                <select id="defaultReadSpeed" class="w-full border border-gray-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-gray-800 dark:text-white focus:outline-none text-sm">
-                    <option value="0.8">0.8x (Chậm)</option>
-                    <option value="1.0" selected>1.0x (Bình thường)</option>
-                    <option value="1.2">1.2x (Nhanh)</option>
-                    <option value="1.5">1.5x (Rất nhanh)</option>
-                    <option value="2.0">2.0x (Siêu nhanh)</option>
-                </select>
-            </div>
-
-            <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                <p class="text-[10px] text-indigo-700 dark:text-indigo-300 mb-2 font-medium"><i class="fas fa-info-circle mr-1"></i> Nhấn để mở khóa Micro (nếu gặp lỗi):</p>
-                <button id="unlockMicBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-md">
-                    <i class="fas fa-microphone mr-2"></i> MỞ KHÓA MICRO
-                </button>
-            </div>
-        </div>
-
-        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-100 dark:border-slate-800 pt-4">
-            <button id="checkModelsBtn" class="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-100 transition">Models</button>
-            <button id="closeAiSettingsBtn" class="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg text-xs font-bold transition">Đóng</button>
-            <button id="saveAiSettingsBtn" class="px-5 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-md transition">Lưu Cấu Hình</button>
-        </div>
-    </div>
-</div>
 
 <!-- Modal AI Generator -->
 <div id="aiGenModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[50] p-4">

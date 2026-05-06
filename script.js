@@ -23,6 +23,76 @@ let scrollObserver = null;
 let currentFileData = null, currentMimeType = null;
 let hintEnabled = localStorage.getItem('haianh_hint_enabled') !== 'false';
 
+// [CLEANUP] Chuyển toggleSettings ra toàn cục để sử dụng linh hoạt
+function toggleSettings(show) {
+    const settingsSidePanel = document.getElementById('settingsSidePanel');
+    const reviewSidePanel = document.getElementById('reviewDashboardCard');
+    
+    if (show) {
+        settingsSidePanel?.classList.remove('-translate-x-[110%]');
+        toggleOverlay(true);
+        if (typeof showSettingsBadge === 'function') showSettingsBadge(false);
+        
+        AuthManager.updateUserProfileUI();
+
+        // 1. Nạp Cấu hình AI
+        const apiInput = document.getElementById('apiKeyInput');
+        if (apiInput) apiInput.value = localStorage.getItem('gemini_api_key') || '';
+        
+        const modelSel = document.getElementById('aiModelSelect');
+        if (modelSel) modelSel.value = localStorage.getItem('ai_model_preference') || localStorage.getItem('last_working_model') || 'gemini-1.5-flash';
+
+        // 2. Nạp Tính năng học tập
+        const hintTog = document.getElementById('hintToggleSide');
+        if (hintTog) hintTog.checked = (localStorage.getItem('haianh_hint_enabled') !== 'false');
+
+        const explainTog = document.getElementById('aiExplainToggleSide');
+        if (explainTog) explainTog.checked = (localStorage.getItem('haianh_show_ai_explain') !== 'false');
+
+        const callTog = document.getElementById('aiCallToggleSide');
+        if (callTog) callTog.checked = (localStorage.getItem('haianh_show_ai_call') !== 'false');
+
+        // 3. Nạp Âm thanh
+        const speedSlider = document.getElementById('aiSpeedSliderSide');
+        const speedVal = document.getElementById('aiSpeedValSide');
+        const savedRate = localStorage.getItem('voice_rate') || '1.0';
+        if (speedSlider) speedSlider.value = savedRate;
+        if (speedVal) speedVal.innerText = savedRate + 'x';
+
+        // 4. Nạp Dark Mode
+        const darkTog = document.getElementById('darkModeToggleSide');
+        if (darkTog) darkTog.checked = document.body.classList.contains('dark');
+
+        // 5. Nạp Cỡ chữ
+        const sizeSlider = document.getElementById('sideFontSizeSlider');
+        const sizeVal = document.getElementById('sideFontSizeVal');
+        const savedScale = localStorage.getItem('haianh_font_scale') || '100';
+        if (sizeSlider) sizeSlider.value = savedScale;
+        if (sizeVal) sizeVal.innerText = savedScale + '%';
+
+    } else {
+        settingsSidePanel?.classList.add('-translate-x-[110%]');
+        if (!reviewSidePanel || reviewSidePanel.classList.contains('translate-x-[110%]')) {
+            toggleOverlay(false);
+        }
+    }
+}
+
+// [CLEANUP] Danh sách Model nòng cốt tập trung (Xương sống của hệ thống)
+const AI_CORE_MODELS = [
+    'gemini-3.1-pro',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemma-4-31b-it',
+    'gemma-4-26b-a4b-it',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-pro-002',
+    'gemini-1.5-flash-8b'
+];
+
 // ======================== AUTH MANAGER (FIREBASE) ========================
 const AuthManager = {
     user: null,
@@ -1301,7 +1371,10 @@ const VoiceTutor = {
 
 
     async startCall(qIdx) {
-        if (!localStorage.getItem('gemini_api_key')) { showToast("Vui lòng cài đặt API Key để dùng tính năng này."); return; }
+        if (!getApiKey()) { 
+            checkAiReady(); // Sử dụng hàm chuẩn để thông báo và mở Sidebar
+            return; 
+        }
         
         // 1. Reset trạng thái hoàn toàn
         this.isCalling = true;
@@ -1975,33 +2048,13 @@ async function compressImage(base64Str) {
 async function callAiProxy({ provider, model, payload }) {
     const apiKey = getApiKey();
     if (!apiKey || provider !== 'google') return await callLegacyProxy({ provider, model, payload });
-    // Danh sách Model sắp xếp theo thứ tự ưu tiên: Thông minh nhất -> Cơ bản nhất
-    const baseModels = [
-        'gemini-3.1-pro',
-        'gemini-3.1-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',   // Thêm bản Lite vào thứ tự ưu tiên cao
-        'gemma-4-31b-it',
-        'gemma-4-26b-a4b-it',
-        'gemini-1.5-pro-002',
-        'gemini-exp-1206',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-8b', 
-        'learnlm-1.5-pro-experimental'
-    ];
-    
-    const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
-    const allAvailable = [...baseModels, ...discovered.filter(m => !baseModels.includes(m))];
 
-    // CHIẾN LƯỢC CHỌN MODEL THÔNG MINH:
-    // 1. Nếu có model do tính năng yêu cầu cụ thể (Parameter)
-    // 2. Nếu không, ưu tiên tuyệt đối Model người dùng đã chọn thủ công (ai_model_preference)
-    // 3. Nếu vẫn không có, dùng model thành công gần nhất (last_working_model)
-    // 4. Cuối cùng, dùng model thông minh nhất trong danh sách (baseModels[0])
+    const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
+    const allAvailable = [...AI_CORE_MODELS, ...discovered.filter(m => !AI_CORE_MODELS.includes(m))];
+
     const userPreference = localStorage.getItem('ai_model_preference');
     const lastWorking = localStorage.getItem('last_working_model');
-    const primaryModel = model || userPreference || lastWorking || baseModels[0];
+    const primaryModel = model || userPreference || lastWorking || AI_CORE_MODELS[0];
     
     const modelsToTry = [primaryModel, ...allAvailable.filter(m => m !== primaryModel)];
     
@@ -2086,38 +2139,22 @@ function updateModelDropdownUI(discoveredModels) {
     const select = document.getElementById('aiModelSelect');
     if (!select) return;
     
-    const currentVal = select.value;
+    const currentVal = select.value || localStorage.getItem('ai_model_preference');
     select.innerHTML = '';
     
-    // 🚀 DANH SÁCH 10+ MODEL NÒNG CỐT (Xương sống của hệ thống)
-    const baseModels = [
-        'gemini-3.1-pro',
-        'gemini-3.1-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemma-4-31b-it',
-        'gemma-4-26b-a4b-it',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash-8b'
-    ];
-
     const groupBase = document.createElement('optgroup');
     groupBase.label = "🚀 MODEL NÒNG CỐT (Khuyên dùng)";
     
-    baseModels.forEach(m => {
+    AI_CORE_MODELS.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m;
-        // Format tên cho đẹp: gemini-3.1-pro -> Gemini 3.1-PRO
-        let displayName = m.toUpperCase().replace('GEMINI-', 'Gemini ').replace('GEMMA-', 'Gemma ');
-        opt.text = displayName;
+        opt.text = m.toUpperCase().replace('GEMINI-', 'Gemini ').replace('GEMMA-', 'Gemma ');
         groupBase.appendChild(opt);
     });
     select.appendChild(groupBase);
 
     // 🔍 DANH SÁCH KHÁM PHÁ (Các model khác từ API)
-    const extraModels = discoveredModels.filter(m => !baseModels.includes(m));
+    const extraModels = discoveredModels.filter(m => !AI_CORE_MODELS.includes(m));
     if (extraModels.length > 0) {
         const groupExtra = document.createElement('optgroup');
         groupExtra.label = "🔍 MODEL KHÁM PHÁ (Từ API)";
@@ -2165,8 +2202,33 @@ function showApiError(status, message) {
 }
 
 function checkAiReady() {
-    if (IS_FILE_PROTOCOL) { showToast('⛔ AI bị chặn do mở file qua file://. Dùng VS Code Live Server hoặc python -m http.server 8080', 7000); return false; }
-    if (!getApiKey()) { showToast('⚠️ Chưa có API Key! Nhấn nút "Cài đặt API" (chấm đỏ) để nhập Gemini API Key.', 6000); const modal = document.getElementById('aiSettingsModal'); if (modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); } return false; }
+    if (IS_FILE_PROTOCOL) { 
+        showToast('⛔ AI bị chặn do mở file qua file://. Dùng VS Code Live Server hoặc python -m http.server 8080', 7000); 
+        return false; 
+    }
+    if (!getApiKey()) { 
+        const msg = '⚠️ Chưa có API Key! Đang mở bảng cài đặt để bạn nhập chìa khóa Gemini...';
+        showToast(msg, 5000); 
+        
+        // [FIX] Gọi toggleSettings toàn cục đã được giải phóng
+        if (typeof toggleSettings === 'function') {
+            toggleSettings(true);
+            
+            // Tự động focus vào ô nhập API Key
+            setTimeout(() => {
+                const input = document.getElementById('apiKeyInput');
+                if (input) {
+                    input.focus();
+                    input.classList.add('ring-2', 'ring-purple-500');
+                    setTimeout(() => input.classList.remove('ring-2', 'ring-purple-500'), 2000);
+                }
+            }, 600);
+        } else {
+            console.error("Lỗi: Không tìm thấy hàm toggleSettings toàn cục.");
+        }
+        
+        return false; 
+    }
     return true;
 }
 
@@ -3065,58 +3127,9 @@ async function initGIA() {
         document.getElementById('clearHistoryBtn')?.addEventListener('click', () => { showConfirm("Xóa toàn bộ lịch sử?", async (yes) => { if (!yes) return; await clearAllHistory(); showToast("Đã xóa lịch sử."); document.getElementById('statsModal')?.classList.add('hidden'); }); });
         
         // Sidebar Toggle Logic
-        const settingsSidePanel = document.getElementById('settingsSidePanel');
-        const reviewSidePanel = document.getElementById('reviewDashboardCard');
         const overlay = document.getElementById('sidePanelOverlay');
 
-        const toggleSettings = (show) => {
-            if (show) {
-                settingsSidePanel?.classList.remove('-translate-x-[110%]');
-                toggleOverlay(true);
-                showSettingsBadge(false);
-                
-                // 0. Cập nhật Profile & Dashboard
-                AuthManager.updateUserProfileUI();
 
-                // 1. Nạp Cấu hình AI
-                if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
-                if (document.getElementById('aiModelSelect')) document.getElementById('aiModelSelect').value = localStorage.getItem('last_working_model') || 'gemini-1.5-flash';
-
-                // 2. Nạp Tính năng học tập
-                const hintTog = document.getElementById('hintToggleSide');
-                if (hintTog) hintTog.checked = (localStorage.getItem('haianh_hint_enabled') !== 'false');
-
-                const explainTog = document.getElementById('aiExplainToggleSide');
-                if (explainTog) explainTog.checked = (localStorage.getItem('haianh_show_ai_explain') !== 'false');
-
-                const callTog = document.getElementById('aiCallToggleSide');
-                if (callTog) callTog.checked = (localStorage.getItem('haianh_show_ai_call') !== 'false');
-
-                // 3. Nạp Âm thanh
-                const speedSlider = document.getElementById('aiSpeedSliderSide');
-                const speedVal = document.getElementById('aiSpeedValSide');
-                const savedRate = localStorage.getItem('voice_rate') || '1.0';
-                if (speedSlider) speedSlider.value = savedRate;
-                if (speedVal) speedVal.innerText = savedRate + 'x';
-
-                // 4. Nạp Hiển thị
-                const darkTog = document.getElementById('darkModeToggleSide');
-                if (darkTog) darkTog.checked = document.body.classList.contains('dark');
-
-                const sizeSlider = document.getElementById('sideFontSizeSlider');
-                const sizeVal = document.getElementById('sideFontSizeVal');
-                const savedScale = localStorage.getItem('haianh_font_scale') || '100';
-                if (sizeSlider) sizeSlider.value = savedScale;
-                if (sizeVal) sizeVal.innerText = savedScale + '%';
-
-            } else {
-                settingsSidePanel?.classList.add('-translate-x-[110%]');
-                // Chỉ đóng overlay nếu panel review cũng đang đóng
-                if (reviewSidePanel?.classList.contains('translate-x-[110%]')) {
-                    toggleOverlay(false);
-                }
-            }
-        };
 
         document.getElementById('settingsToggleBtn')?.addEventListener('click', () => toggleSettings(true));
         document.getElementById('closeSettingsPanel')?.addEventListener('click', () => toggleSettings(false));
@@ -3126,10 +3139,10 @@ async function initGIA() {
 
         // Logic Lưu toàn bộ cài đặt
         document.getElementById('saveAiSettingsBtn')?.addEventListener('click', () => {
-            // 1. Lưu AI
             const key = document.getElementById('apiKeyInput').value.trim();
             const model = document.getElementById('aiModelSelect').value;
             localStorage.setItem('gemini_api_key', key);
+            localStorage.setItem('ai_model_preference', model); // [CLEANUP] Ưu tiên lựa chọn thủ công
             localStorage.setItem('last_working_model', model);
             updateApiKeyBadge();
 
