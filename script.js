@@ -1571,10 +1571,11 @@ const VoiceTutor = {
             - Đáp án đúng: ${q.correctIndices.map(i => String.fromCharCode(65 + i)).join(", ")}
             
             QUY TẮC CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
-            1. CHỐNG ẢO GIÁC 100%: Tuyệt đối KHÔNG bịa đặt thông tin, KHÔNG cung cấp nội dung không có thật. Chỉ trả lời dựa trên sự thật, logic và kiến thức chuẩn xác.
-            2. MẶC ĐỊNH NGẮN GỌN & CHÍNH XÁC: Trả lời đi thẳng vào trọng tâm, cực kỳ súc tích, đúng thông tin câu hỏi. Không rườm rà.
-            3. PHÂN TÍCH SÂU (Lên đến 3000 từ): NẾU người dùng yêu cầu giải thích "chi tiết", "cụ thể", hoặc "phân tích sâu", bạn PHẢI cung cấp một bài phân tích chuyên môn cực kỳ toàn diện, có thể mở rộng tối đa để đáp ứng trọn vẹn yêu cầu.
-            4. ĐỊNH DẠNG: Xưng hô "tôi" và "bạn". KHÔNG lặp lại lời chào ở các lượt chat sau.`;
+            1. NGÔN NGỮ: LUÔN LUÔN TRẢ LỜI BẰNG TIẾNG VIỆT (VIETNAMESE). TUYỆT ĐỐI KHÔNG DÙNG TIẾNG ANH.
+            2. CHỐNG ẢO GIÁC 100%: Tuyệt đối KHÔNG bịa đặt thông tin, KHÔNG cung cấp nội dung không có thật. Chỉ trả lời dựa trên sự thật, logic và kiến thức chuẩn xác.
+            3. MẶC ĐỊNH NGẮN GỌN & CHÍNH XÁC: Trả lời đi thẳng vào trọng tâm, cực kỳ súc tích, đúng thông tin câu hỏi. Không rườm rà.
+            4. PHÂN TÍCH SÂU (Lên đến 3000 từ): NẾU người dùng yêu cầu giải thích "chi tiết", "cụ thể", hoặc "phân tích sâu", bạn PHẢI cung cấp một bài phân tích chuyên môn cực kỳ toàn diện, có thể mở rộng tối đa để đáp ứng trọn vẹn yêu cầu.
+            5. ĐỊNH DẠNG: Xưng hô "tôi" và "bạn". KHÔNG lặp lại lời chào ở các lượt chat sau.`;
 
             const payload = { 
                 contents: [
@@ -1964,14 +1965,14 @@ async function callAiProxy({ provider, model, payload }) {
     const baseModels = [
         'gemini-3.1-pro',
         'gemini-3.1-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',   // Thêm bản Lite vào thứ tự ưu tiên cao
+        'gemma-4-31b-it',
+        'gemma-4-26b-a4b-it',
         'gemini-1.5-pro-002',
         'gemini-exp-1206',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.0-flash',
+        'gemini-1.5-pro',
         'gemini-1.5-flash',
-        'gemini-1.5-flash-002',
-        'gemini-1.5-flash-001',
         'gemini-1.5-flash-8b', 
         'learnlm-1.5-pro-experimental'
     ];
@@ -2078,13 +2079,13 @@ function updateModelDropdownUI(discoveredModels) {
         'gemini-3.1-pro',
         'gemini-3.1-flash-lite',
         'gemini-2.5-flash',
-        'gemma-4-31b-it',         // Siêu não dự phòng (Thử nghiệm)
-        'gemma-4-26b-a4b-it',     // Não dự phòng tốc độ (Thử nghiệm)
+        'gemini-2.5-flash-lite',
+        'gemma-4-31b-it',
+        'gemma-4-26b-a4b-it',
         'gemini-1.5-pro',
         'gemini-1.5-flash',
         'gemini-2.0-flash',
-        'gemini-1.5-pro-002',
-        'gemini-1.5-flash-8b'     // Cứu cánh cuối cùng
+        'gemini-1.5-flash-8b'
     ];
 
     const groupBase = document.createElement('optgroup');
@@ -2183,7 +2184,7 @@ async function explainWithAI(idx, lengthMode = 'normal') {
     if (lengthMode === 'short') lengthPrompt = "cực kỳ ngắn gọn, tóm tắt ý chính trong 1-2 câu";
     if (lengthMode === 'long') lengthPrompt = "rất chi tiết, phân tích cặn kẽ tại sao đáp án đúng lại đúng, tại sao các phương án khác lại sai, cho ví dụ minh họa nếu cần thiết";
 
-    const userQuery = `Hãy giải thích ${lengthPrompt} tại sao đáp án lại là "${correctText}" cho câu hỏi trắc nghiệm dưới đây.\nCâu hỏi: ${q.text}\nCác phương án:\n${allOptionsText}\nLưu ý: Không lặp lại câu hỏi. Trả lời bằng tiếng Việt. Dùng * để in nghiêng, ** để in đậm.`;
+    const userQuery = `QUY TẮC BẮT BUỘC: TRẢ LỜI HOÀN TOÀN BẰNG TIẾNG VIỆT.\nHãy giải thích ${lengthPrompt} tại sao đáp án lại là "${correctText}" cho câu hỏi trắc nghiệm dưới đây.\nCâu hỏi: ${q.text}\nCác phương án:\n${allOptionsText}\nLưu ý: Không lặp lại câu hỏi. Dùng * để in nghiêng, ** để in đậm.`;
 
     let data = null;
     try {
@@ -3931,8 +3932,14 @@ const BottomSheetManager = {
         filtered.forEach(opt => {
             if (opt.group && opt.group !== lastGroup) {
                 const groupHeader = document.createElement('div');
-                groupHeader.className = "px-4 py-2 mt-2 text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-gray-50 dark:bg-slate-800/50";
-                groupHeader.innerText = opt.group;
+                // Tinh chỉnh Style cho tiêu đề nhóm: Cỡ chữ lớn hơn, Padding thoáng hơn, Màu sắc nổi bật
+                groupHeader.className = "px-5 py-3 mt-4 first:mt-0 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-[0.15em] bg-indigo-50/50 dark:bg-indigo-950/30 border-y border-indigo-100/50 dark:border-indigo-900/30 flex items-center gap-2";
+                
+                // Tách icon và text để căn chỉnh tốt hơn
+                const label = opt.group.includes('🚀') ? opt.group.replace('🚀', '<i class="fas fa-rocket text-xs"></i>') : 
+                              opt.group.includes('🔍') ? opt.group.replace('🔍', '<i class="fas fa-search text-xs"></i>') : opt.group;
+                
+                groupHeader.innerHTML = label;
                 listEl.appendChild(groupHeader);
                 lastGroup = opt.group;
             }
