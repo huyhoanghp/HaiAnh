@@ -2066,26 +2066,51 @@ function showSettingsBadge(show) {
     }
 }
 
-function updateModelDropdownUI(models) {
+function updateModelDropdownUI(discoveredModels) {
     const select = document.getElementById('aiModelSelect');
     if (!select) return;
     
     const currentVal = select.value;
     select.innerHTML = '';
     
-    // Tạo nhóm "Khám phá từ API"
-    const groupApi = document.createElement('optgroup');
-    groupApi.label = "Đã cập nhật từ API (Mới nhất)";
+    // 1. Danh sách cứng (Nòng cốt) để sếp luôn thấy 1.5, 3.1 ở đầu
+    const baseModels = [
+        'gemini-3.1-pro',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro-002',
+        'gemini-1.5-flash-8b'
+    ];
+
+    const groupBase = document.createElement('optgroup');
+    groupBase.label = "🚀 MODEL NÒNG CỐT (Khuyên dùng)";
     
-    models.forEach(m => {
+    baseModels.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m;
-        opt.text = m.replace('gemini-', '').toUpperCase();
-        groupApi.appendChild(opt);
+        opt.text = m.toUpperCase().replace('GEMINI-', 'Gemini ');
+        groupBase.appendChild(opt);
     });
+    select.appendChild(groupBase);
+
+    // 2. Danh sách khám phá từ API (Loại bỏ các model đã có ở nhóm nòng cốt)
+    const extraModels = discoveredModels.filter(m => !baseModels.includes(m));
+    if (extraModels.length > 0) {
+        const groupExtra = document.createElement('optgroup');
+        groupExtra.label = "🔍 MODEL KHÁM PHÁ (Từ API)";
+        
+        extraModels.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.text = m.toUpperCase().replace('GEMINI-', '');
+            groupExtra.appendChild(opt);
+        });
+        select.appendChild(groupExtra);
+    }
     
-    select.appendChild(groupApi);
-    if (models.includes(currentVal)) select.value = currentVal;
+    if (currentVal) select.value = currentVal;
 }
 
 async function checkAvailableModels() {
