@@ -89,12 +89,12 @@ const AI_CORE_MODELS = [
     'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
+    'gemini-1.5-pro',
+    'gemini-1.5-pro-002',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
     'gemma-4-31b-it',
     'gemma-4-26b-a4b-it',
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro-002',
     'gemini-1.5-flash-8b'
 ];
 
