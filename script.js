@@ -1578,6 +1578,9 @@ const VoiceTutor = {
 
         this.stt.onResult = (text, isFinal) => {
             if (!text) return;
+            
+            // [FIX] Nếu đang xử lý hoặc đã nhấn Stop, tuyệt đối không cập nhật UI "đang nghe"
+            if (this.isProcessing || this.manualStop) return;
 
             this.updateUI('listening', text);
             this.lastTranscript = text;
@@ -1624,22 +1627,33 @@ const VoiceTutor = {
     },
 
     stopListeningAndSubmit() {
-        if (!this.isCalling) return;
+        if (!this.isCalling || this.isProcessing) return;
         
-        // PHẢN HỒI TỨC THÌ: Đổi nút và trạng thái ngay khi chạm
-        this.updateUI('thinking', 'Đang phân tích...');
-        
+        // PHẢN HỒI TỨC THÌ: Đổi trạng thái và nút ngay lập tức
         this.manualStop = true;
         this.isManualListening = false;
+        
+        // Cập nhật UI ngay tại đây để đảm bảo độ trễ thấp nhất
+        this.updateUI('thinking', 'Đang phân tích...');
+        
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         const finalContent = this.lastTranscript;
         
-        this.stt.stop();
+        // Ngắt mic
+        try {
+            this.stt.stop();
+        } catch(e) { console.warn("Mic stop error:", e); }
+
         if (finalContent.trim().length > 1) {
             this.askGemini(finalContent);
         } else {
+            // Nếu chưa nói gì, trả về trạng thái chờ sau 1s
+            this.isProcessing = false;
+            this.manualStop = false;
             this.updateUI('thinking', 'Bạn chưa nói gì cả...');
-            setTimeout(() => { if (!this.isProcessing) this.updateUI('thinking', ''); }, 1000);
+            setTimeout(() => { 
+                if (!this.isProcessing && !this.manualStop) this.updateUI('thinking', ''); 
+            }, 1200);
         }
         this.lastTranscript = '';
     },
@@ -1668,9 +1682,10 @@ const VoiceTutor = {
     async askGemini(userText) {
         if (!this.isCalling) return;
         
-        // Tạo ID mới cho yêu cầu này
         const requestId = ++this.currentRequestId;
         this.isProcessing = true;
+        this.manualStop = true; // Đảm bảo UI không bị mic ghi đè
+        
         this.updateUI('thinking', 'Đang phân tích...');
         
         // Dừng STT và TTS cũ ngay lập tức
