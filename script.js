@@ -3894,7 +3894,8 @@ const BottomSheetManager = {
         this.options = Array.from(select.options).map(opt => ({
             value: opt.value,
             text: opt.innerText,
-            selected: opt.value === select.value
+            selected: opt.value === select.value,
+            group: opt.parentElement.tagName === 'OPTGROUP' ? opt.parentElement.label : null
         })).filter(opt => opt.value !== "");
 
         this.renderList();
@@ -3921,11 +3922,20 @@ const BottomSheetManager = {
             return;
         }
 
+        let lastGroup = null;
         filtered.forEach(opt => {
+            if (opt.group && opt.group !== lastGroup) {
+                const groupHeader = document.createElement('div');
+                groupHeader.className = "px-4 py-2 mt-2 text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-gray-50 dark:bg-slate-800/50";
+                groupHeader.innerText = opt.group;
+                listEl.appendChild(groupHeader);
+                lastGroup = opt.group;
+            }
+            
             const div = document.createElement('div');
             div.className = `sheet-item ${opt.selected ? 'selected' : ''}`;
             div.innerHTML = `
-                <span class="flex-1">${opt.text}</span>
+                <span class="flex-1 font-bold ${opt.selected ? 'text-indigo-600 dark:text-indigo-400' : ''}">${opt.text}</span>
                 ${opt.selected ? '<i class="fas fa-check"></i>' : ''}
             `;
             div.onclick = () => {
