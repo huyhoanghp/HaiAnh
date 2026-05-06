@@ -1507,8 +1507,11 @@ const VoiceTutor = {
     stopListeningAndSubmit() {
         if (!this.isCalling) return;
         
+        // PHẢN HỒI TỨC THÌ: Đổi nút và trạng thái ngay khi chạm
+        this.updateUI('thinking', 'Đang phân tích...');
+        
         this.manualStop = true;
-        this.isManualListening = false; // Reset trạng thái
+        this.isManualListening = false;
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         const finalContent = this.lastTranscript;
         
@@ -1516,8 +1519,7 @@ const VoiceTutor = {
         if (finalContent.trim().length > 1) {
             this.askGemini(finalContent);
         } else {
-            this.updateUI('listening', 'Bạn chưa nói gì cả...');
-            // Tự động quay lại UI chờ
+            this.updateUI('thinking', 'Bạn chưa nói gì cả...');
             setTimeout(() => { if (!this.isProcessing) this.updateUI('thinking', ''); }, 1000);
         }
         this.lastTranscript = '';
