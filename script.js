@@ -315,11 +315,14 @@ const AuthManager = {
         overlay.classList.add('opacity-0');
         setTimeout(() => overlay.classList.add('hidden'), 500);
         
-        // Bắt đầu nạp dữ liệu từ Cloud
-        this.syncFromCloud();
-        
-        // Khôi phục tiến độ cục bộ sau khi login
-        restoreProgress();
+        // Bắt đầu nạp dữ liệu từ Cloud (AWAIT để đảm bảo có bank trước khi nhắc ôn luyện)
+        this.syncFromCloud().then(() => {
+            // Khôi phục tiến độ cục bộ sau khi login
+            restoreProgress();
+            
+            // Sau khi có bank, mới thực hiện nhắc ôn tập nếu có
+            this.updateDashboardUI();
+        });
 
         // Cập nhật giao diện người dùng
         this.updateUserProfileUI();
@@ -769,20 +772,54 @@ const ReviewManager = {
         this.updateDashboardUI();
     },
 
+    async getAvailableQuestionHashes() {
+        const banks = await getAllBanks();
+        const hashes = new Set();
+        banks.forEach(b => {
+            if (b.questions) {
+                b.questions.forEach(q => hashes.add(this.getQId(q.text)));
+            }
+        });
+        return hashes;
+    },
+
     getDueCount() {
         const now = Date.now();
-        return Object.values(this.stats).filter(item => item.nextDate <= now).length;
+        const availableHashes = this.availableHashes || new Set();
+        return Object.values(this.stats).filter(item => {
+            if (item === this.stats._global) return false;
+            // Chỉ đếm nếu câu hỏi thực sự tồn tại trong các bộ đề hiện có
+            return item.nextDate <= now && (!availableHashes.size || availableHashes.has(item.id || this.findIdByItem(item)));
+        }).length;
+    },
+
+    // Hàm bổ trợ để tìm ID khi lọc
+    findIdByItem(targetItem) {
+        return Object.keys(this.stats).find(key => this.stats[key] === targetItem);
     },
 
     getLearningCount() {
-        return Object.values(this.stats).filter(item => item.reps > 0 && item.reps < 5).length;
+        const availableHashes = this.availableHashes || new Set();
+        return Object.values(this.stats).filter(item => {
+            if (item === this.stats._global) return false;
+            const isLearning = item.reps > 0 && item.reps < 5;
+            return isLearning && (!availableHashes.size || availableHashes.has(item.id || this.findIdByItem(item)));
+        }).length;
     },
 
     getMasteredCount() {
-        return Object.values(this.stats).filter(item => item.reps >= 5).length;
+        const availableHashes = this.availableHashes || new Set();
+        return Object.values(this.stats).filter(item => {
+            if (item === this.stats._global) return false;
+            const isMastered = item.reps >= 5;
+            return isMastered && (!availableHashes.size || availableHashes.has(item.id || this.findIdByItem(item)));
+        }).length;
     },
 
-    updateDashboardUI() {
+    async updateDashboardUI() {
+        // Cập nhật danh sách hash khả dụng để lọc badge
+        this.availableHashes = await this.getAvailableQuestionHashes();
+
         const dueCount = this.getDueCount();
         const learningCount = this.getLearningCount();
         const masteredCount = this.getMasteredCount();
@@ -811,6 +848,11 @@ const ReviewManager = {
                 const percent = Math.round((masteredCount / total) * 100);
                 masteryPercentEl.innerText = percent + '%';
             }
+        } else if (barDue) {
+            barDue.style.width = '0%';
+            barLearning.style.width = '0%';
+            barMastered.style.width = '0%';
+            if (masteryPercentEl) masteryPercentEl.innerText = '0%';
         }
 
         // Cập nhật Badge trên Header
@@ -819,6 +861,10 @@ const ReviewManager = {
             if (dueCount > 0) {
                 badge.innerText = dueCount;
                 badge.classList.remove('hidden');
+                
+                // [UPGRADE] Thêm hiệu ứng rung rinh cho Badge để sếp chú ý
+                badge.classList.add('animate-bounce');
+                setTimeout(() => badge.classList.remove('animate-bounce'), 3000);
             } else {
                 badge.classList.add('hidden');
             }
