@@ -1960,34 +1960,35 @@ async function compressImage(base64Str) {
 async function callAiProxy({ provider, model, payload }) {
     const apiKey = getApiKey();
     if (!apiKey || provider !== 'google') return await callLegacyProxy({ provider, model, payload });
+    // Danh sách Model sắp xếp theo thứ tự ưu tiên: Thông minh nhất -> Cơ bản nhất
     const baseModels = [
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-001',
-        'gemini-1.5-flash-002',
-        'gemini-1.5-flash-8b',
-        'gemini-2.0-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-exp-1206',
+        'gemini-3.1-pro',
+        'gemini-3.1-flash-lite',
         'gemini-1.5-pro-002',
+        'gemini-exp-1206',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash-8b', 
         'learnlm-1.5-pro-experimental'
     ];
     
     const discovered = JSON.parse(localStorage.getItem('haianh_discovered_models') || '[]');
-    
-    // Thuật toán sắp xếp thông minh:
-    // 1. Lấy danh sách cứng làm nòng cốt
-    // 2. Thêm các model khám phá được mà không nằm trong danh sách cứng vào cuối
-    const otherDiscovered = discovered.filter(m => !baseModels.includes(m));
-    const allAvailable = [...baseModels, ...otherDiscovered];
+    const allAvailable = [...baseModels, ...discovered.filter(m => !baseModels.includes(m))];
 
-    // Ưu tiên cao nhất: 1. Model được truyền vào hàm -> 2. Model chạy thành công gần nhất -> 3. Danh sách mặc định
-    const savedModel = localStorage.getItem('last_working_model');
-    const primaryModel = model || savedModel;
+    // CHIẾN LƯỢC CHỌN MODEL THÔNG MINH:
+    // 1. Nếu có model do tính năng yêu cầu (ví dụ Voice Tutor yêu cầu Flash để nhanh)
+    // 2. Nếu không, lấy model người dùng đã chọn trong Cài đặt (localStorage)
+    // 3. Nếu vẫn không có, dùng model thông minh nhất trong danh sách khả dụng
+    const userChoice = localStorage.getItem('last_working_model');
+    const primaryModel = model || userChoice || baseModels[0];
     
-    const modelsToTry = primaryModel && allAvailable.includes(primaryModel) 
-        ? [primaryModel, ...allAvailable.filter(m => m !== primaryModel)]
-        : allAvailable;
+    // Tạo danh sách thử nghiệm: Luôn bắt đầu bằng Model ưu tiên, sau đó là các model khác theo thứ tự chất lượng giảm dần
+    const modelsToTry = [primaryModel, ...allAvailable.filter(m => m !== primaryModel)];
+    
     let lastError = "Không có phản hồi từ AI";
     for (const currentModel of modelsToTry) {
         const versions = ['v1beta', 'v1'];
@@ -2007,7 +2008,12 @@ async function callAiProxy({ provider, model, payload }) {
                         lastError = `[${currentModel}@${apiVer}] ${msg}`;
                         return 'FALLBACK';
                     }
-                    cachedWorkingModel = currentModel; localStorage.setItem('last_working_model', currentModel);
+                    // Chỉ ghi nhớ model này nếu nó không phải là model "khờ" (8b) 
+                    // Hoặc nếu đây là model mà tính năng/người dùng chủ động yêu cầu
+                    if (currentModel !== 'gemini-1.5-flash-8b' || primaryModel === 'gemini-1.5-flash-8b') {
+                        cachedWorkingModel = currentModel; 
+                        localStorage.setItem('last_working_model', currentModel);
+                    }
                     return JSON.parse(text);
                 } catch (err) { lastError = err.message || String(err); return 'FALLBACK'; }
             };
