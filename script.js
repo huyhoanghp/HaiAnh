@@ -1289,6 +1289,7 @@ const VoiceTutor = {
     currentRequestId: 0,
     currentAiSpeechText: '',
     manualStop: false,
+    isManualListening: false, // Biến cờ để kiểm soát việc thu âm thủ công ổn định hơn
 
     init() {
         this.stt.onEnd = () => {
@@ -1454,6 +1455,8 @@ const VoiceTutor = {
         this.updateUI('listening', this.isLiveMode ? 'Đang lắng nghe rảnh tay...' : 'Hãy nói đi, tôi đang nghe...');
         
         this.manualStop = false;
+        if (!this.isLiveMode) this.isManualListening = true; // Đánh dấu đang thu âm thủ công
+
         this.stt.onResult = (text, isFinal) => {
             if (!text) return;
 
@@ -1462,23 +1465,17 @@ const VoiceTutor = {
 
             if (this.isLiveMode) {
                 if (window.speechSynthesis.speaking) {
-                    // AI ĐANG NÓI: Lọc tiếng vọng bằng Semantic V2
                     const isEcho = SemanticEchoCanceller.isEcho(text, this.currentAiSpeechText);
                     if (!isEcho) {
-                        console.log("[VoiceTutor] Barge-in detected (Semantic):", text);
-                        // Ngắt lời AI
                         SpeechManager.stop();
                         this.isProcessing = false;
-                        this.lastTranscript = ''; // Reset để thu âm lại lời người dùng thật sự
+                        this.lastTranscript = '';
                         this.stt.stop();
-                        
-                        // Khởi động lại ngay để bắt phần tiếp theo của người dùng
                         setTimeout(() => { if (this.isCalling && this.isLiveMode) this.stt.start(); }, 100);
                     }
                     return;
                 }
                 
-                // AI KHÔNG NÓI
                 if (!this.isProcessing) {
                     if (this.silenceTimer) clearTimeout(this.silenceTimer);
                     this.silenceTimer = setTimeout(() => {
@@ -1489,6 +1486,20 @@ const VoiceTutor = {
                 }
             }
         };
+
+        // Nếu mic tự ngắt (onEnd), ta kiểm tra xem có phải do người dùng ngừng nói lâu không
+        this.stt.onEnd = () => {
+            if (this.isCalling && !this.isProcessing && !this.manualStop) {
+                if (this.isLiveMode) {
+                    this.stt.start();
+                } else if (this.isManualListening && this.lastTranscript.trim().length > 5) {
+                    // Tự động nộp bài nếu người dùng nói xong mà mic tự ngắt (chế độ thủ công)
+                    console.log("VoiceTutor: Auto-submitting due to STT end in manual mode.");
+                    this.stopListeningAndSubmit();
+                }
+            }
+            if (!this.isLiveMode) this.isManualListening = false;
+        };
         
         this.stt.start();
     },
@@ -1497,6 +1508,7 @@ const VoiceTutor = {
         if (!this.isCalling) return;
         
         this.manualStop = true;
+        this.isManualListening = false; // Reset trạng thái
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         const finalContent = this.lastTranscript;
         
@@ -1589,7 +1601,7 @@ const VoiceTutor = {
                 } 
             };
             
-            const data = await callAiProxy({ provider: 'google', model: 'gemini-2.5-flash', payload });
+            const data = await callAiProxy({ provider: 'google', payload }); // Để callAiProxy tự lấy model từ cài đặt
             const response = data.candidates[0].content.parts[0].text;
             
             // LƯU LẠI LỜI AI ĐANG NÓI ĐỂ KHỬ TIẾNG VỌNG
@@ -1981,13 +1993,14 @@ async function callAiProxy({ provider, model, payload }) {
     const allAvailable = [...baseModels, ...discovered.filter(m => !baseModels.includes(m))];
 
     // CHIẾN LƯỢC CHỌN MODEL THÔNG MINH:
-    // 1. Nếu có model do tính năng yêu cầu (ví dụ Voice Tutor yêu cầu Flash để nhanh)
-    // 2. Nếu không, lấy model người dùng đã chọn trong Cài đặt (localStorage)
-    // 3. Nếu vẫn không có, dùng model thông minh nhất trong danh sách khả dụng
-    const userChoice = localStorage.getItem('last_working_model');
-    const primaryModel = model || userChoice || baseModels[0];
+    // 1. Nếu có model do tính năng yêu cầu cụ thể (Parameter)
+    // 2. Nếu không, ưu tiên tuyệt đối Model người dùng đã chọn thủ công (ai_model_preference)
+    // 3. Nếu vẫn không có, dùng model thành công gần nhất (last_working_model)
+    // 4. Cuối cùng, dùng model thông minh nhất trong danh sách (baseModels[0])
+    const userPreference = localStorage.getItem('ai_model_preference');
+    const lastWorking = localStorage.getItem('last_working_model');
+    const primaryModel = model || userPreference || lastWorking || baseModels[0];
     
-    // Tạo danh sách thử nghiệm: Luôn bắt đầu bằng Model ưu tiên, sau đó là các model khác theo thứ tự chất lượng giảm dần
     const modelsToTry = [primaryModel, ...allAvailable.filter(m => m !== primaryModel)];
     
     let lastError = "Không có phản hồi từ AI";
@@ -3779,16 +3792,18 @@ Tiếng Việt.`;
         
         const micBtn = document.getElementById('toggleMicBtn');
         if (micBtn) {
-            // Tap-to-Talk / Tap-to-Stop
-            micBtn.addEventListener('click', (e) => {
+            // Sử dụng pointerdown để phản hồi tức thì trên di động
+            micBtn.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
-                if (VoiceTutor.isCalling) {
-                    if (VoiceTutor.stt.isListening) {
-                        VoiceTutor.stopListeningAndSubmit();
-                    } else {
-                        SpeechManager.stop();
-                        VoiceTutor.startListening();
-                    }
+                if (!VoiceTutor.isCalling) return;
+
+                // Nếu đang thu âm thủ công -> Stop và Gửi
+                if (VoiceTutor.isManualListening || VoiceTutor.stt.isListening) {
+                    VoiceTutor.stopListeningAndSubmit();
+                } else {
+                    // Nếu đang rảnh rỗi hoặc AI đang nói -> Ngắt AI và Bắt đầu nghe
+                    SpeechManager.stop();
+                    VoiceTutor.startListening();
                 }
             });
         }
