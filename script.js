@@ -2073,15 +2073,18 @@ function updateModelDropdownUI(discoveredModels) {
     const currentVal = select.value;
     select.innerHTML = '';
     
-    // 1. Danh sách cứng (Nòng cốt) để sếp luôn thấy 1.5, 3.1 ở đầu
+    // 🚀 DANH SÁCH 10+ MODEL NÒNG CỐT (Xương sống của hệ thống)
     const baseModels = [
         'gemini-3.1-pro',
         'gemini-3.1-flash-lite',
         'gemini-2.5-flash',
+        'gemma-4-31b-it',         // Siêu não dự phòng (Thử nghiệm)
+        'gemma-4-26b-a4b-it',     // Não dự phòng tốc độ (Thử nghiệm)
         'gemini-1.5-pro',
         'gemini-1.5-flash',
+        'gemini-2.0-flash',
         'gemini-1.5-pro-002',
-        'gemini-1.5-flash-8b'
+        'gemini-1.5-flash-8b'     // Cứu cánh cuối cùng
     ];
 
     const groupBase = document.createElement('optgroup');
@@ -2090,12 +2093,14 @@ function updateModelDropdownUI(discoveredModels) {
     baseModels.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m;
-        opt.text = m.toUpperCase().replace('GEMINI-', 'Gemini ');
+        // Format tên cho đẹp: gemini-3.1-pro -> Gemini 3.1-PRO
+        let displayName = m.toUpperCase().replace('GEMINI-', 'Gemini ').replace('GEMMA-', 'Gemma ');
+        opt.text = displayName;
         groupBase.appendChild(opt);
     });
     select.appendChild(groupBase);
 
-    // 2. Danh sách khám phá từ API (Loại bỏ các model đã có ở nhóm nòng cốt)
+    // 🔍 DANH SÁCH KHÁM PHÁ (Các model khác từ API)
     const extraModels = discoveredModels.filter(m => !baseModels.includes(m));
     if (extraModels.length > 0) {
         const groupExtra = document.createElement('optgroup');
@@ -2104,7 +2109,7 @@ function updateModelDropdownUI(discoveredModels) {
         extraModels.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m;
-            opt.text = m.toUpperCase().replace('GEMINI-', '');
+            opt.text = m.toUpperCase().replace('GEMINI-', '').replace('MODELS/', '');
             groupExtra.appendChild(opt);
         });
         select.appendChild(groupExtra);
